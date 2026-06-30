@@ -1,0 +1,5 @@
+# Keep the AuthClient contract field names intact so JSON (de)serialization against
+# the API stays stable under release-mode obfuscation.
+-keep-property-name
+-enable-property-obfuscation
+-keep-global-name

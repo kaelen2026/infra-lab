@@ -1,0 +1,7 @@
+{
+  "modelVersion": "6.0.2",
+  "name": "infra-harmony",
+  "version": "1.0.0",
+  "description": "Phone-OTP auth client for HarmonyOS (ArkTS) — the harmony face of the infra-lab monorepo.",
+  "dependencies": {}
+}
