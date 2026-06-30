@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Base theme; the Compose Material 3 theme drives the real colors at runtime
+      (see ui/theme/Theme.kt). This only needs to exist for the manifest reference.
+    -->
+    <style name="Theme.Infra" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>
