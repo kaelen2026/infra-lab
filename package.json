@@ -1,0 +1,44 @@
+{
+  "name": "infra-lab",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.33.1",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "turbo run typecheck",
+    "db:generate": "pnpm --filter @infra/db generate",
+    "db:migrate": "pnpm --filter @infra/db migrate",
+    "infra:up": "docker compose up -d",
+    "infra:down": "docker compose down",
+    "verify:redis": "node scripts/verify-redis.mjs",
+    "clean": "turbo run clean",
+    "lint": "turbo run lint:all",
+    "lint:all": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx,mjs,cjs,json,jsonc,css}": [
+      "biome check --write --no-errors-on-unmatched"
+    ]
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.1",
+    "@commitlint/cli": "21.2.0",
+    "@commitlint/config-conventional": "21.2.0",
+    "@types/node": "24.13.2",
+    "husky": "9.1.7",
+    "lint-staged": "17.0.8",
+    "tsup": "8.5.1",
+    "turbo": "^2.10.1",
+    "typescript": "5.9.3",
+    "vitest": "4.1.9"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "//": "Editor root config. Builds are done with tsup (`pnpm build`); type-checking with `pnpm typecheck` (per-package `tsc --noEmit`). This file is intentionally NOT a `tsc -b` solution — no `references` — so tsc never emits into the source tree.",
+  "extends": "./tsconfig.base.json",
+  "include": [],
+  "files": []
+}

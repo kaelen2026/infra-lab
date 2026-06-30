@@ -1,0 +1,20 @@
+import { fileURLToPath } from "node:url";
+import { defineConfig } from "vitest/config";
+
+const r = (p: string) => fileURLToPath(new URL(p, import.meta.url));
+
+export default defineConfig({
+  resolve: {
+    alias: {
+      "@infra/shared": r("./packages/shared/src/index.ts"),
+      "@infra/auth/testing": r("./packages/auth/src/testing.ts"),
+      "@infra/auth": r("./packages/auth/src/index.ts"),
+      "@infra/redis": r("./packages/redis/src/index.ts"),
+      "@infra/db": r("./packages/db/src/index.ts"),
+    },
+  },
+  test: {
+    environment: "node",
+    include: ["packages/**/test/**/*.test.ts", "apps/**/test/**/*.test.ts"],
+  },
+});

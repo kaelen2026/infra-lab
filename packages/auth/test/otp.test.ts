@@ -1,0 +1,154 @@
+import { describe, expect, it } from "vitest";
+import { createOtpService, OTP_KEYS } from "../src/otp.js";
+import { FakeRedis } from "../src/testing.js";
+
+const SECRET = "test-otp-secret-please-rotate";
+const PHONE = "+8613800138000";
+const IP = "203.0.113.7";
+
+function setup() {
+  const store = new FakeRedis();
+  const otp = createOtpService({ store, secret: SECRET, now: store.now });
+  return { store, otp };
+}
+
+async function requestOk(otp: ReturnType<typeof createOtpService>, phone = PHONE, ip = IP) {
+  const res = await otp.requestCode({ phone, ip });
+  if (!res.ok) throw new Error(`expected ok, got ${res.error}`);
+  return res;
+}
+
+describe("OTP service — requestCode", () => {
+  it("issues a 6-digit code with a 300s TTL and stores only a hash", async () => {
+    const { store, otp } = setup();
+
+    const res = await requestOk(otp);
+
+    expect(res.code).toMatch(/^\d{6}$/);
+    expect(res.ttlSeconds).toBe(300);
+
+    const codeKey = OTP_KEYS.code(PHONE);
+    const stored = await store.get(codeKey);
+    expect(stored).not.toBeNull();
+    // never the plaintext code
+    expect(stored).not.toBe(res.code);
+    expect(stored).toMatch(/^[0-9a-f]{64}$/); // hex sha256
+
+    const ttl = await store.ttl(codeKey);
+    expect(ttl).toBeGreaterThan(0);
+    expect(ttl).toBeLessThanOrEqual(300);
+  });
+
+  it("rejects a resend within the 60s cooldown", async () => {
+    const { otp, store } = setup();
+    await requestOk(otp);
+
+    const second = await otp.requestCode({ phone: PHONE, ip: IP });
+    expect(second.ok).toBe(false);
+    if (second.ok) throw new Error("unreachable");
+    expect(second.error).toBe("RESEND_COOLDOWN");
+    expect(second.retryAfter).toBeGreaterThan(0);
+    expect(second.retryAfter).toBeLessThanOrEqual(60);
+
+    // after the cooldown elapses, a resend works again
+    store.advance(60);
+    await requestOk(otp);
+  });
+
+  it("allows at most 10 sends per phone per day", async () => {
+    const { otp, store } = setup();
+    for (let i = 0; i < 10; i++) {
+      await requestOk(otp);
+      store.advance(60); // clear cooldown between sends
+    }
+    const blocked = await otp.requestCode({ phone: PHONE, ip: IP });
+    expect(blocked.ok).toBe(false);
+    if (blocked.ok) throw new Error("unreachable");
+    expect(blocked.error).toBe("DAILY_LIMIT_EXCEEDED");
+  });
+
+  it("allows at most 30 sends per IP per hour (across phones)", async () => {
+    const { otp, store } = setup();
+    for (let i = 0; i < 30; i++) {
+      // distinct phones so the per-phone daily/cooldown limits never trip first
+      const phone = `+861380000${String(1000 + i)}`;
+      const res = await otp.requestCode({ phone, ip: IP });
+      expect(res.ok).toBe(true);
+      store.advance(1);
+    }
+    const blocked = await otp.requestCode({ phone: "+8613800009999", ip: IP });
+    expect(blocked.ok).toBe(false);
+    if (blocked.ok) throw new Error("unreachable");
+    expect(blocked.error).toBe("IP_LIMIT_EXCEEDED");
+  });
+});
+
+describe("OTP service — verifyCode", () => {
+  it("accepts the correct code exactly once, then clears otp + attempt keys", async () => {
+    const { store, otp } = setup();
+    const { code } = await requestOk(otp);
+
+    const ok = await otp.verifyCode({ phone: PHONE, code });
+    expect(ok.ok).toBe(true);
+
+    // single-use: the same code cannot be replayed
+    const replay = await otp.verifyCode({ phone: PHONE, code });
+    expect(replay.ok).toBe(false);
+    if (replay.ok) throw new Error("unreachable");
+    expect(replay.error).toBe("CODE_EXPIRED");
+
+    // otp + attempt keys are gone
+    expect(await store.exists(OTP_KEYS.code(PHONE))).toBe(false);
+    expect(await store.exists(OTP_KEYS.attempt(PHONE))).toBe(false);
+  });
+
+  it("rejects a wrong code and counts down remaining attempts", async () => {
+    const { otp } = setup();
+    await requestOk(otp);
+
+    const wrong = await otp.verifyCode({ phone: PHONE, code: "000000" });
+    expect(wrong.ok).toBe(false);
+    if (wrong.ok || wrong.error !== "INVALID_CODE") throw new Error("expected INVALID_CODE");
+    expect(wrong.remainingAttempts).toBe(4);
+  });
+
+  it("locks the phone for 600s after 5 wrong attempts", async () => {
+    const { store, otp } = setup();
+    await requestOk(otp);
+
+    for (let i = 0; i < 4; i++) {
+      const r = await otp.verifyCode({ phone: PHONE, code: "111111" });
+      expect(r.ok).toBe(false);
+    }
+    const fifth = await otp.verifyCode({ phone: PHONE, code: "111111" });
+    expect(fifth.ok).toBe(false);
+    if (fifth.ok) throw new Error("unreachable");
+    expect(fifth.error).toBe("LOCKED");
+
+    const lockTtl = await store.ttl(OTP_KEYS.lock(PHONE));
+    expect(lockTtl).toBeGreaterThan(0);
+    expect(lockTtl).toBeLessThanOrEqual(600);
+
+    // even the correct path is refused while locked
+    const requestWhileLocked = await otp.requestCode({ phone: PHONE, ip: IP });
+    expect(requestWhileLocked.ok).toBe(false);
+    if (requestWhileLocked.ok) throw new Error("unreachable");
+    expect(requestWhileLocked.error).toBe("LOCKED");
+
+    // lock clears after the window
+    store.advance(600);
+    const afterUnlock = await otp.requestCode({ phone: PHONE, ip: IP });
+    expect(afterUnlock.ok).toBe(true);
+  });
+
+  it("treats an expired code as CODE_EXPIRED", async () => {
+    const { store, otp } = setup();
+    await requestOk(otp);
+    store.advance(301);
+
+    const res = await otp.verifyCode({ phone: PHONE, code: "123456" });
+    expect(res.ok).toBe(false);
+    if (res.ok) throw new Error("unreachable");
+    expect(res.error).toBe("CODE_EXPIRED");
+  });
+});

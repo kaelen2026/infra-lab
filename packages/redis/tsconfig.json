@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "paths": {
+      "@infra/auth": ["../auth/src/index.ts"],
+      "@infra/shared": ["../shared/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

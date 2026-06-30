@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "paths": {
+      "@infra/shared": ["../../packages/shared/src/index.ts"],
+      "@infra/auth": ["../../packages/auth/src/index.ts"],
+      "@infra/auth/testing": ["../../packages/auth/src/testing.ts"],
+      "@infra/redis": ["../../packages/redis/src/index.ts"],
+      "@infra/db": ["../../packages/db/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}
