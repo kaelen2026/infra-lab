@@ -6,6 +6,7 @@ dist/
 .env.local
 coverage/
 .DS_Store
+.vscode/
 .turbo/
 playwright-report/
 test-results/
