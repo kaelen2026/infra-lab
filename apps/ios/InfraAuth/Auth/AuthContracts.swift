@@ -1,0 +1,147 @@
+import Foundation
+
+/// Swift mirror of `@infra/shared`'s auth contracts — the single source of truth
+/// for request/response shapes, error codes and limits shared by every client.
+///
+/// Keep this in lockstep with `packages/shared/src/contracts/auth.ts`. The server
+/// emits camelCase JSON, so the default `Codable` synthesis maps 1:1 with no
+/// custom key strategy.
+
+// MARK: - Platforms
+
+enum Platform: String, Codable, Sendable {
+    case web, ios, android, harmony
+
+    /// Web authenticates via HttpOnly cookie; native platforms via Bearer tokens.
+    var isCookiePlatform: Bool { self == .web }
+}
+
+// MARK: - Limits (mirrors the OTP service config; used for UX hints)
+
+enum OTPLimits {
+    static let codeLength = 6
+    static let ttlSeconds = 300
+    static let resendCooldownSeconds = 60
+    static let dailyPerPhone = 10
+    static let hourlyPerIp = 30
+    static let maxAttempts = 5
+    static let lockSeconds = 600
+}
+
+// MARK: - Validation
+
+enum AuthValidation {
+    /// E.164: leading `+` and 8–15 digits. Clients normalize before sending.
+    private static let phoneRegex = try! NSRegularExpression(pattern: #"^\+[1-9]\d{7,14}$"#)
+
+    static func isValidPhone(_ phone: String) -> Bool {
+        let s = phone.trimmingCharacters(in: .whitespaces)
+        let range = NSRange(s.startIndex..., in: s)
+        return phoneRegex.firstMatch(in: s, range: range) != nil
+    }
+
+    static func isValidCode(_ code: String) -> Bool {
+        code.count == OTPLimits.codeLength && code.allSatisfy(\.isNumber)
+    }
+}
+
+// MARK: - Error codes (stable, client-switchable)
+
+enum AuthErrorCode: String, Codable, Sendable {
+    case invalidRequest = "INVALID_REQUEST"
+    case resendCooldown = "RESEND_COOLDOWN"
+    case dailyLimitExceeded = "DAILY_LIMIT_EXCEEDED"
+    case ipLimitExceeded = "IP_LIMIT_EXCEEDED"
+    case locked = "LOCKED"
+    case codeExpired = "CODE_EXPIRED"
+    case invalidCode = "INVALID_CODE"
+    case unauthorized = "UNAUTHORIZED"
+    case invalidRefreshToken = "INVALID_REFRESH_TOKEN"
+    /// Fallback for any code the server adds before this client is updated.
+    case unknown = "UNKNOWN"
+
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = AuthErrorCode(rawValue: raw) ?? .unknown
+    }
+}
+
+// MARK: - Requests / responses
+
+struct RequestOtpInput: Encodable {
+    let phone: String
+    let platform: Platform
+}
+
+struct RequestOtpResponse: Decodable {
+    let ok: Bool
+    let ttlSeconds: Int
+    let resendAfterSeconds: Int
+    /// Present only when `OTP_DEBUG_RETURN_CODE` is on (dev). Never in production.
+    let debugCode: String?
+}
+
+struct DeviceInfo: Encodable {
+    let platform: Platform
+    /// Stable per-install identifier supplied by the client.
+    let deviceId: String
+    var model: String?
+    var osVersion: String?
+    var appVersion: String?
+    var pushToken: String?
+}
+
+struct VerifyOtpInput: Encodable {
+    let phone: String
+    let code: String
+    let platform: Platform
+    var device: DeviceInfo?
+}
+
+struct AuthUser: Codable, Identifiable, Equatable {
+    let id: String
+    let phone: String
+    let displayName: String?
+    let avatarUrl: String?
+    let createdAt: String // ISO 8601
+    let isNew: Bool
+}
+
+struct AuthTokens: Codable, Equatable {
+    let accessToken: String
+    let accessTokenExpiresIn: Int
+    let refreshToken: String
+    let refreshTokenExpiresIn: Int
+    let tokenType: String // "Bearer"
+}
+
+struct VerifyOtpResponse: Decodable {
+    let ok: Bool
+    let user: AuthUser
+    /// Native only — web omits tokens (session rides the HttpOnly cookie).
+    let tokens: AuthTokens?
+}
+
+struct RefreshInput: Encodable {
+    let refreshToken: String
+}
+
+struct RefreshResponse: Decodable {
+    let ok: Bool
+    let tokens: AuthTokens
+}
+
+struct MeResponse: Decodable {
+    let ok: Bool
+    let user: AuthUser
+}
+
+// MARK: - Endpoint paths (shared so the client never hard-codes strings)
+
+enum AuthRoutes {
+    static let requestOtp = "/auth/otp/request"
+    static let verifyOtp = "/auth/otp/verify"
+    static let refresh = "/auth/refresh"
+    static let logout = "/auth/logout"
+    static let me = "/auth/me"
+}
