@@ -1,5 +1,7 @@
 # infra-lab
 
+[![CI](https://github.com/kaelen/infra-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/kaelen/infra-lab/actions/workflows/ci.yml)
+
 手机号 + 验证码的注册/登录系统。**登录即注册**，认证核心使用 [Better Auth](https://www.better-auth.com/)，
 一套后端服务 **Web / iOS / Android / HarmonyOS** 四端。
 
