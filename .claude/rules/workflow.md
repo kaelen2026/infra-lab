@@ -11,3 +11,22 @@
 - 提交信息遵循 **Conventional Commits**(由 husky `commit-msg` + commitlint 强制)。
 
 > 例外:仅当用户明确要求"就在 main 上提交"时才可破例,否则一律先建分支。
+
+## 使用 worktree 开发特性分支(与主仓库目录平级)
+
+特性分支在 **独立的 git worktree** 中开发。worktree 目录与主仓库目录 **平级**——放在
+同一父目录下的兄弟目录,命名为 `<仓库名>-<端/简述>`,**不要**嵌套在主仓库内部。
+
+本仓库现有:
+
+| worktree 目录            | 分支              |
+| ------------------------ | ----------------- |
+| `../infra-lab-ios`       | `feat/ios-app`    |
+| `../infra-lab-android`   | `feat/android-app`|
+| `../infra-lab-harmony`   | `feat/harmony-app`|
+
+约定:
+
+- 创建:`git worktree add -b feat/<简述> ../infra-lab-<简述> <基线提交>`。
+- 主仓库目录保持在基线分支;同一分支不能在多个 worktree 同时检出(git 会拒绝)。
+- 查看 / 清理:`git worktree list`;特性合并后 `git worktree remove ../infra-lab-<简述>`。

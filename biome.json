@@ -13,7 +13,8 @@
       "!**/.next",
       "!**/migrations",
       "!**/*.tsbuildinfo",
-      "!apps/web/app/globals.css"
+      "!apps/web/app/globals.css",
+      "!apps/ios"
     ]
   },
   "formatter": {

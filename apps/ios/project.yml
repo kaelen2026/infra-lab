@@ -1,0 +1,69 @@
+# XcodeGen spec — regenerate the project with `xcodegen generate` (or `make project`).
+# The .xcodeproj is derived, so it is gitignored; this file is the source of truth.
+name: InfraAuth
+options:
+  bundleIdPrefix: ai.deeplang.infra
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # Sign ad-hoc ("Sign to Run Locally") with no team. Manual style keeps the
+    # build fully offline: Automatic signing tries to fetch a provisioning
+    # profile from the developer portal, which fails ("PLA Update available")
+    # for anyone whose Apple account hasn't accepted the latest agreement —
+    # and a simulator/lab build needs no account at all. Device builds: set
+    # CODE_SIGN_STYLE=Automatic + DEVELOPMENT_TEAM (kept out of source control).
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    DEVELOPMENT_TEAM: ""
+
+targets:
+  InfraAuth:
+    type: application
+    platform: iOS
+    sources:
+      - path: InfraAuth
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ai.deeplang.infra.ios
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: false
+        # Xcode 16 splits the app into a preview "debug dylib"; that breaks
+        # hosted unit tests run via xcodebuild (runner crashes at <external symbol>).
+        ENABLE_DEBUG_DYLIB: false
+    info:
+      path: InfraAuth/Info.plist
+      properties:
+        CFBundleDisplayName: Infra Auth
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        # Dev convenience: allow cleartext HTTP to localhost (the API on :3001).
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+
+  InfraAuthTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: InfraAuthTests
+    dependencies:
+      - target: InfraAuth
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: true
+
+schemes:
+  InfraAuth:
+    build:
+      targets:
+        InfraAuth: all
+    test:
+      targets:
+        - InfraAuthTests
