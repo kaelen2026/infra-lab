@@ -1,0 +1,12 @@
+# DevEco Studio / hvigor build artifacts
+/.idea
+/build
+/entry/build
+/oh_modules
+/entry/oh_modules
+.hvigor
+.cxx
+/.clangd
+/.clang-format
+*.har
+local.properties

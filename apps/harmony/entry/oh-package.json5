@@ -1,0 +1,9 @@
+{
+  "name": "entry",
+  "version": "1.0.0",
+  "description": "Entry HAP: phone-OTP auth UI + AuthClient backed by @ohos.net.http and HUKS.",
+  "main": "",
+  "author": "",
+  "license": "",
+  "dependencies": {}
+}

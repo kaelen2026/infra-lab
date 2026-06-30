@@ -1,0 +1,20 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "Phone-OTP auth entry module."
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "Infra phone-OTP login."
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "Infra 登录"
+    },
+    {
+      "name": "reason_internet",
+      "value": "用于向认证服务请求并校验短信验证码。"
+    }
+  ]
+}
