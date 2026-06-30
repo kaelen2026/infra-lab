@@ -1,5 +1,2 @@
-import { redirect } from "next/navigation";
-
-export default function Home() {
-  redirect("/auth");
-}
+// Route entry for / — the protected account dashboard.
+export { DashboardPage as default } from "@/features/dashboard";

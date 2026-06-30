@@ -3,8 +3,10 @@ import {
   type AuthErrorCode,
   type AuthTokens,
   type AuthUser,
+  type DeviceDTO,
   type DeviceInfo,
   isCookiePlatform,
+  type LoginEventDTO,
   type Platform,
   refreshSchema,
   requestOtpSchema,
@@ -35,6 +37,10 @@ export interface UserRepository {
     deviceId?: string;
     success: boolean;
   }): Promise<void>;
+  /** Registered devices for the account dashboard, most-recently-seen first. */
+  listDevices(userId: string): Promise<DeviceDTO[]>;
+  /** Recent login attempts for the account dashboard, newest first. */
+  listLoginEvents(userId: string, limit?: number): Promise<LoginEventDTO[]>;
 }
 
 export interface SessionContext {
@@ -201,6 +207,20 @@ export function createAuthRoutes(deps: AuthRouteDeps): Hono {
     const user = await sessions.requireUser(c.req.raw.headers);
     if (!user) return fail(c, "UNAUTHORIZED");
     return c.json({ ok: true, user: toAuthUser(user, false) });
+  });
+
+  // ── Account dashboard: this user's devices ───────────────────────────────────
+  app.get("/auth/devices", async (c) => {
+    const user = await sessions.requireUser(c.req.raw.headers);
+    if (!user) return fail(c, "UNAUTHORIZED");
+    return c.json({ ok: true, devices: await users.listDevices(user.id) });
+  });
+
+  // ── Account dashboard: this user's recent login attempts ─────────────────────
+  app.get("/auth/login-events", async (c) => {
+    const user = await sessions.requireUser(c.req.raw.headers);
+    if (!user) return fail(c, "UNAUTHORIZED");
+    return c.json({ ok: true, events: await users.listLoginEvents(user.id) });
   });
 
   return app;

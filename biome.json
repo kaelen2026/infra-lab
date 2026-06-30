@@ -7,7 +7,14 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!**/dist", "!**/.next", "!**/migrations", "!**/*.tsbuildinfo"]
+    "includes": [
+      "**",
+      "!**/dist",
+      "!**/.next",
+      "!**/migrations",
+      "!**/*.tsbuildinfo",
+      "!apps/web/app/globals.css"
+    ]
   },
   "formatter": {
     "enabled": true,

@@ -6,6 +6,7 @@ const r = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 export default defineConfig({
   resolve: {
     alias: {
+      "@infra/sdk": r("./packages/sdk/src/index.ts"),
       "@infra/shared": r("./packages/shared/src/index.ts"),
       "@infra/auth/testing": r("./packages/auth/src/testing.ts"),
       "@infra/auth": r("./packages/auth/src/index.ts"),
