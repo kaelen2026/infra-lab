@@ -21,7 +21,6 @@
 
 | worktree 目录            | 分支              |
 | ------------------------ | ----------------- |
-| `../infra-lab-ios`       | `feat/ios-app`    |
 | `../infra-lab-android`   | `feat/android-app`|
 | `../infra-lab-harmony`   | `feat/harmony-app`|
 
@@ -29,4 +28,7 @@
 
 - 创建:`git worktree add -b feat/<简述> ../infra-lab-<简述> <基线提交>`。
 - 主仓库目录保持在基线分支;同一分支不能在多个 worktree 同时检出(git 会拒绝)。
-- 查看 / 清理:`git worktree list`;特性合并后 `git worktree remove ../infra-lab-<简述>`。
+- 查看:`git worktree list`。
+- 清理:特性合并后,**删除 worktree 的同时一并删除分支**(分支不长期保留):
+  - `git worktree remove ../infra-lab-<简述>`
+  - `git branch -d feat/<简述>`(已合并;远端分支一并删除:`git push origin --delete feat/<简述>`)
