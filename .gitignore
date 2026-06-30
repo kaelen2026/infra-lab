@@ -7,3 +7,7 @@ dist/
 coverage/
 .DS_Store
 .turbo/
+playwright-report/
+test-results/
+blob-report/
+playwright/.cache/

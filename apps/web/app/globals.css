@@ -1,183 +1,108 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* next-themes toggles `.dark` on <html>; default theme is dark (warm charcoal). */
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Warm paper palette. Neutrals are nudged toward a warm hue (60–90) at low chroma
+ * so the whole UI reads sepia-warm rather than cold zinc. Single clay accent.
+ */
 :root {
-  --bg: #0b0d12;
-  --panel: #14171f;
-  --panel-2: #1b1f2a;
-  --border: #262b38;
-  --text: #e8ecf3;
-  --muted: #8b93a7;
-  --accent: #5b8cff;
-  --accent-hover: #6f9bff;
-  --danger: #ff6b6b;
-  --ok: #4ade80;
-  --radius: 14px;
+  --radius: 0.625rem;
+
+  /* Light = warm off-white paper. */
+  --background: oklch(0.985 0.008 90);
+  --foreground: oklch(0.26 0.012 60);
+  --card: oklch(0.998 0.004 90);
+  --card-foreground: oklch(0.26 0.012 60);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.26 0.012 60);
+  --primary: oklch(0.56 0.15 45);
+  --primary-foreground: oklch(0.99 0.005 90);
+  --secondary: oklch(0.95 0.008 85);
+  --secondary-foreground: oklch(0.3 0.012 60);
+  --muted: oklch(0.95 0.008 85);
+  --muted-foreground: oklch(0.52 0.012 60);
+  --accent: oklch(0.93 0.012 70);
+  --accent-foreground: oklch(0.3 0.012 60);
+  --destructive: oklch(0.55 0.18 27);
+  --destructive-foreground: oklch(0.99 0.005 90);
+  --border: oklch(0.9 0.008 85);
+  --input: oklch(0.9 0.008 85);
+  --ring: oklch(0.56 0.15 45);
 }
 
-* {
-  box-sizing: border-box;
+.dark {
+  /* Dark = warm charcoal, not near-black zinc. Elevation via warm lightness steps. */
+  --background: oklch(0.18 0.006 70);
+  --foreground: oklch(0.93 0.006 80);
+  --card: oklch(0.215 0.007 70);
+  --card-foreground: oklch(0.93 0.006 80);
+  --popover: oklch(0.215 0.007 70);
+  --popover-foreground: oklch(0.93 0.006 80);
+  --primary: oklch(0.7 0.13 48);
+  --primary-foreground: oklch(0.2 0.02 50);
+  --secondary: oklch(0.27 0.008 70);
+  --secondary-foreground: oklch(0.93 0.006 80);
+  --muted: oklch(0.27 0.008 70);
+  --muted-foreground: oklch(0.71 0.01 75);
+  --accent: oklch(0.3 0.012 60);
+  --accent-foreground: oklch(0.95 0.006 80);
+  --destructive: oklch(0.58 0.16 25);
+  --destructive-foreground: oklch(0.95 0.006 80);
+  --border: oklch(0.3 0.008 70);
+  --input: oklch(0.3 0.008 70);
+  --ring: oklch(0.7 0.13 48);
 }
 
-html,
-body {
-  margin: 0;
-  padding: 0;
-  background: radial-gradient(1100px 600px at 50% -10%, #1a2030 0%, transparent 60%), var(--bg);
-  color: var(--text);
-  font-family:
-    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB",
-    "Microsoft YaHei", sans-serif;
-  -webkit-font-smoothing: antialiased;
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  /* Spectral display serif · Hanken Grotesk UI · JetBrains Mono for data. CJK fallbacks appended. */
+  --font-sans: var(--font-hanken), ui-sans-serif, system-ui, "PingFang SC", "Noto Sans SC",
+    sans-serif;
+  --font-serif: var(--font-spectral), "Songti SC", "Noto Serif SC", Georgia, serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, "SFMono-Regular", Menlo, monospace;
 }
 
-.shell {
-  min-height: 100dvh;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-}
-
-.card {
-  width: 100%;
-  max-width: 400px;
-  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 32px 28px;
-  box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.6);
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 6px;
-}
-.brand .dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 12px var(--accent);
-}
-.brand span {
-  font-size: 13px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-h1 {
-  font-size: 22px;
-  margin: 14px 0 4px;
-}
-.sub {
-  color: var(--muted);
-  font-size: 14px;
-  margin: 0 0 24px;
-  line-height: 1.5;
-}
-
-label {
-  display: block;
-  font-size: 13px;
-  color: var(--muted);
-  margin-bottom: 8px;
-}
-
-.input {
-  width: 100%;
-  height: 48px;
-  background: #0e1118;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  color: var(--text);
-  font-size: 16px;
-  padding: 0 14px;
-  outline: none;
-  transition:
-    border-color 0.15s,
-    box-shadow 0.15s;
-}
-.input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(91, 140, 255, 0.18);
-}
-.input.code {
-  letter-spacing: 0.5em;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-
-.btn {
-  width: 100%;
-  height: 48px;
-  margin-top: 18px;
-  border: none;
-  border-radius: 10px;
-  background: var(--accent);
-  color: #fff;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    background 0.15s,
-    opacity 0.15s;
-}
-.btn:hover:not(:disabled) {
-  background: var(--accent-hover);
-}
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.linkbtn {
-  background: none;
-  border: none;
-  color: var(--accent);
-  cursor: pointer;
-  font-size: 13px;
-  padding: 0;
-}
-.linkbtn:disabled {
-  color: var(--muted);
-  cursor: not-allowed;
-}
-
-.row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 14px;
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.alert {
-  margin-top: 16px;
-  padding: 11px 13px;
-  border-radius: 10px;
-  font-size: 13px;
-  line-height: 1.45;
-}
-.alert.error {
-  background: rgba(255, 107, 107, 0.12);
-  border: 1px solid rgba(255, 107, 107, 0.35);
-  color: #ffb4b4;
-}
-.alert.ok {
-  background: rgba(74, 222, 128, 0.1);
-  border: 1px solid rgba(74, 222, 128, 0.3);
-  color: #b7f7cf;
-}
-
-.hint {
-  margin-top: 20px;
-  font-size: 12px;
-  color: var(--muted);
-  text-align: center;
-  line-height: 1.5;
-}
-
-a {
-  color: var(--accent);
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+  /* CJK needs more leading than Latin body text. */
+  :lang(zh) {
+    line-height: 1.75;
+  }
+  /* Tighten only Latin display headings; never CJK. */
+  h1:lang(en),
+  h2:lang(en) {
+    letter-spacing: -0.018em;
+  }
 }
