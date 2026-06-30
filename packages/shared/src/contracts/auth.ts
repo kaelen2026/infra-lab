@@ -143,6 +143,38 @@ export interface MeResponse {
   user: AuthUser;
 }
 
+// ── Account dashboard: devices & login history ──────────────────────────────────
+/** A registered client install for the current user. */
+export interface DeviceDTO {
+  id: string;
+  platform: Platform;
+  deviceId: string;
+  model: string | null;
+  osVersion: string | null;
+  appVersion: string | null;
+  lastSeenAt: string; // ISO 8601
+  createdAt: string; // ISO 8601
+}
+
+export interface DevicesResponse {
+  ok: true;
+  devices: DeviceDTO[];
+}
+
+/** A single OTP verification attempt in the audit trail. */
+export interface LoginEventDTO {
+  id: string;
+  platform: Platform;
+  ip: string | null;
+  success: boolean;
+  createdAt: string; // ISO 8601
+}
+
+export interface LoginEventsResponse {
+  ok: true;
+  events: LoginEventDTO[];
+}
+
 // ── Endpoint paths (shared so SDKs never hard-code strings) ─────────────────────
 export const AUTH_ROUTES = {
   requestOtp: "/auth/otp/request",
@@ -150,6 +182,8 @@ export const AUTH_ROUTES = {
   refresh: "/auth/refresh",
   logout: "/auth/logout",
   me: "/auth/me",
+  devices: "/auth/devices",
+  loginEvents: "/auth/login-events",
 } as const;
 
 // ── SDK interface draft (implemented per platform) ─────────────────────────────
@@ -166,5 +200,9 @@ export interface AuthClient {
   /** No-op on web (cookie handles it); native rotates the refresh token. */
   refresh(): Promise<AuthTokens | null>;
   me(): Promise<AuthUser>;
+  /** Registered client installs for the current user (account dashboard). */
+  listDevices(): Promise<DeviceDTO[]>;
+  /** Recent OTP verification attempts for the current user (account dashboard). */
+  listLoginEvents(): Promise<LoginEventDTO[]>;
   logout(): Promise<void>;
 }
