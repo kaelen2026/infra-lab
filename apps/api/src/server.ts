@@ -3,6 +3,7 @@ import { createAuth, createOtpService } from "@infra/auth";
 import { createDb, schema } from "@infra/db";
 import { createRedis, createRedisOtpStore } from "@infra/redis";
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import { createAuthRoutes } from "./routes/auth.routes.js";
 import { createSessionService } from "./services/session-service.js";
 import { createUserRepository } from "./services/user-repository.js";
@@ -51,6 +52,9 @@ const sms = async (phone: string, code: string): Promise<void> => {
 };
 
 const app = new Hono();
+// Browser clients (web) call this API cross-origin and must send the session cookie,
+// so credentials are allowed and the origin is reflected from the configured web origin.
+app.use("*", cors({ origin: baseURL, credentials: true }));
 app.get("/health", (c) => c.json({ ok: true }));
 // Better Auth's own endpoints (used by its client + bearer-token resolution).
 app.on(["GET", "POST"], "/api/auth/*", (c) => auth.handler(c.req.raw));

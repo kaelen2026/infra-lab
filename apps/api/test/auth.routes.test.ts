@@ -51,6 +51,31 @@ class FakeUserRepository implements UserRepository {
   }): Promise<void> {
     this.events.push({ userId: e.userId, platform: e.platform, success: e.success });
   }
+  async listDevices(userId: string) {
+    return this.devices
+      .filter((d) => d.userId === userId)
+      .map((d, i) => ({
+        id: `dev_${i}`,
+        platform: d.device.platform,
+        deviceId: d.device.deviceId,
+        model: d.device.model ?? null,
+        osVersion: d.device.osVersion ?? null,
+        appVersion: d.device.appVersion ?? null,
+        lastSeenAt: "2026-06-30T00:00:00.000Z",
+        createdAt: "2026-06-30T00:00:00.000Z",
+      }));
+  }
+  async listLoginEvents(userId: string) {
+    return this.events
+      .filter((e) => e.userId === userId)
+      .map((e, i) => ({
+        id: `evt_${i}`,
+        platform: e.platform,
+        ip: null,
+        success: e.success,
+        createdAt: "2026-06-30T00:00:00.000Z",
+      }));
+  }
 }
 
 // ── Fake session service ────────────────────────────────────────────────────────

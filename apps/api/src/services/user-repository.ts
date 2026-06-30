@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { type Db, device as deviceTable, loginEvent, profile, user } from "@infra/db";
 import type { DeviceInfo, Platform } from "@infra/shared";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import type { UserRecord, UserRepository } from "../routes/auth.routes.js";
 
 /** Drizzle-backed {@link UserRepository}. */
@@ -80,6 +80,40 @@ export function createUserRepository(db: Db): UserRepository {
         ip: event.ip,
         success: event.success,
       });
+    },
+
+    async listDevices(userId) {
+      const rows = await db
+        .select()
+        .from(deviceTable)
+        .where(eq(deviceTable.userId, userId))
+        .orderBy(desc(deviceTable.lastSeenAt));
+      return rows.map((r) => ({
+        id: r.id,
+        platform: r.platform,
+        deviceId: r.deviceId,
+        model: r.model,
+        osVersion: r.osVersion,
+        appVersion: r.appVersion,
+        lastSeenAt: r.lastSeenAt.toISOString(),
+        createdAt: r.createdAt.toISOString(),
+      }));
+    },
+
+    async listLoginEvents(userId, limit = 10) {
+      const rows = await db
+        .select()
+        .from(loginEvent)
+        .where(eq(loginEvent.userId, userId))
+        .orderBy(desc(loginEvent.createdAt))
+        .limit(limit);
+      return rows.map((r) => ({
+        id: r.id,
+        platform: r.platform,
+        ip: r.ip,
+        success: r.success,
+        createdAt: r.createdAt.toISOString(),
+      }));
     },
   };
 }
