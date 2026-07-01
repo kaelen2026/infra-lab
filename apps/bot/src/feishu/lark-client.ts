@@ -1,4 +1,4 @@
-import { parseFeishuEnv } from "@infra/env/feishu";
+import { parseBotEnv } from "@infra/env/bot";
 import * as Lark from "@larksuiteoapi/node-sdk";
 
 let cached: Lark.Client | null | undefined;
@@ -11,7 +11,7 @@ let cached: Lark.Client | null | undefined;
  */
 export function getLarkClient(): Lark.Client | null {
   if (cached !== undefined) return cached;
-  const { LARK_APP_ID, LARK_APP_SECRET, LARK_DOMAIN } = parseFeishuEnv();
+  const { LARK_APP_ID, LARK_APP_SECRET, LARK_DOMAIN } = parseBotEnv();
   if (!LARK_APP_ID || !LARK_APP_SECRET) {
     cached = null;
     return null;

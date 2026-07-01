@@ -1,6 +1,6 @@
 import { createSign } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { type FeishuEnv, parseFeishuEnv } from "@infra/env/feishu";
+import { type BotEnv, parseBotEnv } from "@infra/env/bot";
 
 /**
  * infra-lab-bot GitHub App 的 token provider：用 App 私钥自己签 JWT → 换 installation
@@ -132,7 +132,7 @@ export function createAppTokenProvider(
  * 文件（INFRA_LAB_BOT_PRIVATE_KEY_PATH）。都没有则返回 undefined。值来自 @infra/env 的
  * feishu bucket（已 trim 空串为 undefined）。
  */
-export function resolvePrivateKey(env: FeishuEnv): string | undefined {
+export function resolvePrivateKey(env: BotEnv): string | undefined {
   const inline = env.INFRA_LAB_BOT_PRIVATE_KEY;
   if (inline) return inline.includes("\\n") ? inline.replace(/\\n/g, "\n") : inline;
   const path = env.INFRA_LAB_BOT_PRIVATE_KEY_PATH;
@@ -151,7 +151,7 @@ export function resolvePrivateKey(env: FeishuEnv): string | undefined {
 
 /** 用 @infra/env 的 feishu bucket 构造一个 provider（repo = owner/name）。 */
 export function createAppTokenProviderFromEnv(): TokenProvider {
-  const env = parseFeishuEnv();
+  const env = parseBotEnv();
   const [owner, name] = (env.INFRA_LAB_BOT_GITHUB_REPO ?? "").split("/");
   return createAppTokenProvider({
     staticToken: env.INFRA_LAB_BOT_GITHUB_TOKEN,

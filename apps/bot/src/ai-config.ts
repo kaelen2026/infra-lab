@@ -1,5 +1,5 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { parseFeishuEnv } from "@infra/env/feishu";
+import { parseBotEnv } from "@infra/env/bot";
 import type { LanguageModel } from "ai";
 
 let cached: LanguageModel | null | undefined;
@@ -13,7 +13,7 @@ let cached: LanguageModel | null | undefined;
  */
 export function getResponderModel(): LanguageModel | null {
   if (cached !== undefined) return cached;
-  const { LLM_BASE_URL, LLM_API_KEY, LLM_MODEL } = parseFeishuEnv();
+  const { LLM_BASE_URL, LLM_API_KEY, LLM_MODEL } = parseBotEnv();
   if (!LLM_BASE_URL || !LLM_API_KEY || !LLM_MODEL) {
     cached = null;
     return null;

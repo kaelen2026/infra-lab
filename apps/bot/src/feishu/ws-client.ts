@@ -1,4 +1,4 @@
-import { parseFeishuEnv } from "@infra/env/feishu";
+import { parseBotEnv } from "@infra/env/bot";
 import * as Lark from "@larksuiteoapi/node-sdk";
 import { routeMessageReceive } from "./event-router";
 import type { FeishuMessageReceiveEvent } from "./types";
@@ -43,7 +43,7 @@ function isDuplicateMessage(messageId: string | undefined): boolean {
 export function startFeishuWsClient(): void {
   if (started) return;
 
-  const { LARK_APP_ID, LARK_APP_SECRET, LARK_DOMAIN } = parseFeishuEnv();
+  const { LARK_APP_ID, LARK_APP_SECRET, LARK_DOMAIN } = parseBotEnv();
   if (!LARK_APP_ID || !LARK_APP_SECRET) {
     console.warn("[feishu] 缺少 LARK_APP_ID / LARK_APP_SECRET，跳过 ws client 启动");
     return;

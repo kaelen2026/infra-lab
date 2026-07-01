@@ -1,4 +1,4 @@
-import { loadFeishuEnv } from "@infra/env/feishu";
+import { loadBotEnv } from "@infra/env/bot";
 
 /**
  * 一次性脚本：用 .env 里的 LARK_APP_ID / LARK_APP_SECRET 换 tenant_access_token，
@@ -7,7 +7,7 @@ import { loadFeishuEnv } from "@infra/env/feishu";
  *   npx tsx scripts/whoami.ts
  */
 
-const { LARK_APP_ID: appId, LARK_APP_SECRET: appSecret, LARK_DOMAIN } = loadFeishuEnv();
+const { LARK_APP_ID: appId, LARK_APP_SECRET: appSecret, LARK_DOMAIN } = loadBotEnv();
 if (!appId || !appSecret) {
   console.error("缺少 LARK_APP_ID / LARK_APP_SECRET（先填好 .env）");
   process.exit(1);

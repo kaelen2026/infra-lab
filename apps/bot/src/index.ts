@@ -1,12 +1,12 @@
-import { loadFeishuEnv } from "@infra/env/feishu";
+import { loadBotEnv } from "@infra/env/bot";
 import { createBotDispatchHandler } from "./bot-dispatch-handler";
 import { setLocalTaskHandler } from "./feishu/dispatcher";
 import { startFeishuWsClient } from "./feishu/ws-client";
 
 // 入口：加载 .env → 装配处理 handler → 启动飞书事件长连接。
-// loadFeishuEnv 读本目录 .env 进 process.env（生产由平台注入、无文件时是 no-op）；
-// 运行期各处再用 parseFeishuEnv() 实时读。
-loadFeishuEnv();
+// loadBotEnv 读本目录 .env 进 process.env（生产由平台注入、无文件时是 no-op）；
+// 运行期各处再用 parseBotEnv() 实时读。
+loadBotEnv();
 // 收到 im.message.receive_v1 后的链路：ws-client（去重/ack）→ event-router（回环/@ 准入）
 // → responder（react → notice → dispatch）→ dispatcher → handler。
 

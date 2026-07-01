@@ -1,4 +1,4 @@
-// Feishu bucket: the bot's Lark / GitHub-dispatch / LLM credentials.
+// Bot bucket: the bot's Lark / GitHub-dispatch / LLM credentials.
 //
 // UNLIKE the core bucket, this is graceful-degradation, not fail-fast. The bot
 // intentionally runs in a reduced mode when a credential is absent — it skips the
@@ -7,7 +7,7 @@
 // open-id. So parsing NEVER throws: every field is optional, normalized into
 // typed optionals + defaults.
 //
-// Read live on each use via parseFeishuEnv (NOT memoized): the router reads
+// Read live on each use via parseBotEnv (NOT memoized): the router reads
 // FEISHU_BOT_OPEN_ID per message and tests toggle env vars between cases.
 //
 // NEVER log a parsed value — these are app secrets.
@@ -19,7 +19,7 @@ import { z } from "zod";
 // An empty string (`KEY=` in a .env) is treated the same as unset.
 const optional = z.preprocess((v) => (v === "" ? undefined : v), z.string().min(1).optional());
 
-const FeishuEnvSchema = z.object({
+const BotEnvSchema = z.object({
   // Lark app auth (inbound ws + outbound API share these).
   LARK_APP_ID: optional,
   LARK_APP_SECRET: optional,
@@ -46,24 +46,22 @@ const FeishuEnvSchema = z.object({
   LLM_MODEL: optional,
 });
 
-export type FeishuEnv = z.infer<typeof FeishuEnvSchema>;
+export type BotEnv = z.infer<typeof BotEnvSchema>;
 
 /**
- * Parse a raw env bag into a typed {@link FeishuEnv}. Pure, side-effect free and
+ * Parse a raw env bag into a typed {@link BotEnv}. Pure, side-effect free and
  * cannot throw (every field is optional / defaulted). Call it fresh at each use —
  * it reads the current `process.env` by default, which the per-message router and
- * the tests rely on. {@link loadFeishuEnv} wires in the .env file at startup.
+ * the tests rely on. {@link loadBotEnv} wires in the .env file at startup.
  */
-export function parseFeishuEnv(
-  source: Record<string, string | undefined> = process.env,
-): FeishuEnv {
-  return FeishuEnvSchema.parse(source);
+export function parseBotEnv(source: Record<string, string | undefined> = process.env): BotEnv {
+  return BotEnvSchema.parse(source);
 }
 
-// The bot runs from apps/feishu, so its .env sits in the current directory. In
+// The bot runs from apps/bot, so its .env sits in the current directory. In
 // production the platform injects real env vars and no file is present — loading is
 // then a no-op. Existing process.env values are not overwritten by the file.
-function loadFeishuEnvFile(): void {
+function loadBotEnvFile(): void {
   const candidate = resolve(process.cwd(), ".env");
   if (existsSync(candidate)) process.loadEnvFile(candidate);
 }
@@ -71,9 +69,9 @@ function loadFeishuEnvFile(): void {
 /**
  * Load the bot's `.env` (if present) then parse. Call once at an entrypoint
  * (`index.ts`, scripts) to populate `process.env`; runtime code then reads live
- * via {@link parseFeishuEnv}.
+ * via {@link parseBotEnv}.
  */
-export function loadFeishuEnv(): FeishuEnv {
-  loadFeishuEnvFile();
-  return parseFeishuEnv(process.env);
+export function loadBotEnv(): BotEnv {
+  loadBotEnvFile();
+  return parseBotEnv(process.env);
 }

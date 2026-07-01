@@ -1,4 +1,4 @@
-import { parseFeishuEnv } from "@infra/env/feishu";
+import { parseBotEnv } from "@infra/env/bot";
 import { runFeishuResponder } from "./responder";
 import type { FeishuMessageReceiveEvent } from "./types";
 
@@ -33,7 +33,7 @@ export async function routeMessageReceive(
   //    流——成员之间相互讨论会被误处理成对 bot 的请求，产生大量无关 AI 触发，得不偿失。
   //    现在统一靠 @ 触发，bot 只在被点名时介入。
   if (message.chat_type === "group") {
-    const { FEISHU_BOT_OPEN_ID } = parseFeishuEnv();
+    const { FEISHU_BOT_OPEN_ID } = parseBotEnv();
     if (!FEISHU_BOT_OPEN_ID) {
       console.error("[feishu] 缺少 FEISHU_BOT_OPEN_ID，无法判断群聊 @；拒绝转发");
       return { handled: false, reason: "missing-bot-open-id" };

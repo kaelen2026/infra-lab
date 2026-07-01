@@ -3,7 +3,7 @@
   "compilerOptions": {
     "types": ["node"],
     "paths": {
-      "@infra/env/feishu": ["../../packages/env/src/feishu.ts"]
+      "@infra/env/bot": ["../../packages/env/src/bot.ts"]
     }
   },
   "include": ["src/**/*.ts", "test/**/*.ts", "scripts/**/*.ts"]

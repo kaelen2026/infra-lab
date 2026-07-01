@@ -13,7 +13,7 @@ name: infra-lab-bot
 #     Requires repo secrets INFRA_LAB_BOT_APP_ID and INFRA_LAB_BOT_PRIVATE_KEY, and the
 #     app installed on this repo with Contents/Issues/Pull requests read & write.
 #
-# Feishu closed loop: apps/feishu dispatches this workflow with `feishu_message_id` set.
+# Feishu closed loop: apps/bot dispatches this workflow with `feishu_message_id` set.
 # The final step then replies the run's result back into that Feishu message's thread —
 # needs repo secrets LARK_APP_ID + LARK_APP_SECRET (and optional var LARK_DOMAIN).
 on:
@@ -25,7 +25,7 @@ on:
         required: false
         default: "分析一下当前项目"
       feishu_message_id:
-        # Set by apps/feishu. When non-empty, the run's result is replied back into this
+        # Set by apps/bot. When non-empty, the run's result is replied back into this
         # Feishu message's thread. Empty (default) for human `gh workflow run` dispatches.
         description: "Feishu message id to reply the result into (leave empty for manual runs)"
         required: false
@@ -94,7 +94,7 @@ jobs:
           github_token: ${{ steps.app-token.outputs.token }}
           # Mention the bot by its own name rather than the default @claude.
           trigger_phrase: "@infra-lab-bot"
-          # apps/feishu dispatches this workflow via the infra-lab-bot App token, so the
+          # apps/bot dispatches this workflow via the infra-lab-bot App token, so the
           # actor is a Bot (infra-lab-bot[bot]). claude-code-action blocks non-human
           # actors by default; allow just this bot (matched case-insensitively, [bot]
           # suffix stripped). NOT "*" — this is a public repo, so a wildcard would let
@@ -110,7 +110,7 @@ jobs:
           # comment runs stay hidden since less-trusted users can fire those.
           show_full_output: ${{ github.event_name == 'workflow_dispatch' }}
 
-      # Feishu closed loop: when apps/feishu dispatched with a feishu_message_id, reply
+      # Feishu closed loop: when apps/bot dispatched with a feishu_message_id, reply
       # the run's result back into that Feishu thread. `always()` so a failed Claude run
       # still posts a "finished" notice (the script falls back to the run link).
       - name: Reply result to Feishu thread

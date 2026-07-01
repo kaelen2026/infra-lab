@@ -71,7 +71,7 @@ apps/
   web/      Next.js：手机号验证码登录页（app/auth）、账户面板（app/page）、待办（app/todos + features/todos）
   h5/       移动端 H5（Vite + React 19 + Tailwind v4 SPA，:3002）：复用 @infra/sdk 的 Web Cookie 传输，
             移动优先的登录 + 账户 + 待办；部署见 apps/h5/docs/deployment.md
-  feishu/   飞书 IM 接待 bot：长连接收消息 → react → 安抚 notice → 派发到 infra-lab-bot workflow（无 PG/Redis）
+  bot/      飞书 IM 接待 bot：长连接收消息 → react → 安抚 notice → 派发到 infra-lab-bot workflow（无 PG/Redis）
 docs/plans/phone-otp-auth-plan.md      设计方案 + 四端 SDK 接口草案
 .ai/verifications/phone-otp-auth.md    验收记录（命令 + 实跑输出）
 ```
@@ -130,5 +130,5 @@ API 输出结构化 JSON 日志（每条带 `requestId`，`x-request-id` 支持�
   改动前先读 `.claude/rules/{ios,android,harmony}.md`；这些门禁本地运行，不进 CI（详见 [`CLAUDE.md`](./CLAUDE.md)）。
 - 详尽的开发须知见 [`CLAUDE.md`](./CLAUDE.md)。
 - 仓库配有 AI 助手 **infra-lab-bot**（`@infra-lab-bot` 提及即用）——协作方式见 [`docs/infra-lab-bot.md`](./docs/infra-lab-bot.md)；
-  飞书用户可经 `apps/feishu` 接待 bot 触达同一 workflow。
+  飞书用户可经 `apps/bot` 接待 bot 触达同一 workflow。
 ```

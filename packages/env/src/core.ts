@@ -4,7 +4,7 @@
 // value fails fast at boot with a named error, instead of surfacing on some later
 // request path.
 //
-// Deliberately fail-fast (unlike the feishu bucket, which degrades gracefully):
+// Deliberately fail-fast (unlike the bot bucket, which degrades gracefully):
 // the API cannot serve without a database, a redis and a signing secret.
 //
 // NEVER log a parsed value — zod issue messages carry the var name and constraint,
