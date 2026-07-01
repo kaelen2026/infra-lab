@@ -76,7 +76,7 @@ jobs:
           # 定时 / 手动触发的巡检把结论也留在 run log 里，便于回溯。
           show_full_output: true
 
-      # 从 execution_file 抽出报告纯文本，剥掉首行的机器状态标记，得到给人看的报告正文。
+      # 从 execution_file 抽出报告纯文本，解析状态标记，剥掉标记行得到给人看的报告正文。
       - name: Extract report
         id: report
         if: always() && steps.claude.outcome == 'success'
@@ -89,28 +89,35 @@ jobs:
             echo "巡检运行结束，但未取到可解析的报告文本。" > report.md
             exit 0
           fi
-          first_line="$(head -n 1 raw-report.md)"
-          case "$first_line" in
-            SECURITY_PATROL_STATUS:*FINDINGS*) echo "status=FINDINGS" >> "$GITHUB_OUTPUT" ;;
-            SECURITY_PATROL_STATUS:*CLEAN*)    echo "status=CLEAN"    >> "$GITHUB_OUTPUT" ;;
-            *)                                  echo "status=UNKNOWN"  >> "$GITHUB_OUTPUT" ;;
-          esac
-          # 剥掉首行状态标记（若存在），其余作为报告正文。
-          case "$first_line" in
-            SECURITY_PATROL_STATUS:*) tail -n +2 raw-report.md > report.md ;;
-            *)                        cp raw-report.md report.md ;;
-          esac
+          # 在整份报告里找状态标记行——不假设它在第一行。模型常在标记前加寒暄/分隔线，
+          # 只看首行会把 FINDINGS 误判成 UNKNOWN 而漏开 issue。FINDINGS 优先于 CLEAN。
+          if grep -qiE '^[[:space:]]*SECURITY_PATROL_STATUS:.*FINDINGS' raw-report.md; then
+            echo "status=FINDINGS" >> "$GITHUB_OUTPUT"
+          elif grep -qiE '^[[:space:]]*SECURITY_PATROL_STATUS:.*CLEAN' raw-report.md; then
+            echo "status=CLEAN" >> "$GITHUB_OUTPUT"
+          else
+            echo "status=UNKNOWN" >> "$GITHUB_OUTPUT"
+          fi
+          # 报告正文剥掉标记行（在任意位置的都剥掉）。
+          grep -vE '^[[:space:]]*SECURITY_PATROL_STATUS:' raw-report.md > report.md || cp raw-report.md report.md
 
-      # 发现问题（或状态未知）时开 / 复用 issue；纯 CLEAN 不开 issue，避免每周噪声。
+      # 发现问题 **或** 状态未知时都开 issue：宁可多开也不漏报（fail-safe）——UNKNOWN 往往
+      # 意味着解析没跟上模型输出，此时若不开 issue 就会像首个版本那样静默吞掉真实发现。
+      # 只有明确 CLEAN 才不开 issue，避免每周噪声。
       - name: Open issue on findings
         id: issue
-        if: always() && steps.report.outputs.status == 'FINDINGS'
+        if: always() && (steps.report.outputs.status == 'FINDINGS' || steps.report.outputs.status == 'UNKNOWN')
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          STATUS: ${{ steps.report.outputs.status }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           gh label create security --color B60205 --description "安全巡检 / 安全扫描" --force >/dev/null 2>&1 || true
-          title="安全巡检发现问题 $(date -u +%Y-%m-%d)"
+          if [ "$STATUS" = "FINDINGS" ]; then
+            title="安全巡检发现问题 $(date -u +%Y-%m-%d)"
+          else
+            title="安全巡检（状态未确定，请人工复核） $(date -u +%Y-%m-%d)"
+          fi
           {
             cat report.md
             printf '\n\n---\n_由 security-patrol 自动生成 · [运行日志](%s)_\n' "$RUN_URL"
@@ -135,13 +142,17 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           case "$STATUS" in
-            CLEAN)  echo "**本周巡检：未发现中/高危问题** ✅" > feishu-body.md ;;
+            CLEAN) echo "**本周巡检：未发现中/高危问题** ✅" > feishu-body.md ;;
             FINDINGS)
               {
                 echo "**本周巡检：发现问题** ⚠️"
                 [ -n "$ISSUE_URL" ] && echo "" && echo "详见 issue：$ISSUE_URL"
               } > feishu-body.md ;;
-            *) echo "**本周巡检已运行**（状态未知，请看运行日志）" > feishu-body.md ;;
+            *)
+              {
+                echo "**本周巡检：状态未确定，请人工复核** ❓"
+                [ -n "$ISSUE_URL" ] && echo "" && echo "详见 issue：$ISSUE_URL"
+              } > feishu-body.md ;;
           esac
           if [ -f report.md ]; then
             { echo ""; echo "---"; cat report.md; } >> feishu-body.md
