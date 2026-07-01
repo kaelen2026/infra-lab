@@ -1,4 +1,4 @@
-# @infra/feishu
+# @infra/bot
 
 飞书 IM 接待 bot。长连接收消息 → 最快打个 emoji react → 回一句安抚 notice →
 把任务 `workflow_dispatch` 派发到本仓库的 **infra-lab-bot** workflow
@@ -32,9 +32,9 @@ LLM 抛错 / 没配 / 没 dispatch 时降级：补默认 emoji + 固定 notice +
 
 ```bash
 pnpm install
-cp apps/feishu/.env.example apps/feishu/.env   # 填 LARK_* / FEISHU_BOT_OPEN_ID / INFRA_LAB_BOT_GITHUB_* / LLM_*
-pnpm --filter @infra/feishu whoami             # 取 bot open_id，填进 .env 的 FEISHU_BOT_OPEN_ID
-pnpm --filter @infra/feishu dev                # tsx watch 启动长连接
+cp apps/bot/.env.example apps/bot/.env   # 填 LARK_* / FEISHU_BOT_OPEN_ID / INFRA_LAB_BOT_GITHUB_* / LLM_*
+pnpm --filter @infra/bot whoami             # 取 bot open_id，填进 .env 的 FEISHU_BOT_OPEN_ID
+pnpm --filter @infra/bot dev                # tsx watch 启动长连接
 ```
 
 - `dev` — watch 模式启动（tsx，直接读 src 旁的 `prompt.md`）
@@ -43,7 +43,7 @@ pnpm --filter @infra/feishu dev                # tsx watch 启动长连接
 - `whoami` — 用 `LARK_APP_*` 换 token 打印 bot open_id
 - `typecheck` / `test` — 跟随仓库统一门禁（`pnpm typecheck` / `pnpm test`）
 
-`import "dotenv/config"` 从 `apps/feishu/` 目录加载 `.env`（与仓库根 `.env` 分开）。
+`import "dotenv/config"` 从 `apps/bot/` 目录加载 `.env`（与仓库根 `.env` 分开）。
 纯出站长连接服务，不监听端口。
 
 ## Docker
@@ -52,8 +52,8 @@ pnpm --filter @infra/feishu dev                # tsx watch 启动长连接
 **构建上下文是仓库根**（要读 workspace 清单与 lockfile）：
 
 ```bash
-docker build -f apps/feishu/Dockerfile -t infra-feishu .
-docker run --rm --env-file apps/feishu/.env infra-feishu
+docker build -f apps/bot/Dockerfile -t infra-bot .
+docker run --rm --env-file apps/bot/.env infra-bot
 ```
 
 App 私钥（方式 A）传给容器：用 `INFRA_LAB_BOT_PRIVATE_KEY`（PEM 内容，`\n` 转义）写进

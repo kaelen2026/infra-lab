@@ -1,7 +1,7 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ["src/core.ts", "src/feishu.ts"],
+  entry: ["src/core.ts", "src/bot.ts"],
   format: ["esm"],
   dts: true,
   clean: true,

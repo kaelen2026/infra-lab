@@ -73,7 +73,7 @@ importers:
         specifier: 4.22.4
         version: 4.22.4
 
-  apps/feishu:
+  apps/bot:
     dependencies:
       '@ai-sdk/openai-compatible':
         specifier: 1.0.42

@@ -52,11 +52,11 @@ verbosity. **Never log phone numbers, OTP codes, or tokens.**
 claude-code-action (Opus 4.8) as the `infra-lab-bot[bot]` GitHub App. See
 [`docs/infra-lab-bot.md`](docs/infra-lab-bot.md); workflow in `.github/workflows/infra-lab-bot.yml`.
 
-`apps/feishu` (`@infra/feishu`) bridges Feishu/Lark IM into that same workflow: it receives chat over a
+`apps/bot` (`@infra/bot`) bridges Feishu/Lark IM into that same workflow: it receives chat over a
 long-lived connection, reacts + posts a holding notice, then `workflow_dispatch`es the task to
 `infra-lab-bot.yml` (task as the `prompt` input). It's a pure outbound service with no Postgres/Redis —
-not an auth client. Run with `pnpm --filter @infra/feishu dev`; see
-[`apps/feishu/README.md`](apps/feishu/README.md).
+not an auth client. Run with `pnpm --filter @infra/bot dev`; see
+[`apps/bot/README.md`](apps/bot/README.md).
 
 ## H5 (`apps/h5`, mobile web)
 

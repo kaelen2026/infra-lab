@@ -16,13 +16,13 @@ read a secret it has no business seeing.
 | Subpath             | Used by                         | Policy                                                              |
 | ------------------- | ------------------------------- | ------------------------------------------------------------------- |
 | `@infra/env/core`   | `apps/api`, db tooling, scripts | **fail-fast** — Postgres / Redis / Better-Auth secrets are required |
-| `@infra/env/feishu` | `apps/feishu`                   | **graceful-degradation** — every field optional, parsing never throws |
+| `@infra/env/bot`    | `apps/bot`                      | **graceful-degradation** — every field optional, parsing never throws |
 
 The two policies are deliberate. The API cannot serve without a database, so `core`
 throws at boot. The bot intentionally runs in a reduced mode when a credential is
 absent (skips the ws client, degrades the LLM responder, refuses group messages), so
-`feishu` normalizes into typed optionals + defaults and never throws. Read `feishu`
-live at each use (`parseFeishuEnv`) — it is not memoized, because the router reads the
+`bot` normalizes into typed optionals + defaults and never throws. Read `bot`
+live at each use (`parseBotEnv`) — it is not memoized, because the router reads the
 bot open-id per message.
 
 ## Usage
