@@ -66,12 +66,12 @@ fun AuthScreenContent(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = "手机号登录",
+            text = AuthCopyGenerated.PHONE_TITLE,
             style = MaterialTheme.typography.headlineMedium,
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "未注册的手机号验证后将自动创建账号",
+            text = AuthCopyGenerated.PHONE_DESCRIPTION,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
         )
@@ -110,15 +110,15 @@ private fun PhoneStep(
         OutlinedTextField(
             value = state.phone,
             onValueChange = onPhoneChange,
-            label = { Text("手机号") },
-            placeholder = { Text("+8613800138000") },
+            label = { Text(AuthCopyGenerated.PHONE_LABEL) },
+            placeholder = { Text(AuthCopyGenerated.PHONE_PLACEHOLDER) },
             singleLine = true,
             enabled = !state.busy,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(20.dp))
-        PrimaryButton(text = "获取验证码", enabled = state.canSend, busy = state.busy, onClick = onSend)
+        PrimaryButton(text = AuthCopyGenerated.PHONE_SUBMIT, enabled = state.canSend, busy = state.busy, onClick = onSend)
     }
 }
 
@@ -132,7 +132,7 @@ private fun CodeStep(
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
-            text = "验证码已发送至 ${state.phone}",
+            text = AuthCopyGenerated.codeDescription(state.phone, OtpLimits.TTL_SECONDS / 60),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
         )
@@ -140,24 +140,24 @@ private fun CodeStep(
         OutlinedTextField(
             value = state.code,
             onValueChange = onCodeChange,
-            label = { Text("${OtpLimits.CODE_LENGTH} 位验证码") },
+            label = { Text(AuthCopyGenerated.CODE_LABEL) },
             singleLine = true,
             enabled = !state.busy,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(20.dp))
-        PrimaryButton(text = "登录 / 注册", enabled = state.canVerify, busy = state.busy, onClick = onVerify)
+        PrimaryButton(text = AuthCopyGenerated.CODE_SUBMIT, enabled = state.canVerify, busy = state.busy, onClick = onVerify)
         Spacer(Modifier.height(4.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             TextButton(onClick = onChangePhone, enabled = !state.busy) {
-                Text("更换手机号")
+                Text(AuthCopyGenerated.CODE_CHANGE_PHONE)
             }
             TextButton(onClick = onResend, enabled = state.canResend) {
-                Text(if (state.cooldown > 0) "重新发送 (${state.cooldown}s)" else "重新发送")
+                Text(if (state.cooldown > 0) AuthCopyGenerated.resendCooldown(state.cooldown) else AuthCopyGenerated.CODE_RESEND)
             }
         }
     }
@@ -167,7 +167,7 @@ private fun CodeStep(
 private fun DoneStep(state: AuthUiState) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
-            text = "登录成功",
+            text = AuthCopyGenerated.DONE_TITLE,
             style = MaterialTheme.typography.headlineSmall,
         )
         Spacer(Modifier.height(8.dp))
