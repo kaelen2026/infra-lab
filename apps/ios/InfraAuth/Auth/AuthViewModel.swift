@@ -135,6 +135,6 @@ final class AuthViewModel: ObservableObject {
     }
 
     private func describe(_ error: Error) -> String {
-        (error as? AuthClientError)?.displayMessage ?? "网络异常,请稍后再试。"
+        (error as? AuthClientError)?.displayMessage ?? AuthCopy.Errors.network
     }
 }

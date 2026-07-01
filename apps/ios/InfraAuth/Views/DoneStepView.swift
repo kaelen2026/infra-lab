@@ -9,27 +9,28 @@ struct DoneStepView: View {
             VStack(alignment: .center, spacing: 16) {
                 Image(systemName: "checkmark.seal.fill")
                     .font(.system(size: 56))
-                    .foregroundStyle(AuthTheme.accent)
+                    .foregroundStyle(DesignTokens.primary)
 
-                Text("已登录")
-                    .font(.title.bold())
+                Text(AuthCopy.Done.title)
+                    .font(AuthTheme.title)
+                    .foregroundStyle(DesignTokens.textPrimary)
 
                 if let name = auth.displayName {
                     Text(name)
                         .font(.headline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(DesignTokens.textSecondary)
                 }
 
                 if auth.user?.isNew == true {
-                    Text("欢迎加入,新账号已自动创建。")
+                    Text(AuthCopy.Done.newAccount)
                         .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(DesignTokens.textSecondary)
                         .multilineTextAlignment(.center)
                 }
             }
             .frame(maxWidth: .infinity)
 
-            PrimaryButton(title: "退出登录") {
+            PrimaryButton(title: AuthCopy.Done.logout) {
                 Task { await auth.logout() }
             }
         }
