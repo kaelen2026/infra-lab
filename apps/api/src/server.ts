@@ -81,7 +81,10 @@ app.route(
     users,
     sessions,
     sms,
-    config: { debugReturnCode: env.OTP_DEBUG_RETURN_CODE },
+    config: {
+      debugReturnCode: env.OTP_DEBUG_RETURN_CODE,
+      trustedProxyCount: env.TRUSTED_PROXY_COUNT,
+    },
   }),
 );
 // Per-user todo routes (protected; reuse the session resolver for Cookie + Bearer).

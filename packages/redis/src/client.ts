@@ -32,6 +32,7 @@ export function createRedisOtpStore(redis: Redis): OtpStore {
     get: (key) => redis.get(key),
     del: (...keys) => redis.del(...keys),
     incr: (key) => redis.incr(key),
+    decr: (key) => redis.decr(key),
     async expire(key, ttlSeconds) {
       return (await redis.expire(key, ttlSeconds)) === 1;
     },
