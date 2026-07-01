@@ -63,4 +63,23 @@ describe("parseCoreEnv", () => {
   it("rejects a non-numeric PORT", () => {
     expect(() => parseCoreEnv({ ...base, PORT: "not-a-port" })).toThrow(/PORT/);
   });
+
+  it("refuses OTP_DEBUG_RETURN_CODE=true in production, but allows it otherwise", () => {
+    let message = "";
+    try {
+      parseCoreEnv({ ...base, NODE_ENV: "production", OTP_DEBUG_RETURN_CODE: "true" });
+    } catch (e) {
+      message = e instanceof Error ? e.message : String(e);
+    }
+    expect(message).toContain("OTP_DEBUG_RETURN_CODE");
+    // The guardrail error must never echo a raw secret value.
+    expect(message).not.toContain(base.OTP_SECRET);
+    // Non-production keeps the dev convenience flag usable.
+    expect(
+      parseCoreEnv({ ...base, NODE_ENV: "development", OTP_DEBUG_RETURN_CODE: "true" })
+        .OTP_DEBUG_RETURN_CODE,
+    ).toBe(true);
+    // Production is fine as long as the debug flag is off.
+    expect(parseCoreEnv({ ...base, NODE_ENV: "production" }).OTP_DEBUG_RETURN_CODE).toBe(false);
+  });
 });

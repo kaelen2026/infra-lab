@@ -36,6 +36,19 @@ const CoreEnvSchema = z
     COOKIE_DOMAIN: optionalNonEmpty,
     OTP_DEBUG_RETURN_CODE: envFlag.default(false),
     PORT: z.coerce.number().int().positive().default(3001),
+    NODE_ENV: optionalNonEmpty,
+  })
+  // Hard production guardrail: OTP_DEBUG_RETURN_CODE echoes the code into responses
+  // and logs, violating the "never log OTP" red line. Refuse to boot rather than
+  // rely on convention if it is ever left on in production.
+  .superRefine((e, ctx) => {
+    if (e.NODE_ENV === "production" && e.OTP_DEBUG_RETURN_CODE) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["OTP_DEBUG_RETURN_CODE"],
+        message: "must not be enabled when NODE_ENV=production (would leak OTP codes)",
+      });
+    }
   })
   .transform((e) => ({
     ...e,

@@ -59,7 +59,11 @@ export interface SessionService {
   refresh(refreshToken: string, ctx: Pick<SessionContext, "ip">): Promise<AuthTokens | null>;
   /** Resolve the current user from Cookie or Bearer (null when unauthenticated). */
   requireUser(headers: Headers): Promise<UserRecord | null>;
-  revoke(headers: Headers): Promise<void>;
+  /**
+   * End the session: returns Set-Cookie values that clear the web session cookie
+   * and revokes the current user's outstanding refresh tokens.
+   */
+  revoke(headers: Headers): Promise<{ cookies: string[] }>;
 }
 
 export interface AuthRouteDeps {
@@ -198,7 +202,8 @@ export function createAuthRoutes(deps: AuthRouteDeps): Hono {
 
   // ── Logout ────────────────────────────────────────────────────────────────────
   app.post("/auth/logout", async (c) => {
-    await sessions.revoke(c.req.raw.headers);
+    const { cookies } = await sessions.revoke(c.req.raw.headers);
+    for (const cookie of cookies) c.header("set-cookie", cookie, { append: true });
     return c.json({ ok: true });
   });
 

@@ -65,6 +65,25 @@ export function createSessionService(config: SessionServiceConfig): SessionServi
     };
   }
 
+  async function requireUser(headers: Headers): Promise<UserRecord | null> {
+    // 1) Better Auth (handles its own cookie + bearer-plugin tokens).
+    const session = await auth.api.getSession({ headers });
+    if (session?.user?.id) {
+      const fromDb = await loadUser(session.user.id);
+      if (fromDb) return fromDb;
+    }
+    // 2) OTP-issued access token, via Bearer header or the web session cookie.
+    const bearer = headers.get("authorization");
+    const cookieHeader = headers.get("cookie");
+    const token =
+      (bearer?.toLowerCase().startsWith("bearer ") ? bearer.slice(7).trim() : null) ??
+      readCookie(cookieHeader, cookie.name);
+    if (!token) return null;
+    const verified = verifyAccessToken(token, secret);
+    if (!verified) return null;
+    return loadUser(verified.userId);
+  }
+
   async function issueTokens(user: UserRecord, ctx: SessionContext): Promise<AuthTokens> {
     const accessToken = signAccessToken(user.id, secret, ttl.accessSeconds);
     const { token: refresh, hash } = generateRefreshToken();
@@ -146,28 +165,28 @@ export function createSessionService(config: SessionServiceConfig): SessionServi
       };
     },
 
-    async requireUser(headers) {
-      // 1) Better Auth (handles its own cookie + bearer-plugin tokens).
-      const session = await auth.api.getSession({ headers });
-      if (session?.user?.id) {
-        const fromDb = await loadUser(session.user.id);
-        if (fromDb) return fromDb;
-      }
-      // 2) OTP-issued access token, via Bearer header or the web session cookie.
-      const bearer = headers.get("authorization");
-      const cookieHeader = headers.get("cookie");
-      const token =
-        (bearer?.toLowerCase().startsWith("bearer ") ? bearer.slice(7).trim() : null) ??
-        readCookie(cookieHeader, cookie.name);
-      if (!token) return null;
-      const verified = verifyAccessToken(token, secret);
-      if (!verified) return null;
-      return loadUser(verified.userId);
-    },
+    requireUser,
 
-    async revoke() {
-      // Web clears the cookie at the route layer; native refresh tokens are
-      // revoked on rotation. A full sign-out-all would delete by userId here.
+    async revoke(headers) {
+      // Always tell cookie clients to drop the session cookie: it is HttpOnly, so
+      // only an expired Set-Cookie (same attributes) from the server can clear it.
+      const cookies = [
+        serializeCookie(cookie.name, "", {
+          maxAge: 0,
+          secure: cookie.secure,
+          domain: cookie.domain,
+        }),
+      ];
+      // Sign-out-all: revoke every outstanding refresh token for the current user
+      // so a leaked/rotating native token can no longer mint fresh access tokens.
+      const current = await requireUser(headers);
+      if (current) {
+        await db
+          .update(refreshToken)
+          .set({ revokedAt: new Date() })
+          .where(and(eq(refreshToken.userId, current.id), isNull(refreshToken.revokedAt)));
+      }
+      return { cookies };
     },
   };
 }
