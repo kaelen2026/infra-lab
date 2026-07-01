@@ -2,27 +2,31 @@
   "color": [
     {
       "name": "start_window_background",
-      "value": "#FFFFFF"
+      "value": "#FCFAF4"
     },
     {
       "name": "brand",
-      "value": "#0A7CFF"
+      "value": "#B95115"
     },
     {
       "name": "page_background",
-      "value": "#F5F6F8"
+      "value": "#FCFAF4"
+    },
+    {
+      "name": "surface",
+      "value": "#FFFEFB"
     },
     {
       "name": "text_primary",
-      "value": "#1A1A1A"
+      "value": "#29231E"
     },
     {
       "name": "text_secondary",
-      "value": "#8A8A8E"
+      "value": "#6E6762"
     },
     {
       "name": "danger",
-      "value": "#E5484D"
+      "value": "#C53732"
     }
   ]
 }
