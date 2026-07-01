@@ -4,6 +4,7 @@ import {
   type AuthErrorCode,
   type AuthTokens,
   type AuthUser,
+  type CreateTodoInput,
   type DeviceDTO,
   type DevicesResponse,
   type LoginEventDTO,
@@ -12,6 +13,13 @@ import {
   type RefreshInput,
   type RequestOtpInput,
   type RequestOtpResponse,
+  TODO_ROUTES,
+  type TodoClient,
+  type TodoDTO,
+  type TodoResponse,
+  type TodosResponse,
+  todoPath,
+  type UpdateTodoInput,
   type VerifyOtpInput,
   type VerifyOtpResponse,
 } from "@infra/shared";
@@ -147,4 +155,74 @@ export function createAuthClient(options: CreateAuthClientOptions): AuthClient {
  */
 export function createWebAuthClient(baseUrl: string, fetchImpl?: typeof fetch): AuthClient {
   return createAuthClient({ baseUrl, platform: "web", fetch: fetchImpl });
+}
+
+export interface CreateTodoClientOptions {
+  baseUrl: string;
+  platform: Platform;
+  /** Defaults to a no-op store (web). Native platforms supply a secure store. */
+  tokens?: TokenStore;
+  fetch?: typeof fetch;
+}
+
+/**
+ * Reference {@link TodoClient}. Shares the auth transport model: web rides the
+ * HttpOnly cookie (`credentials: "include"`), native sends the Bearer header from
+ * the supplied {@link TokenStore}. Non-2xx responses throw {@link HttpAuthError},
+ * whose `code`/`status` carry the todo error codes.
+ */
+export function createTodoClient(options: CreateTodoClientOptions): TodoClient {
+  const doFetch = options.fetch ?? globalThis.fetch;
+  const store = options.tokens ?? noopTokenStore;
+  const isWeb = options.platform === "web";
+
+  async function request<T>(path: string, method: string, body?: unknown): Promise<T> {
+    const headers: Record<string, string> = { "content-type": "application/json" };
+    if (!isWeb) {
+      const t = await store.load();
+      if (t) headers.authorization = `${t.tokenType} ${t.accessToken}`;
+    }
+    const res = await doFetch(`${options.baseUrl}${path}`, {
+      method,
+      headers,
+      credentials: isWeb ? "include" : "omit",
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+    const json: unknown = await res.json().catch(() => ({}));
+    if (!res.ok) throw new HttpAuthError(res.status, json);
+    return json as T;
+  }
+
+  return {
+    async list(): Promise<TodoDTO[]> {
+      const res = await request<TodosResponse>(TODO_ROUTES.list, "GET");
+      return res.todos;
+    },
+
+    async create(input: CreateTodoInput): Promise<TodoDTO> {
+      const res = await request<TodoResponse>(TODO_ROUTES.create, "POST", input);
+      return res.todo;
+    },
+
+    async update(id: string, patch: UpdateTodoInput): Promise<TodoDTO> {
+      const res = await request<TodoResponse>(todoPath(id), "PATCH", patch);
+      return res.todo;
+    },
+
+    toggle(id: string, completed: boolean): Promise<TodoDTO> {
+      return this.update(id, { completed });
+    },
+
+    async remove(id: string): Promise<void> {
+      await request<{ ok: true }>(todoPath(id), "DELETE");
+    },
+  };
+}
+
+/**
+ * Web-flavored {@link createTodoClient}: fixes `platform: "web"` so requests carry
+ * the HttpOnly `infra.session` cookie and no token is stored in the browser.
+ */
+export function createWebTodoClient(baseUrl: string, fetchImpl?: typeof fetch): TodoClient {
+  return createTodoClient({ baseUrl, platform: "web", fetch: fetchImpl });
 }

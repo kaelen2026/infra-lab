@@ -61,13 +61,13 @@ node scripts/verify-redis.mjs        # 针对运行中的 Redis 跑验收断言�
 
 ```
 packages/
-  shared/   契约单一真相：Zod schema、DTO、错误码、限值、路由常量、AuthClient 接口 + JS 参考实现
+  shared/   契约单一真相：Zod schema、DTO、错误码、限值、路由常量、Auth/Todo Client 接口 + JS 参考实现
   auth/     OTP 领域服务（定义 OtpStore 端口）、require-user、Better Auth 集成；testing 导出 FakeRedis
   redis/    OtpStore 的 ioredis 适配器（依赖 @infra/auth 的类型）
-  db/       Drizzle schema（schema/auth.ts）+ 客户端 + drizzle.config
+  db/       Drizzle schema（schema/{auth,todo}.ts + schema/index.ts 桶）+ 客户端 + drizzle.config
 apps/
-  api/      Hono 路由（otp request/verify、refresh、logout、me）+ user-repository / session-service
-  web/      Next.js 手机号验证码登录页（app/auth/page.tsx）
+  api/      Hono 路由（auth：otp/refresh/logout/me；todo：CRUD）+ user/todo repository + session-service
+  web/      Next.js：手机号验证码登录页（app/auth）、账户面板（app/page）、待办（app/todos + features/todos）
 docs/plans/phone-otp-auth-plan.md      设计方案 + 四端 SDK 接口草案
 .ai/verifications/phone-otp-auth.md    验收记录（命令 + 实跑输出）
 ```
@@ -87,8 +87,16 @@ Redis 驱动；`@infra/redis` 实现该端口（因此是 redis 依赖 auth，�
 | POST | `/auth/refresh`     | 轮转刷新 token（原生端）`{ refreshToken }` |
 | POST | `/auth/logout`      | 登出 |
 | GET  | `/auth/me`          | 当前用户（Cookie 或 Bearer） |
+| GET    | `/todos`      | 列出当前用户的待办（按 `userId` 隔离，新→旧） |
+| POST   | `/todos`      | 新建待办 `{ title }` → `201` |
+| PATCH  | `/todos/:id`  | 更新待办 `{ title?, completed? }`（切换完成时同步 `completedAt`） |
+| DELETE | `/todos/:id`  | 删除待办 |
 
-错误码与状态映射：冷却/限流 → `429`，锁定 → `423`，验证码错误/过期/未授权 → `401`，参数非法 → `400`。
+`/todos*` 全部受保护，复用会话解析（Cookie 或 Bearer）；未登录 → `401 UNAUTHORIZED`，
+访问不存在或非本人的待办 → `404 TODO_NOT_FOUND`。
+
+错误码与状态映射：冷却/限流 → `429`，锁定 → `423`，验证码错误/过期/未授权 → `401`，
+待办未找到 → `404`，参数非法 → `400`。
 
 ## 环境变量
 

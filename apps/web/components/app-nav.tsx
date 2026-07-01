@@ -1,7 +1,7 @@
 "use client";
 
 import type { AuthUser } from "@infra/sdk";
-import { LogOut } from "lucide-react";
+import { ListTodo, LogOut } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -68,6 +68,13 @@ export function AppNav() {
                     {user.phone}
                   </span>
                 </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/todos">
+                    <ListTodo />
+                    待办
+                  </Link>
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem variant="destructive" onSelect={handleLogout}>
                   <LogOut />
