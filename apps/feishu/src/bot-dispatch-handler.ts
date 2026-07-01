@@ -1,3 +1,4 @@
+import { parseFeishuEnv } from "@infra/env/feishu";
 import type { LocalTaskHandler, RenderedTask } from "./feishu/dispatcher";
 
 /**
@@ -20,8 +21,7 @@ import type { LocalTaskHandler, RenderedTask } from "./feishu/dispatcher";
  */
 
 // 目标仓库 / ref 全部由环境变量配置（INFRA_LAB_BOT_GITHUB_REPO 必填、
-// INFRA_LAB_BOT_GITHUB_REF 默认 main），不硬编码 owner/repo。
-const DEFAULT_REF = "main";
+// INFRA_LAB_BOT_GITHUB_REF 默认 main，默认值在 @infra/env/feishu 里），不硬编码 owner/repo。
 const BOT_WORKFLOW_FILE = "infra-lab-bot.yml";
 
 /**
@@ -69,17 +69,19 @@ export async function dispatchBot(
   threadKey: string,
   messageId: string,
 ): Promise<{ ok: boolean; status: number; error?: string }> {
-  const token = process.env.INFRA_LAB_BOT_GITHUB_TOKEN;
+  const {
+    INFRA_LAB_BOT_GITHUB_TOKEN: token,
+    INFRA_LAB_BOT_GITHUB_REPO: repo,
+    INFRA_LAB_BOT_GITHUB_REF: ref,
+  } = parseFeishuEnv();
   if (!token) {
     console.error("[feishu→bot] 缺少 INFRA_LAB_BOT_GITHUB_TOKEN，无法触发 workflow");
     return { ok: false, status: 0, error: "missing-github-token" };
   }
-  const repo = process.env.INFRA_LAB_BOT_GITHUB_REPO;
   if (!repo) {
     console.error("[feishu→bot] 缺少 INFRA_LAB_BOT_GITHUB_REPO，无法触发 workflow");
     return { ok: false, status: 0, error: "missing-github-repo" };
   }
-  const ref = process.env.INFRA_LAB_BOT_GITHUB_REF || DEFAULT_REF;
 
   const url = `https://api.github.com/repos/${repo}/actions/workflows/${BOT_WORKFLOW_FILE}/dispatches`;
   const body = JSON.stringify({

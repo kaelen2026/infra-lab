@@ -1,4 +1,4 @@
-import "dotenv/config";
+import { loadFeishuEnv } from "@infra/env/feishu";
 
 /**
  * 一次性脚本：用 .env 里的 LARK_APP_ID / LARK_APP_SECRET 换 tenant_access_token，
@@ -7,16 +7,14 @@ import "dotenv/config";
  *   npx tsx scripts/whoami.ts
  */
 
-const appId = process.env.LARK_APP_ID;
-const appSecret = process.env.LARK_APP_SECRET;
+const { LARK_APP_ID: appId, LARK_APP_SECRET: appSecret, LARK_DOMAIN } = loadFeishuEnv();
 if (!appId || !appSecret) {
   console.error("缺少 LARK_APP_ID / LARK_APP_SECRET（先填好 .env）");
   process.exit(1);
 }
 
 // 国际版 Lark 用 larksuite.com，国内飞书用 feishu.cn。
-const base =
-  process.env.LARK_DOMAIN === "Lark" ? "https://open.larksuite.com" : "https://open.feishu.cn";
+const base = LARK_DOMAIN === "Lark" ? "https://open.larksuite.com" : "https://open.feishu.cn";
 
 const tokenRes = (await fetch(`${base}/open-apis/auth/v3/tenant_access_token/internal`, {
   method: "POST",

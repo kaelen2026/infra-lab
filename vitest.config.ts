@@ -11,6 +11,8 @@ export default defineConfig({
       "@infra/design": r("./packages/design/src/index.ts"),
       "@infra/auth/testing": r("./packages/auth/src/testing.ts"),
       "@infra/auth": r("./packages/auth/src/index.ts"),
+      "@infra/env/core": r("./packages/env/src/core.ts"),
+      "@infra/env/feishu": r("./packages/env/src/feishu.ts"),
       "@infra/redis": r("./packages/redis/src/index.ts"),
       "@infra/db": r("./packages/db/src/index.ts"),
     },

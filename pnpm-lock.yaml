@@ -50,6 +50,9 @@ importers:
       '@infra/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@infra/env':
+        specifier: workspace:*
+        version: link:../../packages/env
       '@infra/redis':
         specifier: workspace:*
         version: link:../../packages/redis
@@ -75,15 +78,15 @@ importers:
       '@ai-sdk/openai-compatible':
         specifier: 1.0.42
         version: 1.0.42(zod@4.4.3)
+      '@infra/env':
+        specifier: workspace:*
+        version: link:../../packages/env
       '@larksuiteoapi/node-sdk':
         specifier: 1.68.0
         version: 1.68.0
       ai:
         specifier: 5.0.209
         version: 5.0.209(zod@4.4.3)
-      dotenv:
-        specifier: 16.6.1
-        version: 16.6.1
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -239,6 +242,12 @@ importers:
       tsx:
         specifier: 4.22.4
         version: 4.22.4
+
+  packages/env:
+    dependencies:
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
 
   packages/redis:
     dependencies:
@@ -2562,10 +2571,6 @@ packages:
 
   detect-node-es@1.1.0:
     resolution: {integrity: sha512-ypdmJU/TbBby2Dxibuv7ZLW3Bs1QEmM7nHjEANfohJLvE0XVujisn1qPJcZxg+qDucsr+bP6fLD1rPS3AhJ7EQ==}
-
-  dotenv@16.6.1:
-    resolution: {integrity: sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow==}
-    engines: {node: '>=12'}
 
   drizzle-kit@0.31.10:
     resolution: {integrity: sha512-7OZcmQUrdGI+DUNNsKBn1aW8qSoKuTH7d0mYgSP8bAzdFzKoovxEFnoGQp2dVs82EOJeYycqRtciopszwUf8bw==}
@@ -5438,8 +5443,6 @@ snapshots:
   detect-libc@2.1.2: {}
 
   detect-node-es@1.1.0: {}
-
-  dotenv@16.6.1: {}
 
   drizzle-kit@0.31.10:
     dependencies:

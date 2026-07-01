@@ -1,3 +1,4 @@
+import { parseFeishuEnv } from "@infra/env/feishu";
 import * as Lark from "@larksuiteoapi/node-sdk";
 
 let cached: Lark.Client | null | undefined;
@@ -10,16 +11,15 @@ let cached: Lark.Client | null | undefined;
  */
 export function getLarkClient(): Lark.Client | null {
   if (cached !== undefined) return cached;
-  const appId = process.env.LARK_APP_ID;
-  const appSecret = process.env.LARK_APP_SECRET;
-  if (!appId || !appSecret) {
+  const { LARK_APP_ID, LARK_APP_SECRET, LARK_DOMAIN } = parseFeishuEnv();
+  if (!LARK_APP_ID || !LARK_APP_SECRET) {
     cached = null;
     return null;
   }
   cached = new Lark.Client({
-    appId,
-    appSecret,
-    domain: process.env.LARK_DOMAIN === "Lark" ? Lark.Domain.Lark : Lark.Domain.Feishu,
+    appId: LARK_APP_ID,
+    appSecret: LARK_APP_SECRET,
+    domain: LARK_DOMAIN === "Lark" ? Lark.Domain.Lark : Lark.Domain.Feishu,
   });
   return cached;
 }

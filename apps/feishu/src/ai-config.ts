@@ -1,4 +1,5 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import { parseFeishuEnv } from "@infra/env/feishu";
 import type { LanguageModel } from "ai";
 
 let cached: LanguageModel | null | undefined;
@@ -12,18 +13,16 @@ let cached: LanguageModel | null | undefined;
  */
 export function getResponderModel(): LanguageModel | null {
   if (cached !== undefined) return cached;
-  const baseURL = process.env.LLM_BASE_URL;
-  const apiKey = process.env.LLM_API_KEY;
-  const model = process.env.LLM_MODEL;
-  if (!baseURL || !apiKey || !model) {
+  const { LLM_BASE_URL, LLM_API_KEY, LLM_MODEL } = parseFeishuEnv();
+  if (!LLM_BASE_URL || !LLM_API_KEY || !LLM_MODEL) {
     cached = null;
     return null;
   }
   const provider = createOpenAICompatible({
     name: "feishu-bot-gateway",
-    baseURL,
-    apiKey,
+    baseURL: LLM_BASE_URL,
+    apiKey: LLM_API_KEY,
   });
-  cached = provider(model);
+  cached = provider(LLM_MODEL);
   return cached;
 }
