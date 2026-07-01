@@ -9,7 +9,8 @@ name: security-patrol
 #
 # 依赖的仓库 secrets / vars：
 #   CLAUDE_CODE_OAUTH_TOKEN                        Claude 鉴权（`claude setup-token`）
-#   INFRA_LAB_BOT_APP_ID / INFRA_LAB_BOT_PRIVATE_KEY  infra-lab-bot GitHub App（开 issue 归属到 bot）
+#   INFRA_LAB_BOT_PRIVATE_KEY                      infra-lab-bot GitHub App 私钥（开 issue 归属到 bot；
+#                                                  Client ID 是公开值，直接内联在下面）
 #   LARK_APP_ID / LARK_APP_SECRET                  飞书应用凭证（可选，用于推送）
 #   vars.LARK_DOMAIN                               Feishu（默认）/ Lark
 #   vars.SECURITY_PATROL_CHAT_ID                   飞书目标 chat_id（可选；不配置则跳过飞书推送）
@@ -42,9 +43,10 @@ jobs:
       # 用 infra-lab-bot App 铸一个短期 installation token，让开出来的 issue 归属到 infra-lab-bot[bot]。
       - name: Generate infra-lab-bot app token
         id: app-token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0 (Node 24)
         with:
-          app-id: ${{ secrets.INFRA_LAB_BOT_APP_ID }}
+          # Client ID（公开值，非 secret）——v3 弃用了数字 `app-id`。
+          client-id: Iv23liQcsfKzRONudnfm
           private-key: ${{ secrets.INFRA_LAB_BOT_PRIVATE_KEY }}
 
       - name: Checkout repository
