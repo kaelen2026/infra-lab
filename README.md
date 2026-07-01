@@ -108,4 +108,5 @@ Redis 驱动；`@infra/redis` 实现该端口（因此是 redis 依赖 auth，�
 - 构建用 **tsup**（基础 tsconfig 为 `noEmit`），**不要运行 `tsc -b`**——会把产物写进源码目录。
 - 提交遵循 **Conventional Commits**：`pre-commit` 跑 lint-staged（Biome），`commit-msg` 由 commitlint 校验。
 - 详尽的开发须知见 [`CLAUDE.md`](./CLAUDE.md)。
+- 仓库配有 AI 助手 **infra-lab-bot**（`@infra-lab-bot` 提及即用）——协作方式见 [`docs/infra-lab-bot.md`](./docs/infra-lab-bot.md)。
 ```
