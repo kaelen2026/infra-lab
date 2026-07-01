@@ -189,7 +189,7 @@ struct AuthPage {
           this.phone = value.trim();
         });
       this.PrimaryButton("获取验证码", () => {
-        this.sendCode();
+        void this.sendCode();
       });
       this.ErrorLine();
     }
@@ -209,7 +209,7 @@ struct AuthPage {
           this.code = this.digits(value).slice(0, OTP_LIMITS.codeLength);
         });
       this.PrimaryButton("登录 / 注册", () => {
-        this.verify();
+        void this.verify();
       });
 
       Row({ space: 24 }) {
@@ -218,7 +218,7 @@ struct AuthPage {
           .fontColor(this.cooldown > 0 ? $r("app.color.text_secondary") : $r("app.color.brand"))
           .onClick(() => {
             if (this.cooldown <= 0 && !this.busy) {
-              this.sendCode();
+              void this.sendCode();
             }
           });
         Text("换个手机号")
@@ -249,7 +249,7 @@ struct AuthPage {
         .fontColor($r("app.color.text_secondary"))
         .width("100%");
       this.PrimaryButton("退出登录", () => {
-        this.logout();
+        void this.logout();
       });
     }
     .width("100%");

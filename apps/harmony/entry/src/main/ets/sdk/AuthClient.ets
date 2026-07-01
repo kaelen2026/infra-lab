@@ -1,5 +1,4 @@
 import { http } from "@kit.NetworkKit";
-import { BusinessError } from "@kit.BasicServicesKit";
 import {
   AUTH_ROUTES,
   AuthErrorBody,
@@ -69,7 +68,7 @@ export interface AuthClient {
  * HarmonyOS {@link AuthClient}: `@ohos.net.http` transport + Bearer auth from a
  * {@link TokenStore}. Tokens land in the store on verify/refresh and are cleared on
  * logout. Non-2xx responses throw {@link HttpAuthError}; transport failures bubble
- * up as the underlying {@link BusinessError}.
+ * up as the underlying `BusinessError` from `@kit.BasicServicesKit`.
  */
 export class HarmonyAuthClient implements AuthClient {
   private readonly baseUrl: string;
