@@ -1,9 +1,12 @@
 "use client";
 
+import { ListTodo } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { AppNav } from "@/components/app-nav";
+import { Button } from "@/components/ui/button";
 import { useSession } from "@/features/session";
 import { DevicesCard } from "./components/devices-card";
 import { LoginEventsCard } from "./components/login-events-card";
@@ -38,9 +41,17 @@ export default function DashboardPage() {
     <>
       <AppNav />
       <main className="mx-auto max-w-3xl px-4 py-10">
-        <header className="mb-8">
-          <h1 className="font-serif text-3xl font-medium">账户</h1>
-          <p className="mt-1 text-muted-foreground">你的资料、当前会话与登录记录。</p>
+        <header className="mb-8 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="font-serif text-3xl font-medium">账户</h1>
+            <p className="mt-1 text-muted-foreground">你的资料、当前会话与登录记录。</p>
+          </div>
+          <Button asChild variant="outline">
+            <Link href="/todos">
+              <ListTodo />
+              待办
+            </Link>
+          </Button>
         </header>
 
         <div className="space-y-6">

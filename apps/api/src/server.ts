@@ -8,7 +8,9 @@ import { checkReadiness } from "./observability/health.js";
 import { createLogger } from "./observability/logger.js";
 import { type ObsEnv, observability } from "./observability/middleware.js";
 import { createAuthRoutes } from "./routes/auth.routes.js";
+import { createTodoRoutes } from "./routes/todo.routes.js";
 import { createSessionService } from "./services/session-service.js";
+import { createTodoRepository } from "./services/todo-repository.js";
 import { createUserRepository } from "./services/user-repository.js";
 
 function env(name: string, fallback?: string): string {
@@ -41,6 +43,7 @@ const auth = createAuth({
 
 const otp = createOtpService({ store: createRedisOtpStore(redis), secret: otpSecret });
 const users = createUserRepository(db);
+const todos = createTodoRepository(db);
 const sessions = createSessionService({
   db,
   auth,
@@ -82,6 +85,8 @@ app.get("/ready", async (c) => {
 app.on(["GET", "POST"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 // Our phone-OTP routes.
 app.route("/", createAuthRoutes({ otp, users, sessions, sms, config: { debugReturnCode } }));
+// Per-user todo routes (protected; reuse the session resolver for Cookie + Bearer).
+app.route("/", createTodoRoutes({ todos, requireUser: (h) => sessions.requireUser(h) }));
 
 // Centralized error handling: log the stack with the request id and return a
 // generic 500 so internals never leak to the client.

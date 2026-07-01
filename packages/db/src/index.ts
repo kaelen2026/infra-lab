@@ -1,3 +1,3 @@
-export * as schema from "../schema/auth.js";
-export * from "../schema/auth.js";
+export * as schema from "../schema/index.js";
+export * from "../schema/index.js";
 export * from "./client.js";
