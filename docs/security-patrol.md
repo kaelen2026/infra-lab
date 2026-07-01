@@ -38,7 +38,7 @@ OTP 生成/有效期/一次性消费/重放、限流与锁定绕过、令牌与�
 | 名称 | 类型 | 用途 | security-scan | security-patrol |
 | --- | --- | --- | :---: | :---: |
 | `CLAUDE_CODE_OAUTH_TOKEN` | secret | Claude 鉴权 | — | ✅ |
-| `INFRA_LAB_BOT_APP_ID` / `INFRA_LAB_BOT_PRIVATE_KEY` | secret | 开 issue 归属到 infra-lab-bot[bot] | — | ✅ |
+| `INFRA_LAB_BOT_PRIVATE_KEY` | secret | 开 issue 归属到 infra-lab-bot[bot]（App Client ID 是公开值，内联在工作流里） | — | ✅ |
 | `LARK_APP_ID` / `LARK_APP_SECRET` | secret | 飞书应用凭证 | 可选 | 可选 |
 | `LARK_DOMAIN` | var | `Feishu`（默认）/ `Lark` | 可选 | 可选 |
 | `SECURITY_PATROL_CHAT_ID` | var | 飞书目标 chat_id | 可选 | 可选 |
