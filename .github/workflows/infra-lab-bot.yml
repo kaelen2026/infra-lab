@@ -16,9 +16,10 @@ on:
   workflow_dispatch:
     inputs:
       prompt:
-        description: "Task for infra-lab-bot to run"
+        # Can be short — it's appended to the base prompt in .github/prompts/infra-lab-bot.md.
+        description: "Task for infra-lab-bot (combined with the base prompt template)"
         required: false
-        default: "分析一下当前项目：整体架构、主要模块与职责、潜在问题和改进建议。用中文给出结论。"
+        default: "分析一下当前项目"
   issue_comment:
     types: [created]
   pull_request_review_comment:
@@ -46,7 +47,7 @@ jobs:
       # of the bot's activity is attributed to infra-lab-bot[bot].
       - name: Generate infra-lab-bot app token
         id: app-token
-        uses: actions/create-github-app-token@v1
+        uses: actions/create-github-app-token@v2 # v2 runs on Node 24 (v1 is Node 20, deprecated)
         with:
           app-id: ${{ secrets.INFRA_LAB_BOT_APP_ID }}
           private-key: ${{ secrets.INFRA_LAB_BOT_PRIVATE_KEY }}
@@ -58,6 +59,22 @@ jobs:
           # Use the app token so any commits/pushes are the bot's, not the default runner.
           token: ${{ steps.app-token.outputs.token }}
 
+      # On manual dispatch, build the prompt = base template (.github/prompts) + the
+      # user's (possibly very short) input. The input is passed via env, never inlined
+      # into the script, to avoid expression injection.
+      - name: Build dispatch prompt
+        id: build-prompt
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          USER_PROMPT: ${{ inputs.prompt }}
+        run: |
+          {
+            echo 'value<<PROMPT_EOF'
+            cat .github/prompts/infra-lab-bot.md
+            printf '\n%s\n' "$USER_PROMPT"
+            echo 'PROMPT_EOF'
+          } >> "$GITHUB_OUTPUT"
+
       - name: Run Claude Code
         uses: anthropics/claude-code-action@v1
         with:
@@ -66,6 +83,12 @@ jobs:
           github_token: ${{ steps.app-token.outputs.token }}
           # Mention the bot by its own name rather than the default @claude.
           trigger_phrase: "@infra-lab-bot"
-          # On manual dispatch, run this prompt (automation mode). Empty on comment
-          # events so the action stays in mention/tag mode and reacts to the comment.
-          prompt: ${{ github.event_name == 'workflow_dispatch' && inputs.prompt || '' }}
+          # Use Opus 4.8.
+          claude_args: "--model claude-opus-4-8"
+          # On manual dispatch, run the composed prompt (automation mode). Empty on
+          # comment events so the action stays in mention/tag mode and reacts inline.
+          prompt: ${{ github.event_name == 'workflow_dispatch' && steps.build-prompt.outputs.value || '' }}
+          # Dispatch has no comment thread to reply in, so surface Claude's output in
+          # the run log. Scoped to workflow_dispatch (maintainer-triggered) only —
+          # comment runs stay hidden since less-trusted users can fire those.
+          show_full_output: ${{ github.event_name == 'workflow_dispatch' }}
