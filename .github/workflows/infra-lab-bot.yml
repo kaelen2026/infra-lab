@@ -1,7 +1,7 @@
 name: infra-lab-bot
 
-# Mention @claude in an issue comment or a pull-request comment and this runs
-# claude-code-action to respond. Auth uses a Claude Code OAuth token (from
+# Mention @infra-lab-bot in an issue comment or a pull-request comment and this
+# runs claude-code-action to respond. Auth uses a Claude Code OAuth token (from
 # `claude setup-token`), stored as the CLAUDE_CODE_OAUTH_TOKEN repo secret.
 on:
   issue_comment:
@@ -15,8 +15,8 @@ jobs:
     # fires for both issue and PR conversation comments; `pull_request_review_comment`
     # covers inline code-review comments.
     if: |
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude'))
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@infra-lab-bot')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@infra-lab-bot'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -34,6 +34,5 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          # Trigger phrase defaults to @claude. To mention the bot by its own
-          # name instead, uncomment:
-          # trigger_phrase: "@infra-lab-bot"
+          # Mention the bot by its own name rather than the default @claude.
+          trigger_phrase: "@infra-lab-bot"
