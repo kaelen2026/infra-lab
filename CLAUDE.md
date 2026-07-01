@@ -19,8 +19,9 @@ pnpm typecheck    # per-package `tsc --noEmit` (pnpm -r typecheck)
 pnpm test         # vitest run (hermetic — no live Redis/PG needed)
 pnpm lint         # biome check .   (pnpm lint:fix to autofix+format)
 
-pnpm --filter @infra/api dev         # API on :3001 (tsx watch)
-pnpm --filter @infra/web dev         # Web on :3000
+pnpm dev                             # API (:3001) + Web (:3000) together (turbo, builds deps first)
+pnpm dev:api                         # just the API on :3001 (tsx watch)
+pnpm dev:web                         # just the Web on :3000
 
 node scripts/verify-redis.mjs        # live OTP assertions against running Redis (needs build first)
 ```

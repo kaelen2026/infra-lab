@@ -9,6 +9,9 @@
   },
   "scripts": {
     "build": "turbo run build",
+    "dev": "turbo run dev",
+    "dev:api": "turbo run dev --filter @infra/api",
+    "dev:web": "turbo run dev --filter @infra/web",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "turbo run typecheck",
