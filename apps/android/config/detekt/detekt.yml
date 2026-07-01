@@ -1,0 +1,75 @@
+# detekt config for the InfraAuth Android client.
+# `buildUponDefaultConfig = true` (see build.gradle.kts) means this only layers
+# overrides on top of detekt's defaults. Run: `./gradlew detekt` (or `:app:detekt`).
+# Coding conventions live in .claude/rules/android.md. Local gate only, not in CI.
+
+build:
+  # Any weighted issue fails the task — keep the tree clean, not merely warned.
+  maxIssues: 0
+
+# ktlint rules, surfaced through detekt-formatting. autoCorrect is off in the
+# build; run `./gradlew detekt --auto-correct` locally to fix what's fixable.
+formatting:
+  active: true
+  android: true
+  FinalNewline:
+    active: true
+  MaximumLineLength:
+    active: true
+    maxLineLength: 120
+  NoWildcardImports:
+    active: true
+
+complexity:
+  LongMethod:
+    active: true
+    threshold: 60
+  TooManyFunctions:
+    active: true
+    thresholdInClasses: 15
+
+exceptions:
+  # Swallowing an error in an auth/token flow hides real failures — forbid it.
+  SwallowedException:
+    active: true
+  TooGenericExceptionCaught:
+    active: true
+  ThrowingExceptionsWithoutMessageOrCause:
+    active: true
+
+potential-bugs:
+  # !! is the Kotlin equivalent of a force-unwrap; a nil crash here is a security event.
+  UnsafeCallOnNullableType:
+    active: true
+  UnsafeCast:
+    active: true
+
+style:
+  MagicNumber:
+    active: true
+    ignoreNumbers: ['-1', '0', '1', '2']
+    ignorePropertyDeclaration: true
+    ignoreCompanionObjectPropertyDeclaration: true
+  MaxLineLength:
+    active: true
+    maxLineLength: 120
+  ForbiddenComment:
+    active: false        # TODOs are tracked separately; don't fail on them
+  # println leaks to logcat and can spill an OTP/token — ban it.
+  ForbiddenMethodCall:
+    active: true
+    methods:
+      - reason: 'Use structured logging, not println — it can leak OTP/tokens to logcat.'
+        value: 'kotlin.io.println'
+      - reason: 'Use structured logging, not print — it can leak OTP/tokens to logcat.'
+        value: 'kotlin.io.print'
+
+naming:
+  active: true
+
+comments:
+  active: true
+  UndocumentedPublicClass:
+    active: false
+  UndocumentedPublicFunction:
+    active: false

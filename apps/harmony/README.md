@@ -61,6 +61,20 @@ Open `apps/harmony` in **DevEco Studio** (HarmonyOS NEXT / API 12+), let it sync
 3. For end-to-end testing without an SMS provider, run the API with
    `OTP_DEBUG_RETURN_CODE=true` (dev only) so the code comes back in the response.
 
+## Lint
+
+ArkTS quality gate is DevEco Studio's **Code Linter** (right-click module → Code Linter),
+or the SDK command-line tools:
+
+```bash
+cd apps/harmony
+codelinter -c ./code-linter.json5 -f json .   # -f default for human-readable output
+```
+
+It is a **local** gate — like the build, it needs the DevEco/hvigor toolchain and so
+isn't in GitHub CI. Config is [`code-linter.json5`](code-linter.json5); coding
+conventions are in `.claude/rules/harmony.md`.
+
 > **Not part of the pnpm pipeline.** HarmonyOS builds with DevEco's hvigor toolchain,
 > not tsup/vitest, so this module is excluded from `pnpm build/typecheck/test`. It has
 > no `package.json`, so pnpm's `apps/*` workspace glob ignores it. The two binary icons

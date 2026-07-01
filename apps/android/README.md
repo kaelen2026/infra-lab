@@ -34,7 +34,12 @@ gradle wrapper        # one-time: writes gradle/wrapper/gradle-wrapper.jar + gra
 ./gradlew testDebugUnitTest   # hermetic JVM unit tests (input/parse/message logic)
 ./gradlew assembleDebug       # build the debug APK
 ./gradlew installDebug        # install on a running emulator/device
+./gradlew detekt              # static analysis + ktlint (local gate; --auto-correct to fix)
 ```
+
+`detekt` is a **local** quality gate (not in CI). Overrides live in
+[`config/detekt/detekt.yml`](config/detekt/detekt.yml); coding conventions are in
+`.claude/rules/android.md`.
 
 ### Pointing at the API
 

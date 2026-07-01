@@ -4,4 +4,8 @@ plugins {
     alias(libs.plugins.kotlin.android) apply false
     alias(libs.plugins.kotlin.compose) apply false
     alias(libs.plugins.kotlin.serialization) apply false
+    // Put detekt on the classpath for modules to apply. Config + wiring live in
+    // app/build.gradle.kts; coding rules in .claude/rules/android.md. Local gate,
+    // not in CI. `./gradlew detekt` from here still triggers `:app:detekt`.
+    alias(libs.plugins.detekt) apply false
 }
