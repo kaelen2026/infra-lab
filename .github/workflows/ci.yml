@@ -62,6 +62,7 @@ jobs:
           pnpm gen:design
           git diff --exit-code -- \
             apps/web/app/tokens.generated.css \
+            apps/h5/src/tokens.generated.css \
             apps/ios/InfraAuth/Generated \
             apps/android/app/src/main/kotlin/ai/deeplang/infra/ui/theme/DesignTokens.kt \
             apps/android/app/src/main/kotlin/ai/deeplang/infra/ui/auth/AuthCopyGenerated.kt \

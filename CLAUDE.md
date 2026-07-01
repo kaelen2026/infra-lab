@@ -3,7 +3,8 @@
 Guidance for Claude Code (claude.ai/code) in this repo.
 
 pnpm-workspace monorepo implementing **phone-number + OTP** auth (login == register) with
-**Better Auth** as the identity core, serving four clients: `web / ios / android / harmony`.
+**Better Auth** as the identity core, serving four clients: `web / ios / android / harmony`
+(plus `h5`, a mobile browser client that reuses web's cookie transport).
 Postgres holds long-term data; Redis holds all short-term OTP/rate-limit state.
 
 ## Commands
@@ -56,6 +57,17 @@ long-lived connection, reacts + posts a holding notice, then `workflow_dispatch`
 `infra-lab-bot.yml` (task as the `prompt` input). It's a pure outbound service with no Postgres/Redis —
 not an auth client. Run with `pnpm --filter @infra/feishu dev`; see
 [`apps/feishu/README.md`](apps/feishu/README.md).
+
+## H5 (`apps/h5`, mobile web)
+
+`@infra/h5` is a **Vite + React 19 + Tailwind v4** SPA — a mobile-first browser client that mirrors
+`apps/web` (login == register, account, todos) reshaped for a phone. It is **not** a new platform: as a
+browser it reuses `@infra/sdk`'s `createWebAuthClient`/`createWebTodoClient` (`platform: "web"`,
+cookie transport, `credentials: "include"`) — no contract change, no client-side token. Colors come from
+`src/tokens.generated.css` (emitted by `pnpm gen:design`, in the CI no-drift gate) and copy from
+`@infra/design`'s `COPY`/`ERROR_MESSAGES` — same source as every other client. It resolves `@infra/*` to
+source via Vite + tsconfig aliases (like web). Run `pnpm --filter @infra/h5 dev` (:3002); deployment in
+[`apps/h5/docs/deployment.md`](apps/h5/docs/deployment.md).
 
 ## Native client rules (read before touching that client)
 

@@ -15,6 +15,8 @@
       "!**/*.tsbuildinfo",
       "!apps/web/app/globals.css",
       "!apps/web/app/tokens.generated.css",
+      "!apps/h5/src/index.css",
+      "!apps/h5/src/tokens.generated.css",
       "!apps/ios"
     ]
   },

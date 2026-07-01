@@ -3,7 +3,8 @@
 [![CI](https://github.com/kaelen/infra-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/kaelen/infra-lab/actions/workflows/ci.yml)
 
 手机号 + 验证码的注册/登录系统。**登录即注册**，认证核心使用 [Better Auth](https://www.better-auth.com/)，
-一套后端服务 **Web / iOS / Android / HarmonyOS** 四端。
+一套后端服务 **Web / iOS / Android / HarmonyOS** 四端（另有移动端 **H5**，作为浏览器客户端复用 Web 的
+Cookie 传输）。
 
 - **Postgres 16** 存长期数据：`user` `profile` `device` `refresh_token` `login_event`
 - **Redis 7** 存短期数据：验证码哈希、错误次数、发送冷却、限流、锁定
@@ -68,6 +69,8 @@ apps/
   api/      Hono 路由（auth：otp/refresh/logout/me/devices/login-events；todo：CRUD）+ user/todo repository
             + session-service + observability（结构化日志 / request-id / 健康探针）
   web/      Next.js：手机号验证码登录页（app/auth）、账户面板（app/page）、待办（app/todos + features/todos）
+  h5/       移动端 H5（Vite + React 19 + Tailwind v4 SPA，:3002）：复用 @infra/sdk 的 Web Cookie 传输，
+            移动优先的登录 + 账户 + 待办；部署见 apps/h5/docs/deployment.md
   feishu/   飞书 IM 接待 bot：长连接收消息 → react → 安抚 notice → 派发到 infra-lab-bot workflow（无 PG/Redis）
 docs/plans/phone-otp-auth-plan.md      设计方案 + 四端 SDK 接口草案
 .ai/verifications/phone-otp-auth.md    验收记录（命令 + 实跑输出）
