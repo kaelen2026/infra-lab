@@ -68,6 +68,7 @@ apps/
   api/      Hono 路由（auth：otp/refresh/logout/me/devices/login-events；todo：CRUD）+ user/todo repository
             + session-service + observability（结构化日志 / request-id / 健康探针）
   web/      Next.js：手机号验证码登录页（app/auth）、账户面板（app/page）、待办（app/todos + features/todos）
+  feishu/   飞书 IM 接待 bot：长连接收消息 → react → 安抚 notice → 派发到 infra-lab-bot workflow（无 PG/Redis）
 docs/plans/phone-otp-auth-plan.md      设计方案 + 四端 SDK 接口草案
 .ai/verifications/phone-otp-auth.md    验收记录（命令 + 实跑输出）
 ```
@@ -122,6 +123,9 @@ API 输出结构化 JSON 日志（每条带 `requestId`，`x-request-id` 支持�
 
 - 构建用 **tsup**（基础 tsconfig 为 `noEmit`），**不要运行 `tsc -b`**——会把产物写进源码目录。
 - 提交遵循 **Conventional Commits**：`pre-commit` 跑 lint-staged（Biome），`commit-msg` 由 commitlint 校验。
+- 原生端（iOS / Android / HarmonyOS）各有本地编码规范 + lint 门禁（SwiftLint / detekt / DevEco CodeLinter），
+  改动前先读 `.claude/rules/{ios,android,harmony}.md`；这些门禁本地运行，不进 CI（详见 [`CLAUDE.md`](./CLAUDE.md)）。
 - 详尽的开发须知见 [`CLAUDE.md`](./CLAUDE.md)。
-- 仓库配有 AI 助手 **infra-lab-bot**（`@infra-lab-bot` 提及即用）——协作方式见 [`docs/infra-lab-bot.md`](./docs/infra-lab-bot.md)。
+- 仓库配有 AI 助手 **infra-lab-bot**（`@infra-lab-bot` 提及即用）——协作方式见 [`docs/infra-lab-bot.md`](./docs/infra-lab-bot.md)；
+  飞书用户可经 `apps/feishu` 接待 bot 触达同一 workflow。
 ```
