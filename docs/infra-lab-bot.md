@@ -58,7 +58,7 @@ gh workflow run infra-lab-bot.yml -f prompt="分析当前项目架构与主要�
 | 基础提示词 | [`.github/prompts/infra-lab-bot.md`](../.github/prompts/infra-lab-bot.md) |
 | 触发短语 | `@infra-lab-bot` |
 | Claude 鉴权 | `CLAUDE_CODE_OAUTH_TOKEN`（secret，`claude setup-token` 生成） |
-| GitHub 身份 | 自定义 App `infra-lab-bot` + secrets `INFRA_LAB_BOT_APP_ID` / `INFRA_LAB_BOT_PRIVATE_KEY` |
+| GitHub 身份 | 自定义 App `infra-lab-bot`：Client ID `Iv23liQcsfKzRONudnfm`（公开值，内联在工作流里）+ secret `INFRA_LAB_BOT_PRIVATE_KEY`（私钥） |
 | 飞书回帖 | secrets `LARK_APP_ID` / `LARK_APP_SECRET`（可选 var `LARK_DOMAIN`）；回帖脚本 [`.github/scripts/feishu-reply.mjs`](../.github/scripts/feishu-reply.mjs) |
 | 修改模型 / 参数 | 工作流里的 `claude_args`（如 `--model claude-opus-4-8`） |
 
