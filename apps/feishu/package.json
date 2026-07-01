@@ -1,0 +1,25 @@
+{
+  "name": "@infra/feishu",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "飞书 IM 接待 bot：长连接收消息 → react → 安抚 notice → 派发到 infra-lab-bot workflow。",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "whoami": "tsx scripts/whoami.ts",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@ai-sdk/openai-compatible": "1.0.42",
+    "@larksuiteoapi/node-sdk": "1.68.0",
+    "ai": "5.0.209",
+    "dotenv": "16.6.1",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "tsx": "4.22.4"
+  }
+}
