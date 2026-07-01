@@ -14,10 +14,11 @@ run-name: >-
 # Two independent credentials:
 #   - Claude (Anthropic) auth: CLAUDE_CODE_OAUTH_TOKEN secret (from `claude setup-token`).
 #   - GitHub identity: a *custom* GitHub App named "infra-lab-bot" — the workflow mints
-#     an installation token from its APP_ID + private key so comments/commits are
+#     an installation token from its Client ID + private key so comments/commits are
 #     attributed to infra-lab-bot[bot] instead of the default claude[bot].
-#     Requires repo secrets INFRA_LAB_BOT_APP_ID and INFRA_LAB_BOT_PRIVATE_KEY, and the
-#     app installed on this repo with Contents/Issues/Pull requests read & write.
+#     The Client ID is public (inlined below); the private key is secret
+#     INFRA_LAB_BOT_PRIVATE_KEY. Needs the app installed on this repo with
+#     Contents/Issues/Pull requests read & write.
 #
 # Feishu closed loop: apps/bot dispatches this workflow with `feishu_message_id` set.
 # The final step then replies the run's result back into that Feishu message's thread —
@@ -83,9 +84,10 @@ jobs:
       # of the bot's activity is attributed to infra-lab-bot[bot].
       - name: Generate infra-lab-bot app token
         id: app-token
-        uses: actions/create-github-app-token@v3 # v3 runs on Node 24 (v2 is Node 20, deprecated)
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0 (Node 24)
         with:
-          app-id: ${{ secrets.INFRA_LAB_BOT_APP_ID }}
+          # Client ID (public, not a secret) — v3 deprecated the numeric `app-id`.
+          client-id: Iv23liQcsfKzRONudnfm
           private-key: ${{ secrets.INFRA_LAB_BOT_PRIVATE_KEY }}
 
       - name: Checkout repository

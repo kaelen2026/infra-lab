@@ -9,7 +9,8 @@ name: reviewer
 #
 # 依赖的仓库 secrets:
 #   CLAUDE_CODE_OAUTH_TOKEN                            Claude 鉴权(`claude setup-token`)
-#   INFRA_LAB_BOT_APP_ID / INFRA_LAB_BOT_PRIVATE_KEY   infra-lab-bot GitHub App(评论归属到 bot)
+#   INFRA_LAB_BOT_PRIVATE_KEY                          infra-lab-bot GitHub App 私钥(评论归属到 bot;
+#                                                      Client ID 是公开值,直接内联在下面)
 #
 # 注:仅审查**本仓库内**发起的 PR。公共仓库里来自 fork 的 PR 拿不到 secrets,
 # 会被下面的 `if` 跳过,既避免失败噪声,也不把凭证暴露给外部代码。
@@ -39,9 +40,10 @@ jobs:
       # 用 infra-lab-bot App 铸一个短期 installation token,让审查评论归属到 infra-lab-bot[bot]。
       - name: Generate infra-lab-bot app token
         id: app-token
-        uses: actions/create-github-app-token@v3 # v3 runs on Node 24 (v2 is Node 20, deprecated)
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0 (Node 24)
         with:
-          app-id: ${{ secrets.INFRA_LAB_BOT_APP_ID }}
+          # Client ID(公开值,非 secret)——v3 弃用了数字 `app-id`。
+          client-id: Iv23liQcsfKzRONudnfm
           private-key: ${{ secrets.INFRA_LAB_BOT_PRIVATE_KEY }}
 
       - name: Checkout repository
