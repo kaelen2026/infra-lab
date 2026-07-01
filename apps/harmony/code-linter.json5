@@ -1,0 +1,38 @@
+/*
+ * DevEco CodeLinter config for the InfraAuth HarmonyOS (ArkTS) client.
+ * Runs in DevEco Studio (Code Linter) or via the SDK command-line tools:
+ *   cd apps/harmony && codelinter -c ./code-linter.json5 -f json .
+ * (Prefer DevEco Studio's Code Linter for inline results; the CLI prints a report.)
+ * ArkTS needs the proprietary hvigor/DevEco toolchain, so this is a LOCAL gate —
+ * it is not in GitHub CI. Coding conventions live in .claude/rules/harmony.md.
+ */
+{
+  files: [
+    "**/*.ets",
+    "**/*.ts",
+  ],
+  ignore: [
+    "**/oh_modules/**",
+    "**/build/**",
+    "**/.preview/**",
+    // Emitted from @infra/design (pnpm gen:design) — never hand-edited.
+    "**/copy.generated.ets",
+  ],
+  ruleSet: [
+    // The ArkTS strict-subset checks (no `any`, explicit types, no structural
+    // typing escapes) plus perf and security recommendations.
+    "plugin:@typescript-eslint/recommended",
+    "plugin:@performance/recommended",
+    "plugin:@security/recommended",
+  ],
+  rules: {
+    // ArkTS is a strict subset — keep the escape hatches off.
+    "@typescript-eslint/no-explicit-any": "error",
+    "@typescript-eslint/explicit-function-return-type": "error",
+    // `_`-prefixed args/vars are deliberately unused (e.g. EntryAbility overrides).
+    "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
+    "@typescript-eslint/no-floating-promises": "error",
+    // console.* lands in hilog and can leak an OTP/token — forbid it.
+    "no-console": "error",
+  },
+}

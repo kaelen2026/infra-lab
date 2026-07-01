@@ -2,10 +2,16 @@
 SCHEME = InfraAuth
 DESTINATION ?= platform=iOS Simulator,name=iPhone 17 Pro
 
-.PHONY: project build test clean
+.PHONY: project build test lint format clean
 
 project: ## Generate InfraAuth.xcodeproj from project.yml
 	xcodegen generate
+
+lint: ## Static-analyse Swift sources (fails on any violation). Install: brew install swiftlint
+	swiftlint lint --strict --config .swiftlint.yml
+
+format: ## Auto-fix the violations SwiftLint can fix in place
+	swiftlint lint --fix --config .swiftlint.yml
 
 build: project ## Build the app for the simulator
 	xcodebuild build -project InfraAuth.xcodeproj -scheme $(SCHEME) \

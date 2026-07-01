@@ -51,6 +51,16 @@ verbosity. **Never log phone numbers, OTP codes, or tokens.**
 claude-code-action (Opus 4.8) as the `infra-lab-bot[bot]` GitHub App. See
 [`docs/infra-lab-bot.md`](docs/infra-lab-bot.md); workflow in `.github/workflows/infra-lab-bot.yml`.
 
+## Native client rules (read before touching that client)
+
+Per-platform coding conventions + the local lint/format gate for each native client.
+Read the relevant one before editing that app (they are not always-on — the TS
+monorepo doesn't need them). None of these gates run in CI; they are local by design.
+
+- iOS (Swift/SwiftUI, `apps/ios`): [`.claude/rules/ios.md`](.claude/rules/ios.md) — SwiftLint, `make lint`.
+- Android (Kotlin/Compose, `apps/android`): [`.claude/rules/android.md`](.claude/rules/android.md) — detekt, `./gradlew detekt`.
+- Harmony (ArkTS, `apps/harmony`): [`.claude/rules/harmony.md`](.claude/rules/harmony.md) — DevEco CodeLinter, `codelinter`.
+
 ## Rules (always apply)
 
 @.claude/rules/build-and-typecheck.md

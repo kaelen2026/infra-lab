@@ -39,7 +39,14 @@ make project                   # generate InfraAuth.xcodeproj
 make build                     # build for the iPhone simulator
 make test                      # run the hermetic unit tests
 open InfraAuth.xcodeproj       # or work in Xcode
+
+brew install swiftlint         # one-time (for the lint gate)
+make lint                      # SwiftLint --strict; run before pushing
+make format                    # auto-fix what SwiftLint can
 ```
+
+Lint is a **local** gate (iOS needs a macOS runner, so it isn't in CI). Config is
+[`.swiftlint.yml`](.swiftlint.yml); coding conventions are in `.claude/rules/ios.md`.
 
 Point the app at a running API (`pnpm --filter @infra/api dev`, port 3001):
 the base URL defaults to `http://localhost:3001` and can be overridden with an

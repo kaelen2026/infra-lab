@@ -3,6 +3,15 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.detekt)
+}
+
+// Local quality gate (not in CI): `./gradlew detekt`, autofix with `--auto-correct`.
+// Rules layer on detekt's defaults; overrides live in config/detekt/detekt.yml.
+detekt {
+    buildUponDefaultConfig = true
+    config.setFrom(rootProject.files("config/detekt/detekt.yml"))
+    autoCorrect = false
 }
 
 android {
@@ -76,4 +85,7 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+
+    // ktlint's formatting rules, surfaced through detekt (see config/detekt/detekt.yml).
+    detektPlugins(libs.detekt.formatting)
 }
