@@ -59,10 +59,17 @@ jobs:
     # Run on manual dispatch, or when the mention phrase appears in a comment.
     # `issue_comment` fires for both issue and PR conversation comments;
     # `pull_request_review_comment` covers inline code-review comments.
+    #
+    # Loop guard: skip comments authored by infra-lab-bot itself. The bot acts via an
+    # App installation token, and events from such tokens DO trigger other workflows
+    # (unlike the built-in GITHUB_TOKEN, which is suppressed). So the bot's own reply —
+    # which may echo "@infra-lab-bot" — would otherwise re-trigger this workflow in an
+    # endless loop, each iteration now a full-permission run. `workflow_dispatch`
+    # (Feishu bridge / manual) is a separate branch and intentionally not filtered.
     if: |
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@infra-lab-bot')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@infra-lab-bot'))
+      (github.event_name == 'issue_comment' && github.event.sender.login != 'infra-lab-bot[bot]' && contains(github.event.comment.body, '@infra-lab-bot')) ||
+      (github.event_name == 'pull_request_review_comment' && github.event.sender.login != 'infra-lab-bot[bot]' && contains(github.event.comment.body, '@infra-lab-bot'))
     runs-on: ubuntu-latest
     permissions:
       # Job-token perms still apply to steps that use it (e.g. checkout fallback);
@@ -116,11 +123,19 @@ jobs:
           # apps/bot dispatches this workflow via the infra-lab-bot App token, so the
           # actor is a Bot (infra-lab-bot[bot]). claude-code-action blocks non-human
           # actors by default; allow just this bot (matched case-insensitively, [bot]
-          # suffix stripped). NOT "*" — this is a public repo, so a wildcard would let
-          # external Apps invoke the action (see the action's docs/security.md).
+          # suffix stripped). Keep it scoped to this bot, NOT "*" — a wildcard would let
+          # any App invoke the action (see the action's docs/security.md).
           allowed_bots: "infra-lab-bot"
+          # Full tool access so the bot works end-to-end like a real teammate — most
+          # importantly it can open its own PRs (`gh pr create`), run git, and invoke
+          # pnpm, instead of being limited to claude-code-action's tag-mode tool set.
+          # Safe because: (1) the repo is private, so only collaborators can trigger it;
+          # (2) main is branch-protected (PR + 1 approval + required CI), so the bot
+          # still cannot self-merge or push main whatever tools it has.
           # Use Opus 4.8.
-          claude_args: "--model claude-opus-4-8"
+          claude_args: >-
+            --dangerously-skip-permissions
+            --model claude-opus-4-8
           # On manual dispatch, run the composed prompt (automation mode). Empty on
           # comment events so the action stays in mention/tag mode and reacts inline.
           prompt: ${{ github.event_name == 'workflow_dispatch' && steps.build-prompt.outputs.value || '' }}
