@@ -47,6 +47,22 @@ describe("parseFeishuEnv", () => {
     expect(env.LLM_MODEL).toBe("m");
   });
 
+  it("carries the App dispatch-auth fields (client id + private key inline/path)", () => {
+    const env = parseFeishuEnv({
+      INFRA_LAB_BOT_CLIENT_ID: "Iv23liXXXX",
+      INFRA_LAB_BOT_PRIVATE_KEY: "-----BEGIN-----\\nk\\n-----END-----",
+      INFRA_LAB_BOT_PRIVATE_KEY_PATH: "/keys/bot.pem",
+    });
+    expect(env.INFRA_LAB_BOT_CLIENT_ID).toBe("Iv23liXXXX");
+    expect(env.INFRA_LAB_BOT_PRIVATE_KEY).toContain("BEGIN");
+    expect(env.INFRA_LAB_BOT_PRIVATE_KEY_PATH).toBe("/keys/bot.pem");
+    // all optional: absent bag leaves them undefined
+    const empty = parseFeishuEnv({});
+    expect(empty.INFRA_LAB_BOT_CLIENT_ID).toBeUndefined();
+    expect(empty.INFRA_LAB_BOT_PRIVATE_KEY).toBeUndefined();
+    expect(empty.INFRA_LAB_BOT_PRIVATE_KEY_PATH).toBeUndefined();
+  });
+
   it("reads process.env by default (live, not memoized)", () => {
     delete process.env.FEISHU_BOT_OPEN_ID;
     expect(parseFeishuEnv().FEISHU_BOT_OPEN_ID).toBeUndefined();

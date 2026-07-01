@@ -30,9 +30,15 @@ const FeishuEnvSchema = z.object({
   // Bot open-id used to detect an @-mention in group chats.
   FEISHU_BOT_OPEN_ID: optional,
   // workflow_dispatch target for infra-lab-bot.yml. REF defaults to "main".
-  INFRA_LAB_BOT_GITHUB_TOKEN: optional,
   INFRA_LAB_BOT_GITHUB_REPO: optional,
   INFRA_LAB_BOT_GITHUB_REF: optional.pipe(z.string().default("main")),
+  // Dispatch auth. Method A (preferred): mint an installation token from the
+  // infra-lab-bot App — CLIENT_ID + private key (inline PEM, or a path to a .pem).
+  // Method B (fallback): a static token that short-circuits the App mint.
+  INFRA_LAB_BOT_CLIENT_ID: optional,
+  INFRA_LAB_BOT_PRIVATE_KEY: optional,
+  INFRA_LAB_BOT_PRIVATE_KEY_PATH: optional,
+  INFRA_LAB_BOT_GITHUB_TOKEN: optional,
   // Fast-responder LLM (OpenAI-compatible). All three required together to run;
   // any missing → the responder degrades. Enforced at the call site, not here.
   LLM_BASE_URL: optional,

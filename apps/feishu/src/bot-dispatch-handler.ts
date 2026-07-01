@@ -1,19 +1,21 @@
 import { parseFeishuEnv } from "@infra/env/feishu";
 import type { LocalTaskHandler, RenderedTask } from "./feishu/dispatcher";
+import { createAppTokenProviderFromEnv, type TokenProvider } from "./github-app-token";
 
 /**
  * 把飞书接待链路的最后一步「派发到本仓库的 infra-lab-bot workflow」。
  *
- * dispatcher 已经把事件翻译成自然语言 `task` + `threadKey`，这里只负责
+ * dispatcher 已经把事件翻译成自然语言 `task` + `threadKey`，这里负责
  * 「拿 task → workflow_dispatch 触发 infra-lab-bot.yml」。
  *
- * 注意 infra-lab-bot.yml 的 workflow_dispatch **只接受一个 `prompt` 输入**
- * （见 .github/workflows/infra-lab-bot.yml）。它把 `prompt` 拼到
- * .github/prompts/infra-lab-bot.md 的基础模板后面，交给 claude-code-action 跑，
- * 输出落到 Actions run 日志——**目前不会回帖到飞书 thread**。要闭环（bot 把结果
- * 回到发起消息的飞书 thread）需要另外扩展该 workflow（加 LARK secrets + 回帖步骤），
- * 属独立后续项。threadKey 此处仅用于日志定位，不作为 workflow 输入透传
- * （多传未声明的输入 GitHub 会以 422 拒绝）。
+ * 传两个输入：`prompt`（= 渲染好的 task，拼到 .github/prompts/infra-lab-bot.md 基础
+ * 模板后交给 claude-code-action 跑）和 `feishu_message_id`（= 原消息 id）。workflow 跑完
+ * 由 .github/scripts/feishu-reply.mjs 把结果回帖到同一飞书 thread，闭环。threadKey 仅用于
+ * 日志。
+ *
+ * 鉴权：以 infra-lab-bot GitHub App 身份换取（并自动续期）installation token
+ * （见 github-app-token）；配了静态 INFRA_LAB_BOT_GITHUB_TOKEN 则用它兜底。App 身份下
+ * actor 是 Bot，workflow 里已 `allowed_bots: infra-lab-bot` 放行。
  *
  * 派发落点是 dispatcher 的 `LocalTaskHandler` 口子（index.ts 里
  * `setLocalTaskHandler(createBotDispatchHandler())` 装配）；要换本地 LLM / 队列 /
@@ -44,12 +46,14 @@ export function __setDispatchBackoffMsForTest(ms: readonly number[]): () => void
 /**
  * 构造一个把任务派发到 infra-lab-bot workflow 的 `LocalTaskHandler`。
  * 在 `index.ts` 里 `setLocalTaskHandler(createBotDispatchHandler())` 装配。
+ * token provider 只建一次并被复用，从而跨消息共享 installation token 缓存 / 续期。
  */
 export function createBotDispatchHandler(): LocalTaskHandler {
+  const tokens = createAppTokenProviderFromEnv();
   return {
     async handle(t: RenderedTask): Promise<void> {
       // 传原消息 message_id 给 workflow：跑完后 feishu-reply 用它把结果回帖到同一 thread。
-      const r = await dispatchBot(t.task, t.threadKey, t.event.message.message_id);
+      const r = await dispatchBot(t.task, t.threadKey, t.event.message.message_id, { tokens });
       // handler 抛错 → dispatcher 的 dispatchLocal 兜底返回 ok:false 并记日志；
       // 安抚 notice 此前已发给用户，不会因派发失败而吞消息。
       if (!r.ok) {
@@ -57,6 +61,18 @@ export function createBotDispatchHandler(): LocalTaskHandler {
       }
     },
   };
+}
+
+/** 全局 provider 单例：dispatchBot 未显式传入 tokens 时的默认来源（复用换发缓存）。 */
+let defaultTokens: TokenProvider | null = null;
+function getDefaultTokens(): TokenProvider {
+  if (!defaultTokens) defaultTokens = createAppTokenProviderFromEnv();
+  return defaultTokens;
+}
+
+export interface DispatchBotDeps {
+  /** token 来源；默认用 App 换发的 provider（github-app-token）。仅测试需要注入。 */
+  tokens?: TokenProvider;
 }
 
 /**
@@ -68,19 +84,20 @@ export async function dispatchBot(
   task: string,
   threadKey: string,
   messageId: string,
+  deps: DispatchBotDeps = {},
 ): Promise<{ ok: boolean; status: number; error?: string }> {
-  const {
-    INFRA_LAB_BOT_GITHUB_TOKEN: token,
-    INFRA_LAB_BOT_GITHUB_REPO: repo,
-    INFRA_LAB_BOT_GITHUB_REF: ref,
-  } = parseFeishuEnv();
-  if (!token) {
-    console.error("[feishu→bot] 缺少 INFRA_LAB_BOT_GITHUB_TOKEN，无法触发 workflow");
-    return { ok: false, status: 0, error: "missing-github-token" };
-  }
+  // repo / ref 从 @infra/env/feishu 读（ref 已默认 main）；token 走 App 换发 provider。
+  const { INFRA_LAB_BOT_GITHUB_REPO: repo, INFRA_LAB_BOT_GITHUB_REF: ref } = parseFeishuEnv();
   if (!repo) {
     console.error("[feishu→bot] 缺少 INFRA_LAB_BOT_GITHUB_REPO，无法触发 workflow");
     return { ok: false, status: 0, error: "missing-github-repo" };
+  }
+  let token: string;
+  try {
+    token = await (deps.tokens ?? getDefaultTokens()).getToken();
+  } catch (err) {
+    console.error(`[feishu→bot] 取 GitHub token 失败：${err instanceof Error ? err.message : err}`);
+    return { ok: false, status: 0, error: "token-error" };
   }
 
   const url = `https://api.github.com/repos/${repo}/actions/workflows/${BOT_WORKFLOW_FILE}/dispatches`;
