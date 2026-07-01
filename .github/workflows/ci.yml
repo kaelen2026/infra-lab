@@ -71,6 +71,20 @@ jobs:
       - name: Test (vitest)
         run: pnpm test
 
+  actionlint:
+    name: Workflows (actionlint)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Lints every .github/workflows/*.yml; the image bundles shellcheck, which
+      # actionlint runs on `run:` steps too. Pinned to match local tooling.
+      - name: Lint workflows
+        uses: docker://rhysd/actionlint:1.7.12
+        with:
+          args: -color
+
   commitlint:
     name: Commit messages (Conventional Commits)
     runs-on: ubuntu-latest
