@@ -69,3 +69,7 @@ jobs:
           # On manual dispatch, run this prompt (automation mode). Empty on comment
           # events so the action stays in mention/tag mode and reacts to the comment.
           prompt: ${{ github.event_name == 'workflow_dispatch' && inputs.prompt || '' }}
+          # Dispatch has no comment thread to reply in, so surface Claude's output in
+          # the run log. Scoped to workflow_dispatch (maintainer-triggered) only —
+          # comment runs stay hidden since less-trusted users can fire those.
+          show_full_output: ${{ github.event_name == 'workflow_dispatch' }}
