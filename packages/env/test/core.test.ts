@@ -79,7 +79,45 @@ describe("parseCoreEnv", () => {
       parseCoreEnv({ ...base, NODE_ENV: "development", OTP_DEBUG_RETURN_CODE: "true" })
         .OTP_DEBUG_RETURN_CODE,
     ).toBe(true);
-    // Production is fine as long as the debug flag is off.
-    expect(parseCoreEnv({ ...base, NODE_ENV: "production" }).OTP_DEBUG_RETURN_CODE).toBe(false);
+    // Production is fine as long as the debug flag is off (with a distinct auth secret).
+    expect(
+      parseCoreEnv({ ...base, NODE_ENV: "production", BETTER_AUTH_SECRET: "b".repeat(32) })
+        .OTP_DEBUG_RETURN_CODE,
+    ).toBe(false);
+  });
+
+  it("L4 — requires a distinct BETTER_AUTH_SECRET in production (key separation)", () => {
+    // Unset in production: no silent fallback to OTP_SECRET.
+    const missing = () => parseCoreEnv({ ...base, NODE_ENV: "production" });
+    expect(missing).toThrow(/BETTER_AUTH_SECRET/);
+    try {
+      missing();
+    } catch (e) {
+      expect(e instanceof Error ? e.message : String(e)).not.toContain(base.OTP_SECRET);
+    }
+
+    // Set but equal to OTP_SECRET in production: rejected.
+    expect(() =>
+      parseCoreEnv({ ...base, NODE_ENV: "production", BETTER_AUTH_SECRET: base.OTP_SECRET }),
+    ).toThrow(/BETTER_AUTH_SECRET/);
+
+    // Set and distinct in production: accepted, no fallback applied.
+    expect(
+      parseCoreEnv({ ...base, NODE_ENV: "production", BETTER_AUTH_SECRET: "b".repeat(32) })
+        .BETTER_AUTH_SECRET,
+    ).toBe("b".repeat(32));
+
+    // Non-production still allows the dev fallback (BETTER_AUTH_SECRET ?? OTP_SECRET).
+    expect(parseCoreEnv({ ...base, NODE_ENV: "development" }).BETTER_AUTH_SECRET).toBe(
+      base.OTP_SECRET,
+    );
+    expect(parseCoreEnv(base).BETTER_AUTH_SECRET).toBe(base.OTP_SECRET);
+  });
+
+  it("L1 — parses TRUSTED_PROXY_COUNT (default 0, coerced non-negative int)", () => {
+    expect(parseCoreEnv(base).TRUSTED_PROXY_COUNT).toBe(0);
+    expect(parseCoreEnv({ ...base, TRUSTED_PROXY_COUNT: "2" }).TRUSTED_PROXY_COUNT).toBe(2);
+    const negative = () => parseCoreEnv({ ...base, TRUSTED_PROXY_COUNT: "-1" });
+    expect(negative).toThrow(/TRUSTED_PROXY_COUNT/);
   });
 });

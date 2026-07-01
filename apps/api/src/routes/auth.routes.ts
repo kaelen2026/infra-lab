@@ -72,7 +72,15 @@ export interface AuthRouteDeps {
   sessions: SessionService;
   /** Deliver the code via your SMS provider. The code is never persisted in plaintext. */
   sms: (phone: string, code: string) => Promise<void>;
-  config: { debugReturnCode: boolean };
+  config: {
+    debugReturnCode: boolean;
+    /**
+     * Number of trusted reverse proxies that append `X-Forwarded-For`. The client IP
+     * is read this many entries from the right of the XFF list. `0` (default) means
+     * XFF is untrusted — see {@link clientIp}.
+     */
+    trustedProxyCount?: number;
+  };
 }
 
 const ERROR_STATUS: Record<AuthErrorCode, ContentfulStatusCode> = {
@@ -87,9 +95,33 @@ const ERROR_STATUS: Record<AuthErrorCode, ContentfulStatusCode> = {
   INVALID_REFRESH_TOKEN: 401,
 };
 
-function clientIp(headers: Headers): string {
-  const first = headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  if (first) return first;
+/**
+ * Resolve the client IP for per-IP rate limiting, honouring the trusted-proxy
+ * boundary.
+ *
+ * `X-Forwarded-For` is a client-controllable header: the *leftmost* entry is
+ * whatever the original caller sent, so trusting it lets an attacker rotate fake
+ * IPs to bypass the per-IP quota. Each trusted proxy in front of us *appends* the
+ * address it saw, so the real client is `trustedProxyCount` entries from the
+ * **right** of the list. Anything an attacker prepends sits further left and is
+ * ignored.
+ *
+ * With `trustedProxyCount === 0` (the safe default) XFF is not trusted at all and
+ * we fall back to `x-real-ip` — operators MUST set the real hop count to enable
+ * per-IP limiting behind a proxy. See `TRUSTED_PROXY_COUNT` in `@infra/env/core`.
+ */
+export function clientIp(headers: Headers, trustedProxyCount = 0): string {
+  if (trustedProxyCount > 0) {
+    const list = (headers.get("x-forwarded-for") ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    // Real client = the entry appended by the outermost trusted proxy. Clamp to 0
+    // if the list is shorter than expected (misconfigured / fewer hops than claimed).
+    const idx = Math.max(0, list.length - trustedProxyCount);
+    const ip = list[idx];
+    if (ip) return ip;
+  }
   return headers.get("x-real-ip") ?? "0.0.0.0";
 }
 
@@ -106,6 +138,7 @@ function toAuthUser(user: UserRecord, isNew: boolean): AuthUser {
 
 export function createAuthRoutes(deps: AuthRouteDeps): Hono {
   const { otp, users, sessions, sms, config } = deps;
+  const trustedProxyCount = config.trustedProxyCount ?? 0;
   const app = new Hono();
 
   const fail = (c: Context, code: AuthErrorCode, extra: Record<string, unknown> = {}) =>
@@ -125,7 +158,7 @@ export function createAuthRoutes(deps: AuthRouteDeps): Hono {
     if (!parsed.success) return fail(c, "INVALID_REQUEST", { issues: parsed.error.issues });
 
     const { phone } = parsed.data;
-    const ip = clientIp(c.req.raw.headers);
+    const ip = clientIp(c.req.raw.headers, trustedProxyCount);
     const res = await otp.requestCode({ phone, ip });
     if (!res.ok) return fail(c, res.error, { retryAfter: res.retryAfter });
 
@@ -144,7 +177,7 @@ export function createAuthRoutes(deps: AuthRouteDeps): Hono {
     if (!parsed.success) return fail(c, "INVALID_REQUEST", { issues: parsed.error.issues });
 
     const { phone, code, platform, device } = parsed.data;
-    const ip = clientIp(c.req.raw.headers);
+    const ip = clientIp(c.req.raw.headers, trustedProxyCount);
 
     const result = await otp.verifyCode({ phone, code });
     if (!result.ok) {
@@ -194,7 +227,7 @@ export function createAuthRoutes(deps: AuthRouteDeps): Hono {
     const parsed = refreshSchema.safeParse(await readJson(c));
     if (!parsed.success) return fail(c, "INVALID_REQUEST", { issues: parsed.error.issues });
 
-    const ip = clientIp(c.req.raw.headers);
+    const ip = clientIp(c.req.raw.headers, trustedProxyCount);
     const tokens = await sessions.refresh(parsed.data.refreshToken, { ip });
     if (!tokens) return fail(c, "INVALID_REFRESH_TOKEN");
     return c.json({ ok: true, tokens });

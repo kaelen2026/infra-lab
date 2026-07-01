@@ -17,6 +17,8 @@ export interface OtpStore {
   get(key: string): Promise<string | null>;
   del(...keys: string[]): Promise<number>;
   incr(key: string): Promise<number>;
+  /** Atomic decrement — used to roll back a quota counter when a later gate rejects. */
+  decr(key: string): Promise<number>;
   expire(key: string, ttlSeconds: number): Promise<boolean>;
   /** Seconds remaining; -2 if missing, -1 if no expiry. */
   ttl(key: string): Promise<number>;
@@ -111,35 +113,52 @@ export function createOtpService(config: OtpServiceConfig): OtpService {
     const lockTtl = await isLocked(phone);
     if (lockTtl > 0) return { ok: false, error: "LOCKED", retryAfter: lockTtl };
 
-    const cooldownTtl = await store.ttl(OTP_KEYS.cooldown(phone));
-    if (cooldownTtl > 0) {
-      return { ok: false, error: "RESEND_COOLDOWN", retryAfter: cooldownTtl };
+    // Atomically claim the resend-cooldown slot with SET NX. This both enforces the
+    // cooldown and serialises concurrent sends for the same phone (only one request
+    // wins the NX), closing the read-then-act race on the per-phone quota below.
+    const cooldownK = OTP_KEYS.cooldown(phone);
+    const claimed = await store.set(cooldownK, "1", {
+      ttlSeconds: resendCooldownSeconds,
+      ifNotExists: true,
+    });
+    if (!claimed) {
+      const ttl = await store.ttl(cooldownK);
+      return {
+        ok: false,
+        error: "RESEND_COOLDOWN",
+        retryAfter: ttl > 0 ? ttl : resendCooldownSeconds,
+      };
     }
 
-    // Per-phone daily quota (read-then-incr so a later gate failure doesn't burn a count).
+    // Per-phone daily quota — atomic incr-then-check. On overflow, roll the count
+    // back (decr) and release the cooldown we just claimed so the rejection reports
+    // the real reason and doesn't spuriously block a later legitimate resend.
     const dailyK = OTP_KEYS.daily(phone, dayKey(ms));
-    const dailyCount = Number((await store.get(dailyK)) ?? 0);
-    if (dailyCount >= dailyPerPhone) {
+    const dailyCount = await store.incr(dailyK);
+    if (dailyCount === 1) await store.expire(dailyK, DAY_SECONDS);
+    if (dailyCount > dailyPerPhone) {
+      await store.decr(dailyK);
+      await store.del(cooldownK);
       const ttl = await store.ttl(dailyK);
       return { ok: false, error: "DAILY_LIMIT_EXCEEDED", retryAfter: ttl > 0 ? ttl : DAY_SECONDS };
     }
 
-    // Per-IP hourly quota.
+    // Per-IP hourly quota — same atomic check-and-occupy, rolling back both counters.
     const ipK = OTP_KEYS.ip(ip, hourKey(ms));
-    const ipCount = Number((await store.get(ipK)) ?? 0);
-    if (ipCount >= hourlyPerIp) {
+    const ipCount = await store.incr(ipK);
+    if (ipCount === 1) await store.expire(ipK, HOUR_SECONDS);
+    if (ipCount > hourlyPerIp) {
+      await store.decr(ipK);
+      await store.decr(dailyK);
+      await store.del(cooldownK);
       const ttl = await store.ttl(ipK);
       return { ok: false, error: "IP_LIMIT_EXCEEDED", retryAfter: ttl > 0 ? ttl : HOUR_SECONDS };
     }
 
-    // All gates passed — consume quota and issue a fresh code.
-    if ((await store.incr(dailyK)) === 1) await store.expire(dailyK, DAY_SECONDS);
-    if ((await store.incr(ipK)) === 1) await store.expire(ipK, HOUR_SECONDS);
-
+    // All gates passed — issue a fresh code (cooldown already claimed above).
     const code = generateCode(codeLength);
     await store.set(OTP_KEYS.code(phone), hashCode(secret, code), { ttlSeconds });
     await store.del(OTP_KEYS.attempt(phone)); // reset wrong-attempt counter for the new code
-    await store.set(OTP_KEYS.cooldown(phone), "1", { ttlSeconds: resendCooldownSeconds });
 
     return { ok: true, code, ttlSeconds, resendAfterSeconds: resendCooldownSeconds };
   }

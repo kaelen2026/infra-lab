@@ -58,6 +58,13 @@ export class FakeRedis implements OtpStore {
     return next;
   }
 
+  async decr(key: string): Promise<number> {
+    const entry = this.live(key);
+    const next = (entry ? Number(entry.value) : 0) - 1;
+    this.data.set(key, { value: String(next), expireAt: entry?.expireAt ?? null });
+    return next;
+  }
+
   async expire(key: string, ttlSeconds: number): Promise<boolean> {
     const entry = this.live(key);
     if (!entry) return false;

@@ -83,6 +83,59 @@ describe("OTP service — requestCode", () => {
   });
 });
 
+describe("OTP service — rate-limit atomicity (L2)", () => {
+  const dailyKeyFor = (store: FakeRedis, phone = PHONE) =>
+    OTP_KEYS.daily(phone, new Date(store.now()).toISOString().slice(0, 10));
+
+  it("does not burn a daily count when the gate rejects (incr is rolled back)", async () => {
+    const { otp, store } = setup();
+    for (let i = 0; i < 10; i++) {
+      await requestOk(otp);
+      store.advance(60); // clear cooldown between sends
+    }
+    // Counter sits exactly at the cap after 10 successful sends.
+    expect(Number(await store.get(dailyKeyFor(store)))).toBe(10);
+
+    const blocked = await otp.requestCode({ phone: PHONE, ip: IP });
+    expect(blocked.ok).toBe(false);
+    if (blocked.ok) throw new Error("unreachable");
+    expect(blocked.error).toBe("DAILY_LIMIT_EXCEEDED");
+    // The rejected request rolled its incr back — the counter is still 10, not 11.
+    expect(Number(await store.get(dailyKeyFor(store)))).toBe(10);
+  });
+
+  it("releases the cooldown on quota overflow so the real reason is reported", async () => {
+    const { otp, store } = setup();
+    for (let i = 0; i < 10; i++) {
+      await requestOk(otp);
+      store.advance(60);
+    }
+    // Two consecutive over-limit calls both surface DAILY_LIMIT_EXCEEDED — the first
+    // does not leave a cooldown behind that would mask the second as RESEND_COOLDOWN.
+    const first = await otp.requestCode({ phone: PHONE, ip: IP });
+    const second = await otp.requestCode({ phone: PHONE, ip: IP });
+    expect(first.ok).toBe(false);
+    expect(second.ok).toBe(false);
+    if (first.ok || second.ok) throw new Error("unreachable");
+    expect(first.error).toBe("DAILY_LIMIT_EXCEEDED");
+    expect(second.error).toBe("DAILY_LIMIT_EXCEEDED");
+  });
+
+  it("SET NX cooldown serialises concurrent sends for one phone (only one wins)", async () => {
+    const { otp, store } = setup();
+    const [a, b] = await Promise.all([
+      otp.requestCode({ phone: PHONE, ip: IP }),
+      otp.requestCode({ phone: PHONE, ip: IP }),
+    ]);
+    const oks = [a, b].filter((r) => r.ok).length;
+    const cooldowns = [a, b].filter((r) => !r.ok && r.error === "RESEND_COOLDOWN").length;
+    expect(oks).toBe(1);
+    expect(cooldowns).toBe(1);
+    // The loser never consumed quota: the per-phone daily counter is exactly 1.
+    expect(Number(await store.get(dailyKeyFor(store)))).toBe(1);
+  });
+});
+
 describe("OTP service — verifyCode", () => {
   it("accepts the correct code exactly once, then clears otp + attempt keys", async () => {
     const { store, otp } = setup();
