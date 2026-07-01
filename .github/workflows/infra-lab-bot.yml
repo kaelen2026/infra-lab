@@ -1,7 +1,9 @@
 name: infra-lab-bot
 
 # Mention @infra-lab-bot in an issue comment or a pull-request comment and this
-# runs claude-code-action to respond.
+# runs claude-code-action to respond. Can also be dispatched manually
+# (`gh workflow run infra-lab-bot.yml -f prompt="..."`) to run a one-off task —
+# in that mode there is no comment thread, so output lands in the Actions run.
 #
 # Two independent credentials:
 #   - Claude (Anthropic) auth: CLAUDE_CODE_OAUTH_TOKEN secret (from `claude setup-token`).
@@ -11,6 +13,12 @@ name: infra-lab-bot
 #     Requires repo secrets INFRA_LAB_BOT_APP_ID and INFRA_LAB_BOT_PRIVATE_KEY, and the
 #     app installed on this repo with Contents/Issues/Pull requests read & write.
 on:
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: "Task for infra-lab-bot to run"
+        required: false
+        default: "分析一下当前项目：整体架构、主要模块与职责、潜在问题和改进建议。用中文给出结论。"
   issue_comment:
     types: [created]
   pull_request_review_comment:
@@ -18,10 +26,11 @@ on:
 
 jobs:
   infra-lab-bot:
-    # Only run when the mention phrase appears in the comment body. `issue_comment`
-    # fires for both issue and PR conversation comments; `pull_request_review_comment`
-    # covers inline code-review comments.
+    # Run on manual dispatch, or when the mention phrase appears in a comment.
+    # `issue_comment` fires for both issue and PR conversation comments;
+    # `pull_request_review_comment` covers inline code-review comments.
     if: |
+      github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@infra-lab-bot')) ||
       (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@infra-lab-bot'))
     runs-on: ubuntu-latest
@@ -57,3 +66,6 @@ jobs:
           github_token: ${{ steps.app-token.outputs.token }}
           # Mention the bot by its own name rather than the default @claude.
           trigger_phrase: "@infra-lab-bot"
+          # On manual dispatch, run this prompt (automation mode). Empty on comment
+          # events so the action stays in mention/tag mode and reacts to the comment.
+          prompt: ${{ github.event_name == 'workflow_dispatch' && inputs.prompt || '' }}
