@@ -1,8 +1,15 @@
 name: infra-lab-bot
 
 # Mention @infra-lab-bot in an issue comment or a pull-request comment and this
-# runs claude-code-action to respond. Auth uses a Claude Code OAuth token (from
-# `claude setup-token`), stored as the CLAUDE_CODE_OAUTH_TOKEN repo secret.
+# runs claude-code-action to respond.
+#
+# Two independent credentials:
+#   - Claude (Anthropic) auth: CLAUDE_CODE_OAUTH_TOKEN secret (from `claude setup-token`).
+#   - GitHub identity: a *custom* GitHub App named "infra-lab-bot" — the workflow mints
+#     an installation token from its APP_ID + private key so comments/commits are
+#     attributed to infra-lab-bot[bot] instead of the default claude[bot].
+#     Requires repo secrets INFRA_LAB_BOT_APP_ID and INFRA_LAB_BOT_PRIVATE_KEY, and the
+#     app installed on this repo with Contents/Issues/Pull requests read & write.
 on:
   issue_comment:
     types: [created]
@@ -19,20 +26,34 @@ jobs:
       (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@infra-lab-bot'))
     runs-on: ubuntu-latest
     permissions:
+      # Job-token perms still apply to steps that use it (e.g. checkout fallback);
+      # the app token below carries its own installation permissions.
       contents: write
       pull-requests: write
       issues: write
-      id-token: write
       actions: read # so Claude can read CI results on PRs
     steps:
+      # Mint a short-lived installation token for the infra-lab-bot GitHub App so all
+      # of the bot's activity is attributed to infra-lab-bot[bot].
+      - name: Generate infra-lab-bot app token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.INFRA_LAB_BOT_APP_ID }}
+          private-key: ${{ secrets.INFRA_LAB_BOT_PRIVATE_KEY }}
+
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
           fetch-depth: 1
+          # Use the app token so any commits/pushes are the bot's, not the default runner.
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Run Claude Code
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Act as the custom infra-lab-bot GitHub App instead of the default claude[bot].
+          github_token: ${{ steps.app-token.outputs.token }}
           # Mention the bot by its own name rather than the default @claude.
           trigger_phrase: "@infra-lab-bot"
