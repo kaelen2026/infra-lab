@@ -231,6 +231,28 @@ ${scheme("Dark", dark)}
 `,
   );
 
+  // XML color resources: the launcher icon and the window background shown at launch
+  // / behind the system bars — pre-Compose surfaces the Compose ColorScheme can't
+  // reach. `window_background` is day/night split via the values-night qualifier;
+  // the launcher icon is static (light-mode values apply in both).
+  const xmlColors = (colors: [string, string][]) =>
+    `<?xml version="1.0" encoding="utf-8"?>\n<!-- ${GEN} -->\n<resources>\n${colors
+      .map(([name, hex]) => `    <color name="${name}">${hex}</color>`)
+      .join("\n")}\n</resources>`;
+  write(
+    "apps/android/app/src/main/res/values/colors.generated.xml",
+    xmlColors([
+      ["window_background", oklchToHex(light.background)],
+      ["ic_launcher_background", oklchToHex(light.primary)],
+      ["ic_launcher_bubble", oklchToHex(light.primaryForeground)],
+      ["ic_launcher_ink", oklchToHex(light.primaryDeep)],
+    ]),
+  );
+  write(
+    "apps/android/app/src/main/res/values-night/colors.generated.xml",
+    xmlColors([["window_background", oklchToHex(dark.background)]]),
+  );
+
   const errEntries = AUTH_ERROR_CODES.map(
     (code) => `        AuthErrorCode.${code} to ${q(COPY.errors.messages[code])},`,
   ).join("\n");

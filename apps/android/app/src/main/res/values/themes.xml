@@ -1,8 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--
-      Base theme; the Compose Material 3 theme drives the real colors at runtime
-      (see ui/theme/Theme.kt). This only needs to exist for the manifest reference.
+      The Compose Material 3 theme drives the real colors at runtime (see
+      ui/theme/Theme.kt). This base theme only owns the pre-Compose window
+      background shown at launch / behind the system bars; @color/window_background
+      is generated from @infra/design and switches day/night via values-night.
     -->
-    <style name="Theme.Infra" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.Infra" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/window_background</item>
+    </style>
 </resources>
