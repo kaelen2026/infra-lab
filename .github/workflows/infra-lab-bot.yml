@@ -94,6 +94,12 @@ jobs:
           github_token: ${{ steps.app-token.outputs.token }}
           # Mention the bot by its own name rather than the default @claude.
           trigger_phrase: "@infra-lab-bot"
+          # apps/feishu dispatches this workflow via the infra-lab-bot App token, so the
+          # actor is a Bot (infra-lab-bot[bot]). claude-code-action blocks non-human
+          # actors by default; allow just this bot (matched case-insensitively, [bot]
+          # suffix stripped). NOT "*" — this is a public repo, so a wildcard would let
+          # external Apps invoke the action (see the action's docs/security.md).
+          allowed_bots: "infra-lab-bot"
           # Use Opus 4.8.
           claude_args: "--model claude-opus-4-8"
           # On manual dispatch, run the composed prompt (automation mode). Empty on
