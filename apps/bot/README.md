@@ -80,6 +80,18 @@ GitHub 侧需要仓库 **secrets `LARK_APP_ID` / `LARK_APP_SECRET`**（可选 va
 人工 `gh workflow run infra-lab-bot.yml -f prompt="..."`（不带 `feishu_message_id`）不受影响，
 回帖步骤自动跳过。
 
+## 记录发起人（谁 @ 的 bot）
+
+派发时把发起人透传给 workflow 供审计：`feishu_sender`（open_id）+ `feishu_sender_name`
+（人名）作为 `workflow_dispatch` 输入，`infra-lab-bot.yml` 的 `run-name` 用它显示
+「谁发起的」（优先姓名 → open_id → `github.actor`）。这样在 Actions run 列表里一眼能看到
+每条自动运行是谁触发的（App 身份下 actor 恒为 bot，原本看不出）。
+
+姓名由 `user-name.ts` 用 `LARK_APP_*` 出站 client 调 `contact.v3.user.get(open_id)` 解析，
+进程内 LRU 缓存。**飞书应用需授予 `contact:user.base:readonly` 一类通讯录读权限**；未授权 /
+解析失败一律降级回 open_id，**绝不阻断派发**。人工 `gh workflow run` 不带发起人输入，
+`run-name` 自动降级为 `github.actor`。
+
 ## 环境变量
 
 见 `.env.example`。要点：

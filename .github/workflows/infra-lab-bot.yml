@@ -1,5 +1,11 @@
 name: infra-lab-bot
 
+# Surface who initiated the run in the Actions run list. Feishu dispatches pass a
+# resolved sender name (falls back to open_id); manual `gh workflow run` and comment
+# triggers have no sender input, so fall back to github.actor (the dispatcher / commenter).
+run-name: >-
+  infra-lab-bot · ${{ inputs.feishu_sender_name || inputs.feishu_sender || github.actor }}
+
 # Mention @infra-lab-bot in an issue comment or a pull-request comment and this
 # runs claude-code-action to respond. Can also be dispatched manually
 # (`gh workflow run infra-lab-bot.yml -f prompt="..."`) to run a one-off task —
@@ -28,6 +34,19 @@ on:
         # Set by apps/bot. When non-empty, the run's result is replied back into this
         # Feishu message's thread. Empty (default) for human `gh workflow run` dispatches.
         description: "Feishu message id to reply the result into (leave empty for manual runs)"
+        required: false
+        default: ""
+      feishu_sender:
+        # Set by apps/bot: the Feishu open_id of whoever @-mentioned the bot. Surfaced
+        # in run-name for audit. Empty for manual runs.
+        description: "Feishu sender open_id (who initiated; leave empty for manual runs)"
+        required: false
+        default: ""
+      feishu_sender_name:
+        # Set by apps/bot: the resolved display name of the sender (open_id → name via
+        # the contact API). May be empty if resolution failed; run-name then falls back
+        # to feishu_sender, then github.actor.
+        description: "Feishu sender display name (leave empty for manual runs)"
         required: false
         default: ""
   issue_comment:
