@@ -1,0 +1,75 @@
+name: reviewer
+
+# 每个 Pull Request 的「AI 自动代码审查」:复用 infra-lab-bot 的凭证与 claude-code-action,
+# 让 Opus 4.8 以只读方式审查本次 PR 的改动,把意见发成**行内评论 + 顶层总结**(见
+# .github/prompts/reviewer.md)。以自定义 GitHub App 身份 infra-lab-bot[bot] 发言。
+#
+# 与其它审查/扫描互补:@infra-lab-bot 是「被 @ 才应答」的通用助手(infra-lab-bot.yml);
+# security-patrol 是「每周深度安全巡检」;本工作流是「每次 PR 自动过一遍」。
+#
+# 依赖的仓库 secrets:
+#   CLAUDE_CODE_OAUTH_TOKEN                            Claude 鉴权(`claude setup-token`)
+#   INFRA_LAB_BOT_APP_ID / INFRA_LAB_BOT_PRIVATE_KEY   infra-lab-bot GitHub App(评论归属到 bot)
+#
+# 注:仅审查**本仓库内**发起的 PR。公共仓库里来自 fork 的 PR 拿不到 secrets,
+# 会被下面的 `if` 跳过,既避免失败噪声,也不把凭证暴露给外部代码。
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+# 同一 PR 有新提交时,取消尚未跑完的旧审查,只审最新改动。
+concurrency:
+  group: reviewer-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+# 审查是只读的:读代码(contents:read),把意见写成 PR 评论(pull-requests:write)。
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    name: AI code review
+    runs-on: ubuntu-latest
+    # 跳过草稿 PR,以及来自 fork 的 PR(后者拿不到 secrets)。
+    if: |
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      # 用 infra-lab-bot App 铸一个短期 installation token,让审查评论归属到 infra-lab-bot[bot]。
+      - name: Generate infra-lab-bot app token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.INFRA_LAB_BOT_APP_ID }}
+          private-key: ${{ secrets.INFRA_LAB_BOT_PRIVATE_KEY }}
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          token: ${{ steps.app-token.outputs.token }}
+
+      # prompt = 审查基础模板 + 本次 PR 的 REPO / 编号。二者非用户可控文本,经 env 传入。
+      - name: Build review prompt
+        id: build-prompt
+        env:
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          {
+            echo 'value<<PROMPT_EOF'
+            cat .github/prompts/reviewer.md
+            printf '\n本次 PR:REPO=%s PR NUMBER=#%s(PR 分支已检出到当前工作目录)。\n' "$REPO" "$PR_NUMBER"
+            echo 'PROMPT_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run Claude Code (review)
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # 以 infra-lab-bot App 身份发评论,而非默认 claude[bot]。
+          github_token: ${{ steps.app-token.outputs.token }}
+          prompt: ${{ steps.build-prompt.outputs.value }}
+          # Opus 4.8;放开发评论所需的工具(行内评论 MCP + gh pr 只读/评论命令)。
+          claude_args: '--model claude-opus-4-8 --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"'
