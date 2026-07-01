@@ -78,6 +78,9 @@ jobs:
     permissions:
       contents: read
       security-events: write
+      # codeql-action 会调 GET /actions/runs/{id} 取本次 run 的信息;缺这条会报
+      # "Resource not accessible by integration ... get-a-workflow-run" 并判为配置错误而失败。
+      actions: read
     steps:
       - name: Checkout
         uses: actions/checkout@v6
