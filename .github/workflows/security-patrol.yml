@@ -1,0 +1,149 @@
+name: security-patrol
+
+# 每周一次的「AI 深度安全巡检」：复用 infra-lab-bot 的凭证与 claude-code-action，让
+# Opus 4.8 以只读方式审计本仓库的认证逻辑（OTP 重放、限流绕过、令牌 / 会话、日志泄密、
+# 契约漂移等，见 .github/prompts/security-patrol.md），把报告写成 GitHub issue 并推到飞书。
+#
+# 与确定性扫描（.github/workflows/security-scan.yml，每日 gitleaks / pnpm audit / CodeQL）
+# 互补：工具查已知类，AI 查业务逻辑。
+#
+# 依赖的仓库 secrets / vars：
+#   CLAUDE_CODE_OAUTH_TOKEN                        Claude 鉴权（`claude setup-token`）
+#   INFRA_LAB_BOT_APP_ID / INFRA_LAB_BOT_PRIVATE_KEY  infra-lab-bot GitHub App（开 issue 归属到 bot）
+#   LARK_APP_ID / LARK_APP_SECRET                  飞书应用凭证（可选，用于推送）
+#   vars.LARK_DOMAIN                               Feishu（默认）/ Lark
+#   vars.SECURITY_PATROL_CHAT_ID                   飞书目标 chat_id（可选；不配置则跳过飞书推送）
+on:
+  schedule:
+    # 每周一 02:00 UTC（北京时间 10:00）。cron 用 UTC。
+    - cron: "0 2 * * 1"
+  workflow_dispatch:
+    inputs:
+      note:
+        description: "追加给巡检的补充说明（可留空）"
+        required: false
+        default: ""
+
+# 巡检是只读审计：内容只读即可；开 issue 需要 issues:write；读 CI 结果需要 actions:read。
+permissions:
+  contents: read
+  issues: write
+  actions: read
+
+concurrency:
+  group: security-patrol-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  patrol:
+    name: AI security patrol
+    runs-on: ubuntu-latest
+    steps:
+      # 用 infra-lab-bot App 铸一个短期 installation token，让开出来的 issue 归属到 infra-lab-bot[bot]。
+      - name: Generate infra-lab-bot app token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.INFRA_LAB_BOT_APP_ID }}
+          private-key: ${{ secrets.INFRA_LAB_BOT_PRIVATE_KEY }}
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      # prompt = 巡检基础模板 + 本次补充说明。补充说明经 env 传入，绝不内联进脚本，避免表达式注入。
+      - name: Build patrol prompt
+        id: build-prompt
+        env:
+          USER_NOTE: ${{ inputs.note }}
+        run: |
+          {
+            echo 'value<<PROMPT_EOF'
+            cat .github/prompts/security-patrol.md
+            printf '\n%s\n' "$USER_NOTE"
+            echo 'PROMPT_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run Claude Code (security audit)
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ steps.app-token.outputs.token }}
+          claude_args: "--model claude-opus-4-8"
+          prompt: ${{ steps.build-prompt.outputs.value }}
+          # 定时 / 手动触发的巡检把结论也留在 run log 里，便于回溯。
+          show_full_output: true
+
+      # 从 execution_file 抽出报告纯文本，剥掉首行的机器状态标记，得到给人看的报告正文。
+      - name: Extract report
+        id: report
+        if: always() && steps.claude.outcome == 'success'
+        env:
+          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          node .github/scripts/extract-result.mjs > raw-report.md || true
+          if [ ! -s raw-report.md ]; then
+            echo "status=UNKNOWN" >> "$GITHUB_OUTPUT"
+            echo "巡检运行结束，但未取到可解析的报告文本。" > report.md
+            exit 0
+          fi
+          first_line="$(head -n 1 raw-report.md)"
+          case "$first_line" in
+            SECURITY_PATROL_STATUS:*FINDINGS*) echo "status=FINDINGS" >> "$GITHUB_OUTPUT" ;;
+            SECURITY_PATROL_STATUS:*CLEAN*)    echo "status=CLEAN"    >> "$GITHUB_OUTPUT" ;;
+            *)                                  echo "status=UNKNOWN"  >> "$GITHUB_OUTPUT" ;;
+          esac
+          # 剥掉首行状态标记（若存在），其余作为报告正文。
+          case "$first_line" in
+            SECURITY_PATROL_STATUS:*) tail -n +2 raw-report.md > report.md ;;
+            *)                        cp raw-report.md report.md ;;
+          esac
+
+      # 发现问题（或状态未知）时开 / 复用 issue；纯 CLEAN 不开 issue，避免每周噪声。
+      - name: Open issue on findings
+        id: issue
+        if: always() && steps.report.outputs.status == 'FINDINGS'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh label create security --color B60205 --description "安全巡检 / 安全扫描" --force >/dev/null 2>&1 || true
+          title="安全巡检发现问题 $(date -u +%Y-%m-%d)"
+          {
+            cat report.md
+            printf '\n\n---\n_由 security-patrol 自动生成 · [运行日志](%s)_\n' "$RUN_URL"
+          } > issue-body.md
+          url="$(gh issue create --title "$title" --body-file issue-body.md --label security)"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "已开 issue：$url"
+
+      # 推送到飞书（可选）。CLEAN / FINDINGS / UNKNOWN 都推一条，作为每周巡检心跳；
+      # 未配置 SECURITY_PATROL_CHAT_ID 时脚本自行跳过。
+      - name: Notify Feishu
+        if: always() && steps.claude.outcome == 'success'
+        env:
+          LARK_APP_ID: ${{ secrets.LARK_APP_ID }}
+          LARK_APP_SECRET: ${{ secrets.LARK_APP_SECRET }}
+          LARK_DOMAIN: ${{ vars.LARK_DOMAIN }}
+          FEISHU_CHAT_ID: ${{ vars.SECURITY_PATROL_CHAT_ID }}
+          NOTIFY_TITLE: "🛡️ 每周安全巡检"
+          NOTIFY_FILE: feishu-body.md
+          STATUS: ${{ steps.report.outputs.status }}
+          ISSUE_URL: ${{ steps.issue.outputs.url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          case "$STATUS" in
+            CLEAN)  echo "**本周巡检：未发现中/高危问题** ✅" > feishu-body.md ;;
+            FINDINGS)
+              {
+                echo "**本周巡检：发现问题** ⚠️"
+                [ -n "$ISSUE_URL" ] && echo "" && echo "详见 issue：$ISSUE_URL"
+              } > feishu-body.md ;;
+            *) echo "**本周巡检已运行**（状态未知，请看运行日志）" > feishu-body.md ;;
+          esac
+          if [ -f report.md ]; then
+            { echo ""; echo "---"; cat report.md; } >> feishu-body.md
+          fi
+          node .github/scripts/feishu-notify.mjs

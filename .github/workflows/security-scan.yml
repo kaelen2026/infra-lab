@@ -1,0 +1,145 @@
+name: security-scan
+
+# 确定性安全扫描（工具查已知类问题），与 AI 深度巡检（security-patrol.yml）互补：
+#   - gitleaks  扫源码里的密钥 / 令牌
+#   - pnpm audit 扫依赖已知漏洞（CVE）
+#   - CodeQL     JS/TS 静态分析（SAST），结果进仓库 Security 标签页
+#
+# 触发：每日定时 + 手动 + PR / push(main) 作为质量门禁。PR 上任一扫描失败即拦截合并；
+# 定时运行失败时，额外开 / 复用一个 issue 并推飞书（见 notify job）。
+on:
+  schedule:
+    # 每日 03:00 UTC（北京时间 11:00）。cron 用 UTC。
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: security-scan-${{ github.ref }}
+  cancel-in-progress: true
+
+# 默认最小权限；各 job 按需上调。
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    name: Secrets (gitleaks)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write # 上传 SARIF 到 Security 标签页
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # gitleaks-action 需要完整历史来算提交范围（PR 上是 <head>^..<head>）；
+          # 浅克隆会让父提交缺失、扫描报错。全事件都取全量历史。
+          fetch-depth: 0
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  audit:
+    name: Dependencies (pnpm audit)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      # 只装依赖不跑生命周期脚本，避免装依赖阶段执行第三方脚本；审计只需要 lockfile 解析出的依赖树。
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      # high / critical 漏洞才让门禁失败，避免被低危噪声淹没。
+      - name: pnpm audit (high+)
+        run: pnpm audit --audit-level high
+
+  codeql:
+    name: SAST (CodeQL)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          # security-extended 覆盖更多规则；对认证类代码值得。
+          queries: security-extended
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@v3
+
+  notify:
+    name: Notify on scheduled failure
+    runs-on: ubuntu-latest
+    needs: [gitleaks, audit, codeql]
+    # 仅定时运行失败时通知：PR / push 的失败已经体现在 checks 上，开 issue 只会制造噪声。
+    if: always() && github.event_name == 'schedule' && contains(needs.*.result, 'failure')
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Build report
+        id: build
+        env:
+          GITLEAKS_RESULT: ${{ needs.gitleaks.result }}
+          AUDIT_RESULT: ${{ needs.audit.result }}
+          CODEQL_RESULT: ${{ needs.codeql.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          {
+            echo "**每日安全扫描发现问题** ⚠️（$(date -u +%Y-%m-%d) UTC）"
+            echo ""
+            echo "| 扫描 | 结果 |"
+            echo "| --- | --- |"
+            echo "| gitleaks（密钥） | $GITLEAKS_RESULT |"
+            echo "| pnpm audit（依赖） | $AUDIT_RESULT |"
+            echo "| CodeQL（SAST） | $CODEQL_RESULT |"
+            echo ""
+            echo "CodeQL 详情见仓库 **Security → Code scanning**；其余见运行日志。"
+            echo ""
+            echo "[运行日志]($RUN_URL)"
+          } > scan-report.md
+
+      - name: Open / update issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh label create security --color B60205 --description "安全巡检 / 安全扫描" --force >/dev/null 2>&1 || true
+          title="每日安全扫描失败 $(date -u +%Y-%m-%d)"
+          gh issue create --title "$title" --body-file scan-report.md --label security
+
+      - name: Notify Feishu
+        env:
+          LARK_APP_ID: ${{ secrets.LARK_APP_ID }}
+          LARK_APP_SECRET: ${{ secrets.LARK_APP_SECRET }}
+          LARK_DOMAIN: ${{ vars.LARK_DOMAIN }}
+          FEISHU_CHAT_ID: ${{ vars.SECURITY_PATROL_CHAT_ID }}
+          NOTIFY_TITLE: "🚨 每日安全扫描失败"
+          NOTIFY_FILE: scan-report.md
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node .github/scripts/feishu-notify.mjs
