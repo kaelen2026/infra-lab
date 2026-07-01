@@ -54,17 +54,24 @@ const CSS_ROLES: [keyof Palette, string][] = [
   ["ring", "ring"],
 ];
 
-// ── web: CSS custom properties ────────────────────────────────────────────────
-function emitWeb(): void {
+// ── web + h5: CSS custom properties ───────────────────────────────────────────
+/** The `:root` / `.dark` custom-property file, identical for every CSS consumer. */
+function cssTokens(): string {
   const block = (sel: string, p: Palette, withRadius: boolean) => {
     const lines = withRadius ? [`  --radius: ${shape.radiusPx / 16}rem;`] : [];
     for (const [role, name] of CSS_ROLES) lines.push(`  --${name}: ${oklchToCss(p[role])};`);
     return `${sel} {\n${lines.join("\n")}\n}`;
   };
-  write(
-    "apps/web/app/tokens.generated.css",
-    `/* ${GEN} */\n\n${block(":root", light, true)}\n\n${block(".dark", dark, false)}\n`,
-  );
+  return `/* ${GEN} */\n\n${block(":root", light, true)}\n\n${block(".dark", dark, false)}\n`;
+}
+
+function emitWeb(): void {
+  write("apps/web/app/tokens.generated.css", cssTokens());
+}
+
+// h5 is the mobile web client — same Tailwind v4 token model as web, same CSS.
+function emitH5(): void {
+  write("apps/h5/src/tokens.generated.css", cssTokens());
 }
 
 // ── ios: SwiftUI tokens + copy ────────────────────────────────────────────────
@@ -391,6 +398,7 @@ export function invalidCodeRemaining(base: string, remaining: number): string {
 }
 
 emitWeb();
+emitH5();
 emitIos();
 emitAndroid();
 emitHarmony();

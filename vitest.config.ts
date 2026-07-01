@@ -8,6 +8,7 @@ export default defineConfig({
     alias: {
       "@infra/sdk": r("./packages/sdk/src/index.ts"),
       "@infra/shared": r("./packages/shared/src/index.ts"),
+      "@infra/design": r("./packages/design/src/index.ts"),
       "@infra/auth/testing": r("./packages/auth/src/testing.ts"),
       "@infra/auth": r("./packages/auth/src/index.ts"),
       "@infra/redis": r("./packages/redis/src/index.ts"),
