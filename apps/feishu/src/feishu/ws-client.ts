@@ -1,3 +1,4 @@
+import { parseFeishuEnv } from "@infra/env/feishu";
 import * as Lark from "@larksuiteoapi/node-sdk";
 import { routeMessageReceive } from "./event-router";
 import type { FeishuMessageReceiveEvent } from "./types";
@@ -42,18 +43,17 @@ function isDuplicateMessage(messageId: string | undefined): boolean {
 export function startFeishuWsClient(): void {
   if (started) return;
 
-  const appId = process.env.LARK_APP_ID;
-  const appSecret = process.env.LARK_APP_SECRET;
-  if (!appId || !appSecret) {
+  const { LARK_APP_ID, LARK_APP_SECRET, LARK_DOMAIN } = parseFeishuEnv();
+  if (!LARK_APP_ID || !LARK_APP_SECRET) {
     console.warn("[feishu] 缺少 LARK_APP_ID / LARK_APP_SECRET，跳过 ws client 启动");
     return;
   }
   started = true;
 
   const wsClient = new Lark.WSClient({
-    appId,
-    appSecret,
-    domain: process.env.LARK_DOMAIN === "Lark" ? Lark.Domain.Lark : Lark.Domain.Feishu,
+    appId: LARK_APP_ID,
+    appSecret: LARK_APP_SECRET,
+    domain: LARK_DOMAIN === "Lark" ? Lark.Domain.Lark : Lark.Domain.Feishu,
     loggerLevel: Lark.LoggerLevel.info,
   });
 
@@ -97,5 +97,5 @@ export function startFeishuWsClient(): void {
     }),
   });
 
-  console.info(`[feishu] WS client 启动 (app_id=${appId})`);
+  console.info(`[feishu] WS client 启动 (app_id=${LARK_APP_ID})`);
 }

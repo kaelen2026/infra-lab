@@ -7,6 +7,10 @@
     "./core": {
       "types": "./dist/core.d.ts",
       "import": "./dist/core.js"
+    },
+    "./feishu": {
+      "types": "./dist/feishu.d.ts",
+      "import": "./dist/feishu.js"
     }
   },
   "scripts": {

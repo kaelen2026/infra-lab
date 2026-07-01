@@ -13,14 +13,17 @@ package is what parses and type-checks them.
 Env is split by concern; import only the bucket a process needs, so a subsystem can't
 read a secret it has no business seeing.
 
-| Subpath            | Used by                        | Policy                                                        |
-| ------------------ | ------------------------------ | ------------------------------------------------------------- |
-| `@infra/env/core`  | `apps/api`, db tooling, scripts | **fail-fast** — Postgres / Redis / Better-Auth secrets are required |
+| Subpath             | Used by                         | Policy                                                              |
+| ------------------- | ------------------------------- | ------------------------------------------------------------------- |
+| `@infra/env/core`   | `apps/api`, db tooling, scripts | **fail-fast** — Postgres / Redis / Better-Auth secrets are required |
+| `@infra/env/feishu` | `apps/feishu`                   | **graceful-degradation** — every field optional, parsing never throws |
 
-Planned (not yet migrated): `@infra/env/feishu` — the bot's Lark / GitHub / LLM
-credentials. That bucket is **graceful-degradation**, not fail-fast (the bot
-intentionally falls back when the LLM or bot open-id is unset), so it will parse into
-optionals rather than throw.
+The two policies are deliberate. The API cannot serve without a database, so `core`
+throws at boot. The bot intentionally runs in a reduced mode when a credential is
+absent (skips the ws client, degrades the LLM responder, refuses group messages), so
+`feishu` normalizes into typed optionals + defaults and never throws. Read `feishu`
+live at each use (`parseFeishuEnv`) — it is not memoized, because the router reads the
+bot open-id per message.
 
 ## Usage
 
