@@ -3,7 +3,10 @@ name: security-scan
 # 确定性安全扫描（工具查已知类问题），与 AI 深度巡检（security-patrol.yml）互补：
 #   - gitleaks  扫源码里的密钥 / 令牌
 #   - pnpm audit 扫依赖已知漏洞（CVE）
-#   - CodeQL     JS/TS 静态分析（SAST），结果进仓库 Security 标签页
+#
+# 注：CodeQL（SAST）已移除——仓库转 private 后，code scanning 上传属 GitHub Advanced
+# Security，个人账号私有仓库用不了（upload 报 "Code scanning is not enabled"）。如果日后
+# 迁到带 GHAS 的组织、或仓库重新公开，可把 codeql job 加回来。
 #
 # 触发：每日定时 + 手动 + PR / push(main) 作为质量门禁。PR 上任一扫描失败即拦截合并；
 # 定时运行失败时，额外开 / 复用一个 issue 并推飞书（见 notify job）。
@@ -72,30 +75,10 @@ jobs:
       - name: pnpm audit (high+)
         run: pnpm audit --audit-level high
 
-  codeql:
-    name: SAST (CodeQL)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
-        with:
-          languages: javascript-typescript
-          # security-extended 覆盖更多规则；对认证类代码值得。
-          queries: security-extended
-
-      - name: Analyze
-        uses: github/codeql-action/analyze@v3
-
   notify:
     name: Notify on scheduled failure
     runs-on: ubuntu-latest
-    needs: [gitleaks, audit, codeql]
+    needs: [gitleaks, audit]
     # 仅定时运行失败时通知：PR / push 的失败已经体现在 checks 上，开 issue 只会制造噪声。
     if: always() && github.event_name == 'schedule' && contains(needs.*.result, 'failure')
     permissions:
@@ -112,7 +95,6 @@ jobs:
         env:
           GITLEAKS_RESULT: ${{ needs.gitleaks.result }}
           AUDIT_RESULT: ${{ needs.audit.result }}
-          CODEQL_RESULT: ${{ needs.codeql.result }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           {
@@ -122,9 +104,8 @@ jobs:
             echo "| --- | --- |"
             echo "| gitleaks（密钥） | $GITLEAKS_RESULT |"
             echo "| pnpm audit（依赖） | $AUDIT_RESULT |"
-            echo "| CodeQL（SAST） | $CODEQL_RESULT |"
             echo ""
-            echo "CodeQL 详情见仓库 **Security → Code scanning**；其余见运行日志。"
+            echo "详情见运行日志。"
             echo ""
             echo "[运行日志]($RUN_URL)"
           } > scan-report.md
