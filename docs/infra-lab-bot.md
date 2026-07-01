@@ -9,6 +9,7 @@
 | --- | --- | --- |
 | **评论提及**（tag 模式） | 在 issue 评论、PR 评论或 PR 行内评论里写 `@infra-lab-bot <你的问题>` | 以 `infra-lab-bot[bot]` 身份**在同一线程回复** |
 | **手动派发**（dispatch） | `gh workflow run infra-lab-bot.yml -f prompt="..."`，或 Actions 页面点 “Run workflow” | 无线程，**结果在该次运行日志里**（`show_full_output` 仅对 dispatch 开启） |
+| **飞书 @**（`@infra/feishu`） | 在飞书群 @ bot 或私聊它 | bot 先 react + 安抚，再 dispatch 本工作流；跑完**把结果回帖到发起消息的飞书 thread** |
 
 示例：
 
@@ -58,6 +59,17 @@ gh workflow run infra-lab-bot.yml -f prompt="分析当前项目架构与主要�
 | 触发短语 | `@infra-lab-bot` |
 | Claude 鉴权 | `CLAUDE_CODE_OAUTH_TOKEN`（secret，`claude setup-token` 生成） |
 | GitHub 身份 | 自定义 App `infra-lab-bot` + secrets `INFRA_LAB_BOT_APP_ID` / `INFRA_LAB_BOT_PRIVATE_KEY` |
+| 飞书回帖 | secrets `LARK_APP_ID` / `LARK_APP_SECRET`（可选 var `LARK_DOMAIN`）；回帖脚本 [`.github/scripts/feishu-reply.mjs`](../.github/scripts/feishu-reply.mjs) |
 | 修改模型 / 参数 | 工作流里的 `claude_args`（如 `--model claude-opus-4-8`） |
 
 > App 需安装到本仓库，并授予 Contents / Issues / Pull requests 读写权限，否则 token 交换会 404。
+
+## 飞书闭环（`@infra/feishu`）
+
+[`apps/feishu`](../apps/feishu) 的接待 bot 在飞书收消息后，用 `workflow_dispatch` 触发本工作流，
+并透传 `feishu_message_id`（发起消息的 id）。本工作流跑完后，`Reply result to Feishu thread`
+步骤调 [`.github/scripts/feishu-reply.mjs`](../.github/scripts/feishu-reply.mjs)，从
+claude-code-action 的 `execution_file` 取最终文本，`reply_in_thread` 回帖到同一 thread，闭环。
+
+- 仅当 `feishu_message_id` 非空时回帖；人工 dispatch（不带该输入）自动跳过。
+- 需要仓库 secrets `LARK_APP_ID` / `LARK_APP_SECRET`（与 `apps/feishu` 用的是同一飞书应用）。
