@@ -1,0 +1,26 @@
+{
+  "name": "@infra/design",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "generate": "tsx src/generate.ts",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@infra/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "4.22.4"
+  }
+}

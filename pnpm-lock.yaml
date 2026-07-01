@@ -159,6 +159,16 @@ importers:
         specifier: 0.31.10
         version: 0.31.10
 
+  packages/design:
+    dependencies:
+      '@infra/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      tsx:
+        specifier: 4.22.4
+        version: 4.22.4
+
   packages/redis:
     dependencies:
       '@infra/auth':

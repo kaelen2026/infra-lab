@@ -52,6 +52,22 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # The single source of truth for color + copy lives in `@infra/design`.
+      # Regenerate every client's artifacts and fail if any drifted — the only way
+      # to change a brand color or auth string is to change the source, not a
+      # generated file. Runs after Build because the generator imports built @infra/shared.
+      # Scoped to the generated paths so unrelated build artifacts can't fail it.
+      - name: Design tokens · no drift
+        run: |
+          pnpm gen:design
+          git diff --exit-code -- \
+            apps/web/app/tokens.generated.css \
+            apps/ios/InfraAuth/Generated \
+            apps/android/app/src/main/kotlin/ai/deeplang/infra/ui/theme/DesignTokens.kt \
+            apps/android/app/src/main/kotlin/ai/deeplang/infra/ui/auth/AuthCopyGenerated.kt \
+            apps/harmony/entry/src/main/resources/base/element/color.json \
+            apps/harmony/entry/src/main/ets/sdk/copy.generated.ets
+
       - name: Test (vitest)
         run: pnpm test
 
