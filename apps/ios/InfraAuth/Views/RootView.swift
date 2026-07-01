@@ -12,10 +12,19 @@ struct RootView: View {
             if auth.restoring {
                 ProgressView()
                     .controlSize(.large)
-                    .tint(.white)
+                    .tint(DesignTokens.primary)
             } else {
-                content
-                    .frame(maxWidth: 480)
+                VStack(spacing: 16) {
+                    content
+                    if auth.step != .done {
+                        Text(AuthCopy.footer)
+                            .font(.caption2)
+                            .foregroundStyle(DesignTokens.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 44)
+                    }
+                }
+                .frame(maxWidth: 480)
             }
         }
         .task { await auth.bootstrap() }

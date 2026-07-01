@@ -7,52 +7,55 @@ struct CodeStepView: View {
 
     var body: some View {
         AuthCard {
+            BrandMark()
+
             VStack(alignment: .leading, spacing: 8) {
-                Text("输入验证码")
-                    .font(.title.bold())
-                Text("验证码已发送至 \(auth.phone)")
+                Text(AuthCopy.Code.title)
+                    .font(AuthTheme.title)
+                    .foregroundStyle(DesignTokens.textPrimary)
+                Text(AuthCopy.Code.description(phone: auth.phone, minutes: OTPLimits.ttlSeconds / 60))
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(DesignTokens.textSecondary)
             }
 
-            TextField("------", text: $auth.code)
+            TextField(AuthCopy.Code.placeholder, text: $auth.code)
                 .keyboardType(.numberPad)
                 .textContentType(.oneTimeCode)
                 .font(.system(size: 34, weight: .semibold, design: .monospaced))
+                .foregroundStyle(DesignTokens.textPrimary)
                 .kerning(8)
                 .multilineTextAlignment(.center)
                 .focused($focused)
                 .padding(.vertical, 14)
                 .frame(maxWidth: .infinity)
-                .background(.background.opacity(0.6),
-                            in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .authFieldBackground()
 
             if let debugCode = auth.debugCode {
                 Label("调试验证码:\(debugCode)", systemImage: "ladybug.fill")
                     .font(.footnote)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(DesignTokens.primary)
             }
 
             ErrorBanner(message: auth.errorMessage)
 
-            PrimaryButton(title: "登录", loading: auth.busy, enabled: auth.canVerify) {
+            PrimaryButton(title: AuthCopy.Code.submit, loading: auth.busy, enabled: auth.canVerify) {
                 Task { await auth.verify() }
             }
 
             HStack {
-                Button("返回修改手机号") { auth.changePhone() }
+                Button(AuthCopy.Code.changePhone) { auth.changePhone() }
                 Spacer()
                 Button(resendTitle) { Task { await auth.sendCode() } }
                     .disabled(!auth.canResend || auth.busy)
             }
             .font(.footnote)
-            .tint(AuthTheme.accent)
+            .tint(DesignTokens.primary)
         }
         .onAppear { focused = true }
     }
 
     private var resendTitle: String {
-        auth.canResend ? "重新发送" : "重新发送 (\(auth.cooldown)s)"
+        auth.canResend ? AuthCopy.Code.resend : AuthCopy.Code.resendCooldown(seconds: auth.cooldown)
     }
 }
 
