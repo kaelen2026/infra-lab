@@ -21,6 +21,7 @@
     "infra:up": "docker compose up -d",
     "infra:down": "docker compose down",
     "verify:redis": "node scripts/verify-redis.mjs",
+    "security:audit": "pnpm audit --audit-level high",
     "clean": "turbo run clean",
     "lint": "turbo run lint:all",
     "lint:all": "biome check .",
