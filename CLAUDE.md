@@ -38,6 +38,19 @@ How the OTP/auth/session/contracts pieces span files (ports & adapters, platform
 contracts, schema): read [`.claude/docs/architecture.md`](.claude/docs/architecture.md) before touching
 auth, session, OTP, or contract code.
 
+## Observability (`apps/api/src/observability/`)
+
+The API emits structured JSON logs (one `requestId` per request; `x-request-id` propagated), a cheap
+`/health` liveness probe, and a `/ready` readiness probe that checks Postgres + Redis (503 if either is
+down). `app.onError` logs stack + `requestId` and returns a generic 500. `LOG_LEVEL` (default `info`) sets
+verbosity. **Never log phone numbers, OTP codes, or tokens.**
+
+## Bot
+
+`@infra-lab-bot` in an issue/PR comment, or `gh workflow run infra-lab-bot.yml -f prompt="..."`, runs
+claude-code-action (Opus 4.8) as the `infra-lab-bot[bot]` GitHub App. See
+[`docs/infra-lab-bot.md`](docs/infra-lab-bot.md); workflow in `.github/workflows/infra-lab-bot.yml`.
+
 ## Rules (always apply)
 
 @.claude/rules/build-and-typecheck.md
