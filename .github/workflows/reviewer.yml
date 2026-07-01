@@ -39,7 +39,7 @@ jobs:
       # 用 infra-lab-bot App 铸一个短期 installation token,让审查评论归属到 infra-lab-bot[bot]。
       - name: Generate infra-lab-bot app token
         id: app-token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3 # v3 runs on Node 24 (v2 is Node 20, deprecated)
         with:
           app-id: ${{ secrets.INFRA_LAB_BOT_APP_ID }}
           private-key: ${{ secrets.INFRA_LAB_BOT_PRIVATE_KEY }}

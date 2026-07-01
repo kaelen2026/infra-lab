@@ -57,7 +57,7 @@ jobs:
       # of the bot's activity is attributed to infra-lab-bot[bot].
       - name: Generate infra-lab-bot app token
         id: app-token
-        uses: actions/create-github-app-token@v2 # v2 runs on Node 24 (v1 is Node 20, deprecated)
+        uses: actions/create-github-app-token@v3 # v3 runs on Node 24 (v2 is Node 20, deprecated)
         with:
           app-id: ${{ secrets.INFRA_LAB_BOT_APP_ID }}
           private-key: ${{ secrets.INFRA_LAB_BOT_PRIVATE_KEY }}
