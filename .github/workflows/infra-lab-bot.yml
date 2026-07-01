@@ -12,6 +12,10 @@ name: infra-lab-bot
 #     attributed to infra-lab-bot[bot] instead of the default claude[bot].
 #     Requires repo secrets INFRA_LAB_BOT_APP_ID and INFRA_LAB_BOT_PRIVATE_KEY, and the
 #     app installed on this repo with Contents/Issues/Pull requests read & write.
+#
+# Feishu closed loop: apps/feishu dispatches this workflow with `feishu_message_id` set.
+# The final step then replies the run's result back into that Feishu message's thread —
+# needs repo secrets LARK_APP_ID + LARK_APP_SECRET (and optional var LARK_DOMAIN).
 on:
   workflow_dispatch:
     inputs:
@@ -20,6 +24,12 @@ on:
         description: "Task for infra-lab-bot (combined with the base prompt template)"
         required: false
         default: "分析一下当前项目"
+      feishu_message_id:
+        # Set by apps/feishu. When non-empty, the run's result is replied back into this
+        # Feishu message's thread. Empty (default) for human `gh workflow run` dispatches.
+        description: "Feishu message id to reply the result into (leave empty for manual runs)"
+        required: false
+        default: ""
   issue_comment:
     types: [created]
   pull_request_review_comment:
@@ -76,6 +86,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Run Claude Code
+        id: claude
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -92,3 +103,20 @@ jobs:
           # the run log. Scoped to workflow_dispatch (maintainer-triggered) only —
           # comment runs stay hidden since less-trusted users can fire those.
           show_full_output: ${{ github.event_name == 'workflow_dispatch' }}
+
+      # Feishu closed loop: when apps/feishu dispatched with a feishu_message_id, reply
+      # the run's result back into that Feishu thread. `always()` so a failed Claude run
+      # still posts a "finished" notice (the script falls back to the run link).
+      - name: Reply result to Feishu thread
+        if: >-
+          always() &&
+          github.event_name == 'workflow_dispatch' &&
+          inputs.feishu_message_id != ''
+        env:
+          LARK_APP_ID: ${{ secrets.LARK_APP_ID }}
+          LARK_APP_SECRET: ${{ secrets.LARK_APP_SECRET }}
+          LARK_DOMAIN: ${{ vars.LARK_DOMAIN }}
+          FEISHU_MESSAGE_ID: ${{ inputs.feishu_message_id }}
+          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node .github/scripts/feishu-reply.mjs

@@ -48,7 +48,8 @@ export function __setDispatchBackoffMsForTest(ms: readonly number[]): () => void
 export function createBotDispatchHandler(): LocalTaskHandler {
   return {
     async handle(t: RenderedTask): Promise<void> {
-      const r = await dispatchBot(t.task, t.threadKey);
+      // 传原消息 message_id 给 workflow：跑完后 feishu-reply 用它把结果回帖到同一 thread。
+      const r = await dispatchBot(t.task, t.threadKey, t.event.message.message_id);
       // handler 抛错 → dispatcher 的 dispatchLocal 兜底返回 ok:false 并记日志；
       // 安抚 notice 此前已发给用户，不会因派发失败而吞消息。
       if (!r.ok) {
@@ -59,12 +60,14 @@ export function createBotDispatchHandler(): LocalTaskHandler {
 }
 
 /**
- * workflow_dispatch 触发 infra-lab-bot.yml。task 由 dispatcher 渲染好，作为
- * workflow 唯一支持的 `prompt` 输入透传；threadKey 仅用于日志。
+ * workflow_dispatch 触发 infra-lab-bot.yml。task 由 dispatcher 渲染好作为 `prompt`
+ * 输入透传；messageId 作为 `feishu_message_id` 输入，让 workflow 跑完把结果回帖到
+ * 同一飞书 thread（闭环）；threadKey 仅用于日志。
  */
 export async function dispatchBot(
   task: string,
   threadKey: string,
+  messageId: string,
 ): Promise<{ ok: boolean; status: number; error?: string }> {
   const token = process.env.INFRA_LAB_BOT_GITHUB_TOKEN;
   if (!token) {
@@ -79,7 +82,10 @@ export async function dispatchBot(
   const ref = process.env.INFRA_LAB_BOT_GITHUB_REF || DEFAULT_REF;
 
   const url = `https://api.github.com/repos/${repo}/actions/workflows/${BOT_WORKFLOW_FILE}/dispatches`;
-  const body = JSON.stringify({ ref, inputs: { prompt: task } });
+  const body = JSON.stringify({
+    ref,
+    inputs: { prompt: task, feishu_message_id: messageId },
+  });
   const ctx = { repo, ref, threadKey, taskLength: task.length };
 
   const maxAttempts = 1 + dispatchBackoffMs.length;

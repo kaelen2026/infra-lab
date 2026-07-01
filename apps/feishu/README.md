@@ -19,7 +19,10 @@ responder (LLM agent)  第0步强制 react（贴语境 emoji）→ 第1步强制
    ▼
 dispatcher             renderTask 翻译事件 → LocalTaskHandler
    ▼
-bot-dispatch-handler   workflow_dispatch 触发 infra-lab-bot.yml（task 作为 prompt 输入）
+bot-dispatch-handler   workflow_dispatch 触发 infra-lab-bot.yml
+                       （task→prompt 输入，原 message_id→feishu_message_id 输入）
+   ▼
+infra-lab-bot.yml      claude-code-action 跑完 → feishu-reply.mjs 把结果回帖到原 thread（闭环）
 ```
 
 接待 agent 用 AI SDK 的多步工具循环 + step gate，把「先 react、后 dispatch」做成运行时契约。
@@ -43,6 +46,26 @@ pnpm --filter @infra/feishu dev                # tsx watch 启动长连接
 `import "dotenv/config"` 从 `apps/feishu/` 目录加载 `.env`（与仓库根 `.env` 分开）。
 纯出站长连接服务，不监听端口。
 
+## Docker
+
+镜像用 `pnpm deploy` 产出自包含目录（prod `node_modules` + 已构建 `dist`）。
+**构建上下文是仓库根**（要读 workspace 清单与 lockfile）：
+
+```bash
+docker build -f apps/feishu/Dockerfile -t infra-feishu .
+docker run --rm --env-file apps/feishu/.env infra-feishu
+```
+
+## 闭环回帖（飞书 ↔ infra-lab-bot）
+
+`bot-dispatch-handler` 派发时把原消息 `message_id` 作为 `feishu_message_id` 输入传给
+`infra-lab-bot.yml`；该 workflow 跑完后 `.github/scripts/feishu-reply.mjs` 用飞书
+OpenAPI 把结果**回帖到同一 thread**（`reply_in_thread`）。
+
+GitHub 侧需要仓库 **secrets `LARK_APP_ID` / `LARK_APP_SECRET`**（可选 var `LARK_DOMAIN`）。
+人工 `gh workflow run infra-lab-bot.yml -f prompt="..."`（不带 `feishu_message_id`）不受影响，
+回帖步骤自动跳过。
+
 ## 环境变量
 
 见 `.env.example`。要点：
@@ -59,9 +82,8 @@ pnpm --filter @infra/feishu dev                # tsx watch 启动长连接
 
 ## 已知限制 / 后续
 
-- **闭环回帖未接**：`infra-lab-bot.yml` 的 `workflow_dispatch` 目前只接受 `prompt`
-  输入，且把 claude-code-action 的输出落到 Actions run 日志，**不会回到发起消息的
-  飞书 thread**。要实现「bot 把结果回帖到飞书 thread」需扩展该 workflow（加 LARK
-  secrets + 回帖步骤，并补 `thread_key` 等输入），属独立后续项。
-- **无 Dockerfile**：原独立仓自带 tsx-runtime Dockerfile；迁入 monorepo 后容器化需
-  pnpm workspace 感知的构建，暂未随迁，后续需要时再补。
+- **单次运行无跨轮记忆**：`infra-lab-bot.yml` 每次派发都是独立运行，thread 内多轮追问
+  不会自动带上历史（claude-code-action 的 `--resume` 需要透传 session id + 用
+  `thread_key` 做 concurrency 串行，尚未接）。当前每条 @ 都是「从头开始」。
+- **回帖为纯文本卡片**：结果以 markdown 卡片回到 thread，超长会截断并附运行日志链接；
+  暂不回传图片 / 文件等富媒体。
