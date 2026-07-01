@@ -15,8 +15,10 @@ describe("clientIp — X-Forwarded-For trust boundary (L1)", () => {
     // Attacker prepends a spoofed IP; the single trusted proxy appends the real one.
     // With one trusted hop, the real client is the last (rightmost) entry.
     expect(clientIp(h({ "x-forwarded-for": "1.2.3.4, 9.9.9.9" }), 1)).toBe("9.9.9.9");
-    // Two trusted hops: real client is two from the right.
-    expect(clientIp(h({ "x-forwarded-for": "9.9.9.9, 10.0.0.1, 10.0.0.2" }), 2)).toBe("9.9.9.9");
+    // Two trusted hops: the two rightmost entries were appended by our proxies, so
+    // the real client sits at length-2 (two from the right). The forged leftmost
+    // entry (9.9.9.9) is ignored.
+    expect(clientIp(h({ "x-forwarded-for": "9.9.9.9, 10.0.0.1, 10.0.0.2" }), 2)).toBe("10.0.0.1");
   });
 
   it("handles a single-entry XFF behind one proxy", () => {
