@@ -70,6 +70,11 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # 以 infra-lab-bot App 身份发评论,而非默认 claude[bot]。
           github_token: ${{ steps.app-token.outputs.token }}
+          # infra-lab-bot 会自己开 PR;claude-code-action 默认拦 bot 发起的运行,
+          # 不放行的话 bot 作者的 PR 全被拒审(恰恰是最该被审的)。只放这一个 bot,
+          # 不用 "*"。审查是只读、只发行内评论,评论又以 infra-lab-bot[bot] 身份发出,
+          # 会被 infra-lab-bot.yml 的回环防护跳过,不会触发新的 bot 运行。
+          allowed_bots: "infra-lab-bot"
           prompt: ${{ steps.build-prompt.outputs.value }}
           # Opus 4.8;放开发评论所需的工具(行内评论 MCP + gh pr 只读/评论命令)。
           claude_args: '--model claude-opus-4-8 --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"'
