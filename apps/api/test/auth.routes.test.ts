@@ -120,7 +120,11 @@ class FakeSessionService implements SessionService {
   async requireUser(): Promise<UserRecord | null> {
     return null;
   }
-  async revoke(): Promise<void> {}
+  async revoke(): Promise<{ cookies: string[] }> {
+    // Sign-out-all: drop every issued refresh token, mirroring the real service.
+    this.refreshStore.clear();
+    return { cookies: ["infra.session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0"] };
+  }
 }
 
 function setup() {
@@ -301,6 +305,37 @@ describe("POST /auth/refresh", () => {
     expect(body.tokens.refreshToken).not.toBe(tokens.refreshToken);
 
     // the old token no longer works after rotation
+    const reuse = await post(app, "/auth/refresh", { refreshToken: tokens.refreshToken });
+    expect(reuse.status).toBe(401);
+  });
+});
+
+describe("POST /auth/logout", () => {
+  it("clears the HttpOnly session cookie (expired Set-Cookie)", async () => {
+    const { app } = setup();
+    const res = await app.request("/auth/logout", { method: "POST" });
+    expect(res.status).toBe(200);
+    expect((await readJson(res)).ok).toBe(true);
+    const setCookie = res.headers.get("set-cookie") ?? "";
+    expect(setCookie).toContain("infra.session=");
+    expect(setCookie).toContain("Max-Age=0");
+    expect(setCookie).toContain("HttpOnly");
+  });
+
+  it("revokes outstanding refresh tokens so they can no longer rotate", async () => {
+    const { app, sentSms } = setup();
+    const code = await getCode(sentSms, app);
+    const verify = await post(app, "/auth/otp/verify", {
+      phone: PHONE,
+      code,
+      platform: "android",
+      device: { platform: "android", deviceId: "pixel-1" },
+    });
+    const { tokens } = await readJson(verify);
+
+    const logout = await app.request("/auth/logout", { method: "POST" });
+    expect(logout.status).toBe(200);
+
     const reuse = await post(app, "/auth/refresh", { refreshToken: tokens.refreshToken });
     expect(reuse.status).toBe(401);
   });
