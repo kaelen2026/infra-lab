@@ -1,6 +1,7 @@
 import { serve } from "@hono/node-server";
 import { createAuth, createOtpService } from "@infra/auth";
 import { createDb, schema } from "@infra/db";
+import { loadCoreEnv } from "@infra/env/core";
 import { createRedis, createRedisOtpStore } from "@infra/redis";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -13,42 +14,31 @@ import { createSessionService } from "./services/session-service.js";
 import { createTodoRepository } from "./services/todo-repository.js";
 import { createUserRepository } from "./services/user-repository.js";
 
-function env(name: string, fallback?: string): string {
-  const value = process.env[name] ?? fallback;
-  if (value === undefined) throw new Error(`Missing required env var: ${name}`);
-  return value;
-}
-
 const DAY = 60 * 60 * 24;
 
-const databaseUrl = env("DATABASE_URL");
-const redisUrl = env("REDIS_URL");
-const otpSecret = env("OTP_SECRET");
-const authSecret = env("BETTER_AUTH_SECRET", otpSecret);
-const baseURL = env("BETTER_AUTH_URL", "http://localhost:3000");
-const cookieSecure = env("COOKIE_SECURE", "false") === "true";
-const cookieDomain = process.env.COOKIE_DOMAIN || undefined;
-const debugReturnCode = env("OTP_DEBUG_RETURN_CODE", "false") === "true";
+// Load + validate the core env bucket once, fail-fast. See @infra/env/core.
+const env = loadCoreEnv();
+const baseURL = env.BETTER_AUTH_URL;
 
-const db = createDb(databaseUrl);
-const redis = createRedis(redisUrl);
+const db = createDb(env.DATABASE_URL);
+const redis = createRedis(env.REDIS_URL);
 const auth = createAuth({
   db,
   schema,
-  secret: authSecret,
+  secret: env.BETTER_AUTH_SECRET,
   baseURL,
   trustedOrigins: [baseURL],
-  cookie: { secure: cookieSecure, domain: cookieDomain },
+  cookie: { secure: env.COOKIE_SECURE, domain: env.COOKIE_DOMAIN },
 });
 
-const otp = createOtpService({ store: createRedisOtpStore(redis), secret: otpSecret });
+const otp = createOtpService({ store: createRedisOtpStore(redis), secret: env.OTP_SECRET });
 const users = createUserRepository(db);
 const todos = createTodoRepository(db);
 const sessions = createSessionService({
   db,
   auth,
-  secret: authSecret,
-  cookie: { name: "infra.session", secure: cookieSecure, domain: cookieDomain },
+  secret: env.BETTER_AUTH_SECRET,
+  cookie: { name: "infra.session", secure: env.COOKIE_SECURE, domain: env.COOKIE_DOMAIN },
   ttl: { webSeconds: 30 * DAY, accessSeconds: 15 * 60, refreshSeconds: 30 * DAY },
 });
 
@@ -59,7 +49,7 @@ const log = createLogger({ base: { service: "api" } });
 // already returns the code in the response (OTP_DEBUG_RETURN_CODE) — so no PII or
 // secret reaches the logs in a production-like config. Replace with a real provider.
 const sms = async (phone: string, code: string): Promise<void> => {
-  if (debugReturnCode) log.warn("dev sms stub: delivering code", { phone, code });
+  if (env.OTP_DEBUG_RETURN_CODE) log.warn("dev sms stub: delivering code", { phone, code });
   else log.debug("sms code dispatched");
 };
 
@@ -84,7 +74,16 @@ app.get("/ready", async (c) => {
 // Better Auth's own endpoints (used by its client + bearer-token resolution).
 app.on(["GET", "POST"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 // Our phone-OTP routes.
-app.route("/", createAuthRoutes({ otp, users, sessions, sms, config: { debugReturnCode } }));
+app.route(
+  "/",
+  createAuthRoutes({
+    otp,
+    users,
+    sessions,
+    sms,
+    config: { debugReturnCode: env.OTP_DEBUG_RETURN_CODE },
+  }),
+);
 // Per-user todo routes (protected; reuse the session resolver for Cookie + Bearer).
 app.route("/", createTodoRoutes({ todos, requireUser: (h) => sessions.requireUser(h) }));
 
@@ -98,6 +97,6 @@ app.onError((err, c) => {
   return c.json({ ok: false, code: "INTERNAL" }, 500);
 });
 
-const port = Number(env("PORT", "3001"));
+const port = env.PORT;
 serve({ fetch: app.fetch, port });
 log.info("api listening", { port });

@@ -6,6 +6,7 @@
       "@infra/shared": ["../../packages/shared/src/index.ts"],
       "@infra/auth": ["../../packages/auth/src/index.ts"],
       "@infra/auth/testing": ["../../packages/auth/src/testing.ts"],
+      "@infra/env/core": ["../../packages/env/src/core.ts"],
       "@infra/redis": ["../../packages/redis/src/index.ts"],
       "@infra/db": ["../../packages/db/src/index.ts"]
     }

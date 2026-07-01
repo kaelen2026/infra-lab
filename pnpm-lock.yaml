@@ -50,6 +50,9 @@ importers:
       '@infra/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@infra/env':
+        specifier: workspace:*
+        version: link:../../packages/env
       '@infra/redis':
         specifier: workspace:*
         version: link:../../packages/redis
@@ -239,6 +242,12 @@ importers:
       tsx:
         specifier: 4.22.4
         version: 4.22.4
+
+  packages/env:
+    dependencies:
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
 
   packages/redis:
     dependencies:
