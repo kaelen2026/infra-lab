@@ -47,6 +47,9 @@ targets:
         # Dev convenience: allow cleartext HTTP to localhost (the API on :3001).
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
+        # Standard HTTPS only — exempt from export compliance, so TestFlight
+        # builds skip the per-build encryption questionnaire.
+        ITSAppUsesNonExemptEncryption: false
 
   InfraAuthTests:
     type: bundle.unit-test
