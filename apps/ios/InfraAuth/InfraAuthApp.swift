@@ -8,6 +8,7 @@ struct InfraAuthApp: App {
     @StateObject private var auth: AuthViewModel
     @StateObject private var account: AccountViewModel
     @StateObject private var todos: TodoViewModel
+    @StateObject private var appearance = AppearanceStore()
 
     init() {
         let store = KeychainTokenStore()
@@ -24,6 +25,8 @@ struct InfraAuthApp: App {
                 .environmentObject(auth)
                 .environmentObject(account)
                 .environmentObject(todos)
+                .environmentObject(appearance)
+                .preferredColorScheme(appearance.preference.colorScheme)
         }
     }
 }

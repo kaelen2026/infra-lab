@@ -20,5 +20,6 @@ struct AuthenticatedView: View {
         .environmentObject(AuthViewModel(client: PreviewAuthClient()))
         .environmentObject(AccountViewModel(client: PreviewAuthClient()))
         .environmentObject(TodoViewModel(client: PreviewTodoClient()))
+        .environmentObject(AppearanceStore())
 }
 #endif

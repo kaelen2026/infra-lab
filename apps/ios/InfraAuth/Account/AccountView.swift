@@ -15,6 +15,7 @@ struct AccountView: View {
                     ProfileCard(user: user)
                 }
                 SessionCard()
+                AppearanceCard()
                 DevicesCard(devices: account.devices, loading: account.loading)
                 LoginEventsCard(events: account.events, loading: account.loading)
 
@@ -87,6 +88,25 @@ struct ProfileCard: View {
             RoundedRectangle(cornerRadius: DesignTokens.radius, style: .continuous)
                 .strokeBorder(DesignTokens.border, lineWidth: 1)
         )
+    }
+}
+
+/// Appearance control: pick system / light / dark. The choice is persisted by
+/// ``AppearanceStore`` and applied at the app root; colors themselves come from
+/// the shared ``DesignTokens``, which already resolve per scheme.
+struct AppearanceCard: View {
+    @EnvironmentObject private var appearance: AppearanceStore
+
+    var body: some View {
+        SectionCard(title: "外观", systemImage: "circle.lefthalf.filled") {
+            Picker("外观", selection: $appearance.preference) {
+                ForEach(ThemePreference.allCases) { preference in
+                    Text(preference.label).tag(preference)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+        }
     }
 }
 
@@ -192,5 +212,6 @@ struct LoginEventsCard: View {
     AccountView()
         .environmentObject(AuthViewModel(client: PreviewAuthClient()))
         .environmentObject(AccountViewModel(client: PreviewAuthClient()))
+        .environmentObject(AppearanceStore())
 }
 #endif
