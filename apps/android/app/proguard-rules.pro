@@ -18,3 +18,8 @@
 -dontwarn okhttp3.**
 -dontwarn okio.**
 -dontwarn retrofit2.**
+
+# Tink (pulled in by androidx.security-crypto for EncryptedSharedPreferences) references
+# compile-time-only errorprone annotations that aren't on the runtime classpath; R8 flags
+# them as missing classes. They are safe to ignore.
+-dontwarn com.google.errorprone.annotations.**

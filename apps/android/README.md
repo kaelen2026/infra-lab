@@ -32,8 +32,8 @@ cd apps/android
 gradle wrapper        # one-time: writes gradle/wrapper/gradle-wrapper.jar + gradlew
 
 ./gradlew testDebugUnitTest   # hermetic JVM unit tests (input/parse/message logic)
-./gradlew assembleDebug       # build the debug APK
-./gradlew installDebug        # install on a running emulator/device
+./gradlew assembleDevDebug    # build the dev debug APK (see variants below)
+./gradlew installDevDebug     # install on a running emulator/device
 ./gradlew detekt              # static analysis + ktlint (local gate; --auto-correct to fix)
 ```
 
@@ -41,11 +41,34 @@ gradle wrapper        # one-time: writes gradle/wrapper/gradle-wrapper.jar + gra
 [`config/detekt/detekt.yml`](config/detekt/detekt.yml); coding conventions are in
 `.claude/rules/android.md`.
 
-### Pointing at the API
+### Environments & build variants
 
-- **Debug** builds default to `http://10.0.2.2:3001` — the emulator's route to the host machine's
-  `localhost`, where `pnpm --filter @infra/api dev` serves the API. Cleartext is allowed for debug only.
-- **Release** builds use HTTPS (`API_BASE_URL` in `app/build.gradle.kts`) — set it to your deployed API.
+The API base URL is selected by an `env` **product flavor** — `dev` / `staging` / `prod` — crossed
+with the `debug` / `release` build type, giving six variants. Build any with
+`assemble<Env><BuildType>` (e.g. `assembleProdRelease`), or use the **`/android-build`** skill which
+picks the variant, finds the APK, and can install it.
+
+| env     | `API_BASE_URL`                     | applicationId               | notes |
+|---------|------------------------------------|-----------------------------|-------|
+| dev     | `http://10.0.2.2:3001`             | `ai.deeplang.infra.dev`     | emulator → host `localhost`; cleartext, debug only |
+| staging | `https://staging-api.example.com`  | `ai.deeplang.infra.staging` | placeholder — set to real staging API |
+| prod    | `https://api.example.com`          | `ai.deeplang.infra`         | placeholder — set to real production API |
+
+The `applicationId` suffixes let dev/staging/prod be installed side by side. The APK lands at
+`app/build/outputs/apk/<env>/<buildType>/app-<env>-<buildType>.apk`.
+
+For a `dev` build, run the backend first (from the repo root):
+
+```bash
+docker compose up -d
+pnpm --filter @infra/api dev
+```
+
+### Release signing
+
+Release builds sign with `keystore.properties` if present (copy `keystore.properties.example` and
+fill it in — both it and the `.jks` are gitignored). Without it, release falls back to the **debug**
+key: installable locally, but **not** for distribution.
 
 Run the backend first (from the repo root):
 
