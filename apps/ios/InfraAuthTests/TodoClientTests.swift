@@ -1,5 +1,5 @@
-import XCTest
 @testable import InfraAuth
+import XCTest
 
 final class TodoClientTests: XCTestCase {
     private let baseURL = URL(string: "http://localhost:3001")!
@@ -14,14 +14,15 @@ final class TodoClientTests: XCTestCase {
     }
 
     private func json(_ object: [String: Any]) -> Data {
-        try! JSONSerialization.data(withJSONObject: object)
+        // A broken fixture yields empty Data, which fails the test loudly.
+        (try? JSONSerialization.data(withJSONObject: object)) ?? Data()
     }
 
     private func todoBody(id: String, title: String, completed: Bool) -> [String: Any] {
         [
             "id": id, "title": title, "completed": completed,
             "createdAt": "2026-07-01T09:30:00.000Z", "updatedAt": "2026-07-01T09:30:00.000Z",
-            "completedAt": completed ? "2026-07-01T10:00:00.000Z" : NSNull(),
+            "completedAt": completed ? "2026-07-01T10:00:00.000Z" : NSNull()
         ]
     }
 
@@ -31,8 +32,8 @@ final class TodoClientTests: XCTestCase {
                 "ok": true,
                 "todos": [
                     self.todoBody(id: "t1", title: "买菜", completed: false),
-                    self.todoBody(id: "t2", title: "写代码", completed: true),
-                ],
+                    self.todoBody(id: "t2", title: "写代码", completed: true)
+                ]
             ]))
         }
         let todos = try await makeClient().list()

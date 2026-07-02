@@ -35,7 +35,7 @@ final class KeychainTokenStore: TokenStore {
         [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
+            kSecAttrAccount as String: account
         ]
     }
 
@@ -56,7 +56,7 @@ final class KeychainTokenStore: TokenStore {
         // Upsert: try to update an existing item, otherwise add a fresh one.
         let attributes: [String: Any] = [
             kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
         ]
         let updateStatus = SecItemUpdate(baseQuery as CFDictionary, attributes as CFDictionary)
         if updateStatus == errSecItemNotFound {

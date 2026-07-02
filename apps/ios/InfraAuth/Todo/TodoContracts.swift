@@ -1,11 +1,11 @@
 import Foundation
 
-/// Swift mirror of `@infra/shared`'s todo contracts — the single source of truth
-/// for the request/response shapes shared by every client. Every todo is scoped
-/// to the authenticated user.
-///
-/// Keep this in lockstep with `packages/shared/src/contracts/todo.ts`. The server
-/// emits camelCase JSON, so the default `Codable` synthesis maps 1:1.
+// Swift mirror of `@infra/shared`'s todo contracts — the single source of truth
+// for the request/response shapes shared by every client. Every todo is scoped
+// to the authenticated user.
+//
+// Keep this in lockstep with `packages/shared/src/contracts/todo.ts`. The server
+// emits camelCase JSON, so the default `Codable` synthesis maps 1:1.
 
 // MARK: - Validation
 
