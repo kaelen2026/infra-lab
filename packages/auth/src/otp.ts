@@ -169,24 +169,41 @@ export function createOtpService(config: OtpServiceConfig): OtpService {
     const lockTtl = await isLocked(phone);
     if (lockTtl > 0) return { ok: false, error: "LOCKED", retryAfter: lockTtl };
 
-    const storedHash = await store.get(OTP_KEYS.code(phone));
+    const codeK = OTP_KEYS.code(phone);
+    const storedHash = await store.get(codeK);
     if (storedHash === null) return { ok: false, error: "CODE_EXPIRED" };
 
-    if (!safeEqualHex(storedHash, hashCode(secret, code))) {
-      const attemptK = OTP_KEYS.attempt(phone);
-      const attempts = await store.incr(attemptK);
-      if (attempts === 1) await store.expire(attemptK, ttlSeconds);
+    // Claim an attempt slot with an atomic INCR *before* acting on the comparison.
+    // Concurrent verifies for the same phone thus get distinct attempt numbers and
+    // only the first `maxAttempts` are allowed to consume a guess — closing the
+    // read-then-compare TOCTOU where a burst of concurrent requests all cleared the
+    // lock gate above and brute-forced the 6-digit code past the 5-try limit. This
+    // mirrors requestCode's incr-then-check, which serialises concurrent sends.
+    // Only reached when a code exists, so verifying a code-less phone neither burns
+    // quota nor can lock it.
+    const attemptK = OTP_KEYS.attempt(phone);
+    const attempts = await store.incr(attemptK);
+    if (attempts === 1) await store.expire(attemptK, ttlSeconds);
 
+    if (attempts > maxAttempts) {
+      // Quota exhausted by a concurrent burst — lock and reject without acting on the
+      // comparison, so a racing request can't turn a lucky guess into a login.
+      await store.set(OTP_KEYS.lock(phone), "1", { ttlSeconds: lockSeconds });
+      await store.del(codeK, attemptK);
+      return { ok: false, error: "LOCKED", retryAfter: lockSeconds };
+    }
+
+    if (!safeEqualHex(storedHash, hashCode(secret, code))) {
       if (attempts >= maxAttempts) {
         await store.set(OTP_KEYS.lock(phone), "1", { ttlSeconds: lockSeconds });
-        await store.del(OTP_KEYS.code(phone), attemptK);
+        await store.del(codeK, attemptK);
         return { ok: false, error: "LOCKED", retryAfter: lockSeconds };
       }
       return { ok: false, error: "INVALID_CODE", remainingAttempts: maxAttempts - attempts };
     }
 
     // Success — wipe code + attempt immediately so the code is strictly single-use.
-    await store.del(OTP_KEYS.code(phone), OTP_KEYS.attempt(phone));
+    await store.del(codeK, attemptK);
     return { ok: true };
   }
 
