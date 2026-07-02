@@ -13,14 +13,16 @@
 ```
 飞书长连接 (ws-client)   收消息：LRU 去重 + fire-and-forget ack（避开飞书 3s 超时重推）
    ▼
-event-router           总线卫生：回环过滤（丢 bot 自己的消息）+ 群聊必须 @ bot
+event-router           总线卫生：回环过滤（丢 bot 自己的消息）+ 群聊准入
+                       （@ bot，或 bot 参与过的话题内回复免 @ —— thread-tracker）
    ▼
 responder (LLM agent)  第0步强制 react（贴语境 emoji）→ 第1步强制 dispatch（写 notice）
    ▼
 dispatcher             renderTask 翻译事件 → LocalTaskHandler
    ▼
 bot-dispatch-handler   workflow_dispatch 触发 infra-lab-bot.yml
-                       （task→prompt 输入，原 message_id→feishu_message_id 输入）
+                       （task→prompt、message_id→feishu_message_id、
+                         threadKey→thread_key + session_uuid：话题多轮）
    ▼
 infra-lab-bot.yml      claude-code-action 跑完 → feishu-reply.mjs 把结果回帖到原 thread（闭环）
 ```
@@ -110,10 +112,25 @@ GitHub 侧需要仓库 **secrets `LARK_APP_ID` / `LARK_APP_SECRET`**（可选 va
 
 鉴权二选一，详见「派发鉴权」与 `.env.example`。
 
+## 话题多轮（thread 免 @ + session 复用）
+
+bot 回帖默认落在话题（`reply_in_thread`），用户顺着话题继续追问即可多轮对话，
+不需要每条再 @：
+
+- **触发**：群聊消息未 @ bot 但带 `root_id` 时，`thread-tracker` 拉一次话题 root 消息
+  判定归属——root 是 bot 发的、或 root @ 过 bot → 放行；成员自己开的话题仍要求 @
+  （避免把成员间讨论误当成对 bot 的请求，这是当年撤销「所有 thread 免 @」的教训）。
+  判定结果按 root_id 做 LRU 缓存。
+- **记忆**：`bot-dispatch-handler` 把 `threadKey`（root_id / 首条 message_id）作为
+  `thread_key` 输入透传，并派生 `session_uuid = uuidv5(NAMESPACE, threadKey)`。
+  `infra-lab-bot.yml` 用 thread_key 做 concurrency group 串行同话题 run（防止并发写坏
+  session.jsonl），`actions/cache` 持久化 `~/.claude`，探测到 session 文件则
+  `--resume`、否则 `--session-id` 首建——同一话题跨 run 共享 Claude Code 对话记忆。
+- **权限依赖**：飞书应用必须开通 **`im:message.group_msg`（获取群组中所有消息）**。
+  只有 `im:message.group_at_msg` 时，群里非 @ 消息（含话题内回复）根本不会推送到
+  长连接，免 @ 放行无从谈起；`thread-tracker` 的 `message.get` 也依赖该读权限。
+
 ## 已知限制 / 后续
 
-- **单次运行无跨轮记忆**：`infra-lab-bot.yml` 每次派发都是独立运行，thread 内多轮追问
-  不会自动带上历史（claude-code-action 的 `--resume` 需要透传 session id + 用
-  `thread_key` 做 concurrency 串行，尚未接）。当前每条 @ 都是「从头开始」。
 - **回帖为纯文本卡片**：结果以 markdown 卡片回到 thread，超长会截断并附运行日志链接；
   暂不回传图片 / 文件等富媒体。
