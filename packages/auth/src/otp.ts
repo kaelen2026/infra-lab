@@ -62,7 +62,11 @@ export type RequestCodeResult =
 export type VerifyCodeResult =
   | { ok: true }
   | { ok: false; error: "INVALID_CODE"; remainingAttempts: number }
-  | { ok: false; error: "LOCKED"; retryAfter: number }
+  // `justLocked` marks the single wrong guess that TRIPPED the lock (attempts hit the
+  // cap now), distinct from hits on an already-locked phone. Callers audit only the
+  // transition, so the strongest brute-force signal is recorded exactly once per code
+  // lifecycle while repeat LOCKED hits stay unaudited (bounded, no DB amplification).
+  | { ok: false; error: "LOCKED"; retryAfter: number; justLocked?: boolean }
   | { ok: false; error: "CODE_EXPIRED" };
 
 export interface OtpService {
@@ -195,9 +199,12 @@ export function createOtpService(config: OtpServiceConfig): OtpService {
 
     if (!safeEqualHex(storedHash, hashCode(secret, code))) {
       if (attempts >= maxAttempts) {
+        // This wrong guess exhausted the per-code quota — trip the lock. `justLocked`
+        // lets the caller audit this one transition (the brute-force signal) while
+        // ignoring subsequent already-locked hits, which short-circuit above.
         await store.set(OTP_KEYS.lock(phone), "1", { ttlSeconds: lockSeconds });
         await store.del(codeK, attemptK);
-        return { ok: false, error: "LOCKED", retryAfter: lockSeconds };
+        return { ok: false, error: "LOCKED", retryAfter: lockSeconds, justLocked: true };
       }
       return { ok: false, error: "INVALID_CODE", remainingAttempts: maxAttempts - attempts };
     }

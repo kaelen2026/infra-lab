@@ -345,17 +345,22 @@ describe("POST /auth/otp/verify — failure paths", () => {
     expect((await readJson(res)).code).toBe("LOCKED");
   });
 
-  it("does not audit the LOCKED short-circuit (no DoS-amplifying DB write per request)", async () => {
+  it("audits the lock-tripping guess exactly once, not repeat LOCKED hits (bounded, no DoS)", async () => {
     const { app, sentSms, users } = setup();
     await getCode(sentSms, app);
     // Drive the phone into a locked state, then keep hammering it while locked.
     for (let i = 0; i < 8; i++) {
       await post(app, "/auth/otp/verify", { phone: PHONE, code: "111111", platform: "web" });
     }
-    // Only the code-verifying attempts (INVALID_CODE) are audited; the LOCKED
-    // short-circuit writes nothing, so the count is bounded by the attempt quota.
-    expect(users.events.every((e) => e.reason !== "LOCKED")).toBe(true);
-    expect(users.events.every((e) => e.reason === "INVALID_CODE")).toBe(true);
+    // The 5 code-verifying guesses are audited: 4× INVALID_CODE + the 5th that trips
+    // the lock (reason LOCKED, the brute-force signal). Every already-locked hit after
+    // that short-circuits from Redis and writes nothing, so the total is bounded by the
+    // per-code quota — no per-request DB amplification.
+    const lockedEvents = users.events.filter((e) => e.reason === "LOCKED");
+    expect(lockedEvents.length).toBe(1);
+    expect(users.events.every((e) => e.reason === "INVALID_CODE" || e.reason === "LOCKED")).toBe(
+      true,
+    );
     expect(users.events.length).toBeLessThanOrEqual(5);
   });
 
