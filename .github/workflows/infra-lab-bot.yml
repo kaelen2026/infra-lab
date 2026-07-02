@@ -55,6 +55,21 @@ on:
         description: "Feishu sender display name (leave empty for manual runs)"
         required: false
         default: ""
+      thread_key:
+        # Set by apps/bot: stable key of the Feishu thread (root_id, or the first
+        # message's id). Non-empty enables same-thread session reuse — concurrency
+        # serializes runs of the same thread and ~/.claude is cached per thread.
+        # Empty (default) for manual runs / other events: no session reuse.
+        description: "Feishu thread key for session reuse (leave empty for manual runs)"
+        required: false
+        default: ""
+      session_uuid:
+        # Set by apps/bot: uuidv5(NAMESPACE, thread_key) — a stable Claude Code session
+        # UUID. Non-empty makes the run resume that session (`--resume`, cache hit) or
+        # create it under this exact UUID (`--session-id`, first run of the thread).
+        description: "Stable Claude Code session UUID for this thread (leave empty for manual runs)"
+        required: false
+        default: ""
   issue_comment:
     types: [created]
   pull_request_review_comment:
@@ -62,12 +77,19 @@ on:
   issues:
     types: [labeled]
 
-# Serialize runs that share an issue/PR thread (label intake, mentions), so a
-# double-labeled issue or rapid mentions never run concurrently; a superseded
-# queued run is dropped, and the surviving run re-reads the whole thread anyway.
-# Dispatch runs have no thread — fall back to run_id (i.e. unconstrained).
+# Serialize runs that share a thread:
+# - Feishu dispatch with thread_key → group per Feishu thread. cancel-in-progress=false
+#   is load-bearing: same-thread messages must queue, or two runs would write the same
+#   session.jsonl concurrently and corrupt it for the next resume.
+# - Issue/PR events (label intake, mentions) → group per issue number, so a
+#   double-labeled issue or rapid mentions never run concurrently; the surviving run
+#   re-reads the whole thread anyway.
+# - Anything else (manual dispatch without thread_key) → run_id, i.e. unconstrained.
 concurrency:
-  group: infra-lab-bot-${{ github.event.issue.number || github.run_id }}
+  group: >-
+    ${{ (github.event_name == 'workflow_dispatch' && inputs.thread_key != '')
+        && format('infra-lab-bot-thread-{0}', inputs.thread_key)
+        || format('infra-lab-bot-{0}', github.event.issue.number || github.run_id) }}
   cancel-in-progress: false
 
 jobs:
@@ -113,18 +135,68 @@ jobs:
           # Use the app token so any commits/pushes are the bot's, not the default runner.
           token: ${{ steps.app-token.outputs.token }}
 
+      # Same-thread session reuse (Feishu dispatches with thread_key only). The whole
+      # ~/.claude is cached — session transcripts live in
+      # ~/.claude/projects/<cwd-hash>/<uuid>.jsonl and the cwd hash is stable because
+      # the runner checkout path is stable. Cache keys are immutable, so each save uses
+      # a run_id-unique key and restore-keys prefix-matches the thread's latest entry.
+      - name: Restore thread session cache
+        if: github.event_name == 'workflow_dispatch' && inputs.thread_key != ''
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.claude
+          key: bot-session-${{ inputs.thread_key }}-${{ github.run_id }}
+          restore-keys: |
+            bot-session-${{ inputs.thread_key }}-
+
+      # Decide --resume vs --session-id from what the cache actually restored:
+      # - session jsonl exists → `--resume <uuid>`: continue the thread's conversation;
+      # - missing (first run of the thread, or cache evicted) → `--session-id <uuid>`:
+      #   create the session under our stable UUID so the NEXT run can resume it;
+      # - no session_uuid (manual dispatch / other events) → no session flag at all.
+      # Runs unconditionally so its outputs are always defined for claude_args below.
+      - name: Decide session resume mode
+        id: session_mode
+        env:
+          SESSION_UUID: ${{ inputs.session_uuid }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SESSION_UUID:-}" ]; then
+            echo "mode=none" >> "$GITHUB_OUTPUT"
+            echo "claude_session_arg=" >> "$GITHUB_OUTPUT"
+            echo "resume mode: none (no session_uuid)" >&2
+            exit 0
+          fi
+          if compgen -G "$HOME/.claude/projects/*/${SESSION_UUID}.jsonl" > /dev/null; then
+            echo "mode=resume" >> "$GITHUB_OUTPUT"
+            echo "claude_session_arg=--resume ${SESSION_UUID}" >> "$GITHUB_OUTPUT"
+            echo "resume mode: resume (jsonl found for ${SESSION_UUID})" >&2
+          else
+            echo "mode=fresh" >> "$GITHUB_OUTPUT"
+            echo "claude_session_arg=--session-id ${SESSION_UUID}" >> "$GITHUB_OUTPUT"
+            echo "resume mode: fresh (will create session ${SESSION_UUID})" >&2
+          fi
+
       # On manual dispatch, build the prompt = base template (.github/prompts) + the
       # user's (possibly very short) input. The input is passed via env, never inlined
-      # into the script, to avoid expression injection.
+      # into the script, to avoid expression injection. When the run resumes a Feishu
+      # thread session, a short mode note is injected so Claude treats the message as a
+      # follow-up instead of re-introducing itself.
       - name: Build dispatch prompt
         id: build-prompt
         if: github.event_name == 'workflow_dispatch'
         env:
           USER_PROMPT: ${{ inputs.prompt }}
+          SESSION_MODE: ${{ steps.session_mode.outputs.mode }}
         run: |
           {
             echo 'value<<PROMPT_EOF'
             cat .github/prompts/infra-lab-bot.md
+            if [ "$SESSION_MODE" = "resume" ]; then
+              printf '\n> 本条消息是同一飞书话题的延续，session 已 resume：不要重新自我介绍或复述上次结论，接着这条新消息往下处理。\n'
+            elif [ "$SESSION_MODE" = "fresh" ]; then
+              printf '\n> 本话题首次会话：正常处理本条消息；同话题的后续追问会自动接续这次 session。\n'
+            fi
             printf '\n%s\n' "$USER_PROMPT"
             echo 'PROMPT_EOF'
           } >> "$GITHUB_OUTPUT"
@@ -168,10 +240,12 @@ jobs:
           # Safe because: (1) the repo is private, so only collaborators can trigger it;
           # (2) main is branch-protected (PR + 1 approval + required CI), so the bot
           # still cannot self-merge or push main whatever tools it has.
-          # Use Opus 4.8.
+          # Use Opus 4.8. The session arg is empty unless this is a Feishu thread
+          # dispatch (see "Decide session resume mode").
           claude_args: >-
             --dangerously-skip-permissions
             --model claude-opus-4-8
+            ${{ steps.session_mode.outputs.claude_session_arg }}
           # On manual dispatch / label intake, run the composed prompt (automation
           # mode). Empty on comment events so the action stays in mention/tag mode
           # and reacts inline.
@@ -180,6 +254,17 @@ jobs:
           # the run log; ticket intake is likewise collaborator-gated (only they can
           # label). Comment runs stay hidden since less-trusted users can fire those.
           show_full_output: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'issues' }}
+
+      # Caches are immutable — save under a run_id-unique key every time; the next run
+      # of this thread picks the latest via restore-keys prefix match. always() keeps
+      # the save on failed runs too: partial turns already written to session.jsonl are
+      # better carried forward than lost.
+      - name: Save thread session cache
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.thread_key != ''
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.claude
+          key: bot-session-${{ inputs.thread_key }}-${{ github.run_id }}
 
       # Ticket-mode failure visibility: an employee raises a hand instead of going
       # silent — post the run link back to the issue if anything above failed.

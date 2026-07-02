@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { parseBotEnv } from "@infra/env/bot";
 import type { LocalTaskHandler, RenderedTask } from "./feishu/dispatcher";
 import { resolveSenderName } from "./feishu/user-name";
@@ -9,10 +10,12 @@ import { createAppTokenProviderFromEnv, type TokenProvider } from "./github-app-
  * dispatcher 已经把事件翻译成自然语言 `task` + `threadKey`，这里负责
  * 「拿 task → workflow_dispatch 触发 infra-lab-bot.yml」。
  *
- * 传两个输入：`prompt`（= 渲染好的 task，拼到 .github/prompts/infra-lab-bot.md 基础
- * 模板后交给 claude-code-action 跑）和 `feishu_message_id`（= 原消息 id）。workflow 跑完
- * 由 .github/scripts/feishu-reply.mjs 把结果回帖到同一飞书 thread，闭环。threadKey 仅用于
- * 日志。
+ * 传给 workflow 的输入：`prompt`（= 渲染好的 task，拼到 .github/prompts/infra-lab-bot.md
+ * 基础模板后交给 claude-code-action 跑）、`feishu_message_id`（= 原消息 id，跑完由
+ * .github/scripts/feishu-reply.mjs 回帖到同一飞书话题闭环），以及话题多轮的两个元信息：
+ * `thread_key`（= threadKey，workflow 用它做 concurrency 串行 + session 缓存 key）和
+ * `session_uuid`（= uuidv5(NAMESPACE, threadKey)，透传给 Claude Code 的
+ * `--resume` / `--session-id`，让同一话题跨 run 共享对话记忆）。
  *
  * 鉴权：以 infra-lab-bot GitHub App 身份换取（并自动续期）installation token
  * （见 github-app-token）；配了静态 INFRA_LAB_BOT_GITHUB_TOKEN 则用它兜底。App 身份下
@@ -26,6 +29,13 @@ import { createAppTokenProviderFromEnv, type TokenProvider } from "./github-app-
 // 目标仓库 / ref 全部由环境变量配置（INFRA_LAB_BOT_GITHUB_REPO 必填、
 // INFRA_LAB_BOT_GITHUB_REF 默认 main，默认值在 @infra/env/bot 里），不硬编码 owner/repo。
 const BOT_WORKFLOW_FILE = "infra-lab-bot.yml";
+
+/**
+ * 把 thread_key 映射到稳定 UUID 的种子（UUIDv5 namespace）。
+ * 不是密钥，不要挪进 secret——只是个固定常量；但改了会让所有已存在的话题 session
+ * 一夜失联（UUID 错位）。一次定型，永不改动。
+ */
+const BOT_THREAD_NAMESPACE = "0598300b-8327-4059-b870-cf1a18e7d887";
 
 /**
  * GitHub Actions workflow_dispatch 偶发 5xx 时的退避序列。
@@ -99,7 +109,8 @@ export interface DispatchBotDeps {
  * workflow_dispatch 触发 infra-lab-bot.yml。task 由 dispatcher 渲染好作为 `prompt`
  * 输入透传；messageId 作为 `feishu_message_id` 输入，让 workflow 跑完把结果回帖到
  * 同一飞书 thread（闭环）；发起人 open_id/姓名作为 `feishu_sender` / `feishu_sender_name`
- * 输入（workflow 的 run-name 显示谁发起）；threadKey 仅用于日志。
+ * 输入（workflow 的 run-name 显示谁发起）；threadKey 作为 `thread_key` 输入并派生
+ * `session_uuid`，workflow 端据此串行同话题 run 并复用 Claude Code session（话题多轮）。
  */
 export async function dispatchBot(
   task: string,
@@ -123,7 +134,12 @@ export async function dispatchBot(
   }
 
   const url = `https://api.github.com/repos/${repo}/actions/workflows/${BOT_WORKFLOW_FILE}/dispatches`;
-  const inputs: Record<string, string> = { prompt: task, feishu_message_id: messageId };
+  const inputs: Record<string, string> = {
+    prompt: task,
+    feishu_message_id: messageId,
+    thread_key: threadKey,
+    session_uuid: uuidV5(BOT_THREAD_NAMESPACE, threadKey),
+  };
   if (deps.sender?.openId) inputs.feishu_sender = deps.sender.openId;
   if (deps.sender?.name) inputs.feishu_sender_name = deps.sender.name;
   const body = JSON.stringify({ ref, inputs });
@@ -176,6 +192,38 @@ export async function dispatchBot(
 
   // 类型层兜底：上面循环已穷尽所有 attempt，理论不可达。
   return { ok: false, status: 0, error: "unreachable" };
+}
+
+/**
+ * UUIDv5（RFC 4122 §4.3）：name-based hash with SHA-1。
+ *
+ * 项目里没引入 `uuid` npm 包，单点使用 node:crypto 实现 20 行即可——避免为一个常量
+ * 映射拉一个完整依赖。把 namespace UUID 解成 16 字节 buffer，与 name 的 UTF-8 字节
+ * 拼起来过 SHA-1，取前 16 字节，塞入 version(=5) 与 variant 位后格式化成 UUID 字符串。
+ */
+export function uuidV5(namespace: string, name: string): string {
+  const nsBytes = parseUuid(namespace);
+  const nameBytes = Buffer.from(name, "utf8");
+  const hash = createHash("sha1").update(nsBytes).update(nameBytes).digest();
+  const out = Buffer.from(hash.subarray(0, 16));
+  // 高 4 位填 version（0101 = 5）
+  out[6] = ((out[6] as number) & 0x0f) | 0x50;
+  // 高 2 位填 RFC 4122 variant（10xx）
+  out[8] = ((out[8] as number) & 0x3f) | 0x80;
+  return formatUuid(out);
+}
+
+function parseUuid(uuid: string): Buffer {
+  const hex = uuid.replaceAll("-", "");
+  if (hex.length !== 32 || /[^0-9a-f]/i.test(hex)) {
+    throw new Error(`非法 UUID namespace：${uuid}`);
+  }
+  return Buffer.from(hex, "hex");
+}
+
+function formatUuid(bytes: Buffer): string {
+  const hex = bytes.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 function formatDiag(diag: Record<string, string | number>): string {

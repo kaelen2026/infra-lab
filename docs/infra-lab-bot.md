@@ -9,7 +9,7 @@
 | --- | --- | --- |
 | **评论提及**（tag 模式） | 在 issue 评论、PR 评论或 PR 行内评论里写 `@infra-lab-bot <你的问题>` | 以 `infra-lab-bot[bot]` 身份**在同一线程回复** |
 | **手动派发**（dispatch） | `gh workflow run infra-lab-bot.yml -f prompt="..."`，或 Actions 页面点 “Run workflow” | 无线程，**结果在该次运行日志里**（`show_full_output` 仅对 dispatch 开启） |
-| **飞书 @**（`@infra/bot`） | 在飞书群 @ bot 或私聊它 | bot 先 react + 安抚，再 dispatch 本工作流；跑完**把结果回帖到发起消息的飞书 thread** |
+| **飞书 @**（`@infra/bot`） | 在飞书群 @ bot 或私聊它 | bot 先 react + 安抚，再 dispatch 本工作流；跑完**把结果回帖到发起消息的飞书话题**；之后**在话题里直接追问即可（免 @）**，同话题多轮共享记忆 |
 | **工单接单**（label） | 给 issue 打上 **`bot` 标签** | bot 在 issue 里评论开工计划 → 切 `bot/<编号>-<slug>` 分支实施 → 开 PR（`Closes #N`）并回帖链接；之后自动返工链接手（见下节） |
 
 示例：
@@ -28,6 +28,10 @@ gh workflow run infra-lab-bot.yml -f prompt="分析当前项目架构与主要�
 **每次触发都是一次独立运行，运行之间没有持久会话或记忆。** 上下文是这样来的：
 
 - **tag 模式**：每次被 @ 时，它会**重新读取整个 issue / PR**——标题、正文、**全部历史评论**，以及（PR 场景）改动文件和 diff。所以只要**留在同一个线程里继续 @**，它就“记得”前面聊过什么。线程本身就是它的记忆载体。
+- **飞书话题**：同一话题的每次派发共享同一个 Claude Code session——`apps/bot` 透传
+  `thread_key` + `session_uuid`，工作流按话题串行（concurrency）、用 `actions/cache`
+  持久化 `~/.claude` 并 `--resume`。**在 bot 回过帖的话题里直接追问（不用再 @）**，
+  它接着上次的对话往下；换个话题 / 主聊天流新 @ 一次 = 新会话。
 - **换一个新 issue、或用 dispatch** → 从零开始，不带任何历史。dispatch 没有线程，需要的信息要**全部写进 prompt**。
 - **常驻背景**（每次运行都会注入）：[`CLAUDE.md`](../CLAUDE.md)、[`.claude/docs/architecture.md`](../.claude/docs/architecture.md)、以及机器人的基础提示词 [`.github/prompts/infra-lab-bot.md`](../.github/prompts/infra-lab-bot.md)。
 - 单次运行**内部**的多步推理（日志里的 `num_turns`）是真·连续对话，但只活在这一次运行里。
@@ -102,3 +106,12 @@ claude-code-action 的 `execution_file` 取最终文本，`reply_in_thread` 回�
 
 - 仅当 `feishu_message_id` 非空时回帖；人工 dispatch（不带该输入）自动跳过。
 - 需要仓库 secrets `LARK_APP_ID` / `LARK_APP_SECRET`（与 `apps/bot` 用的是同一飞书应用）。
+
+话题多轮（在 bot 回过帖的话题里追问免 @，同话题共享记忆）：
+
+- 触发侧在 `apps/bot`：event-router 放行 bot 参与过的话题（`thread-tracker` 查 root 归属），
+  依赖飞书应用开通 **`im:message.group_msg`（获取群组中所有消息）**——否则非 @ 消息
+  根本不会推送到长连接。详见 [`apps/bot/README.md`](../apps/bot/README.md) 的「话题多轮」。
+- 记忆侧在本工作流：`thread_key` 非空时按话题 concurrency 串行（防并发写坏 session），
+  `actions/cache` 持久化 `~/.claude`，按 `session_uuid` 探测后 `--resume` / `--session-id`，
+  同一话题跨 run 接续同一个 Claude Code session。

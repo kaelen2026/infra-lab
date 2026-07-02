@@ -1,5 +1,6 @@
 import { parseBotEnv } from "@infra/env/bot";
 import { runFeishuResponder } from "./responder";
+import { isBotInThread } from "./thread-tracker";
 import type { FeishuMessageReceiveEvent } from "./types";
 
 /**
@@ -10,11 +11,13 @@ import type { FeishuMessageReceiveEvent } from "./types";
  * 然后派发到本地处理（dispatcher）。event-router 不再直接调 dispatcher。
  */
 
-// 测试接缝：用 holder 包一层，让 event-router 单测可以替换 runFeishuResponder 而无需
-// module mock。生产代码请勿改这个字段，要换实现请改 responder 模块本身。
+// 测试接缝：用 holder 包一层，让 event-router 单测可以替换依赖而无需 module mock。
+// 生产代码请勿改这些字段，要换实现请改对应模块本身。
 export const __routerDeps: {
+  isBotInThread: typeof isBotInThread;
   runFeishuResponder: typeof runFeishuResponder;
 } = {
+  isBotInThread,
   runFeishuResponder,
 };
 
@@ -28,10 +31,11 @@ export async function routeMessageReceive(
     return { handled: false, reason: `non-user-sender:${sender.sender_type}` };
   }
 
-  // 2. 群聊准入：必须 @ bot 才放行。
-  //    历史上曾允许「bot 已参与过的 thread 内回复免 @」，后来发现 thread 本身也是讨论
-  //    流——成员之间相互讨论会被误处理成对 bot 的请求，产生大量无关 AI 触发，得不偿失。
-  //    现在统一靠 @ 触发，bot 只在被点名时介入。
+  // 2. 群聊准入：要么 @ 了 bot，要么落在 bot 参与过的话题里（bot 回帖默认
+  //    reply_in_thread，同话题追问免 @，这就是"话题多轮"的入口）。
+  //    注意范围：曾有过「所有 thread 内回复免 @」的版本，因成员间讨论被误处理成对
+  //    bot 的请求而撤销（grain #1832）；现在只放行 root 归属 bot 的话题（bot 自己
+  //    开的 / 用户 @ bot 开的），成员自己开的话题仍要求 @（见 thread-tracker）。
   if (message.chat_type === "group") {
     const { FEISHU_BOT_OPEN_ID } = parseBotEnv();
     if (!FEISHU_BOT_OPEN_ID) {
@@ -40,7 +44,13 @@ export async function routeMessageReceive(
     }
     const mentioned = message.mentions?.some((m) => m.id.open_id === FEISHU_BOT_OPEN_ID);
     if (!mentioned) {
-      return { handled: false, reason: "group-without-mention" };
+      if (!message.root_id) {
+        return { handled: false, reason: "group-without-mention" };
+      }
+      const inBotThread = await __routerDeps.isBotInThread(message.root_id, FEISHU_BOT_OPEN_ID);
+      if (!inBotThread) {
+        return { handled: false, reason: "group-thread-not-bot-involved" };
+      }
     }
   }
 
