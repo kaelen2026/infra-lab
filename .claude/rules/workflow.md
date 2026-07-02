@@ -6,6 +6,8 @@
 
 - 任何代码改动都必须先从 `main` 切出特性分支再提交:
   - 命名约定:`feat/<简述>`、`fix/<简述>`、`ci/<简述>`、`docs/<简述>`、`chore/<简述>`。
+  - `bot/<issue编号>-<slug>` **保留给 infra-lab-bot 的工单分支**(自动返工链 `rework.yml`
+    靠此前缀识别),人类分支不要使用。
 - 提交前必须确认当前不在 `main`:`git branch --show-current` 不得返回 `main`。
 - 改动通过 **Pull Request** 合入 `main`,且必须通过 CI 质量门禁(lint / typecheck / build / test,见 `.github/workflows/ci.yml`)。
 - 提交信息遵循 **Conventional Commits**(由 husky `commit-msg` + commitlint 强制)。
