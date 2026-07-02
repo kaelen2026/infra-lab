@@ -185,16 +185,19 @@ export function createAuthRoutes(deps: AuthRouteDeps): Hono<ObsEnv> {
 
     const result = await otp.verifyCode({ phone, code });
     if (!result.ok) {
-      // Audit only attempts that actually verified a code (INVALID_CODE / CODE_EXPIRED)
-      // so brute-force and anomalous logins are observable. The LOCKED short-circuit is
-      // deliberately NOT audited: it returns straight from Redis with zero DB access, and
-      // the attempt that *caused* the lock (the last INVALID_CODE) is already recorded —
-      // auditing every subsequent LOCKED would let an unauthenticated caller hammer a
-      // locked phone to flood login_event / Postgres (a DoS amplification) for no signal.
+      // Audit ONLY a wrong-code guess (INVALID_CODE) — a real brute-force signal that is
+      // rate-limited by the per-code 5-attempt cap (otp.ts). CODE_EXPIRED and LOCKED are
+      // deliberately NOT audited, because /auth/otp/verify has no per-IP / global rate limit:
+      //   • CODE_EXPIRED returns before any attempt counter increments (otp.ts) for a phone
+      //     with no live code — an unauthenticated caller can hit it with any phone+code and
+      //     never trigger a lock, so auditing it is an unbounded DB write amplification.
+      //   • LOCKED returns straight from Redis with zero DB access; the attempt that *caused*
+      //     the lock (the last INVALID_CODE) is already recorded, so every subsequent LOCKED
+      //     is pure noise that a caller could hammer to flood login_event / Postgres.
       // A brand-new phone has no user row yet, so userId is null and the event is keyed on
       // phone (login_event_phone_idx). The plaintext code is never recorded — only
       // phone / ip / platform / reason.
-      if (result.error !== "LOCKED") {
+      if (result.error === "INVALID_CODE") {
         try {
           const existing = await users.findByPhone(phone);
           await users.recordLoginEvent({

@@ -320,13 +320,18 @@ describe("POST /auth/otp/verify — failure paths", () => {
     });
   });
 
-  it("audits an expired/replayed code as success:false + CODE_EXPIRED", async () => {
+  it("does not audit a CODE_EXPIRED miss (no unauthenticated, unbounded DB write)", async () => {
     const { app, sentSms, users } = setup();
     const code = await getCode(sentSms, app);
     await post(app, "/auth/otp/verify", { phone: PHONE, code, platform: "web" });
-    // Replaying the now-consumed code is a failed attempt and must be audited.
-    await post(app, "/auth/otp/verify", { phone: PHONE, code, platform: "web" });
-    expect(users.events.at(-1)).toMatchObject({ success: false, reason: "CODE_EXPIRED" });
+    const before = users.events.length;
+    // CODE_EXPIRED returns before any attempt counter increments and can never lock the
+    // phone; with no per-IP rate limit on /auth/otp/verify, auditing it would be an
+    // unbounded write amplification. Replaying the now-consumed code must write nothing.
+    const res = await post(app, "/auth/otp/verify", { phone: PHONE, code, platform: "web" });
+    expect((await readJson(res)).code).toBe("CODE_EXPIRED");
+    expect(users.events.length).toBe(before);
+    expect(users.events.every((e) => e.reason !== "CODE_EXPIRED")).toBe(true);
   });
 
   it("locks the phone after 5 wrong codes (423 LOCKED)", async () => {
