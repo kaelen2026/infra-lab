@@ -22,9 +22,9 @@ final class AccountViewModel: ObservableObject {
         do {
             async let devicesTask = client.listDevices()
             async let eventsTask = client.listLoginEvents()
-            let (d, e) = try await (devicesTask, eventsTask)
-            devices = d
-            events = e
+            let (loadedDevices, loadedEvents) = try await (devicesTask, eventsTask)
+            devices = loadedDevices
+            events = loadedEvents
         } catch {
             self.error = "无法加载账户数据，请稍后重试。"
         }

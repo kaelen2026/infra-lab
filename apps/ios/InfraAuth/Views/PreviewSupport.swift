@@ -60,9 +60,9 @@ extension LoginEventDTO {
 }
 
 extension TodoDTO {
-    static func preview(_ n: Int, _ completed: Bool, title: String? = nil) -> TodoDTO {
+    static func preview(_ index: Int, _ completed: Bool, title: String? = nil) -> TodoDTO {
         TodoDTO(
-            id: "t\(n)", title: title ?? "示例待办 \(n)", completed: completed,
+            id: "t\(index)", title: title ?? "示例待办 \(index)", completed: completed,
             createdAt: "2026-07-01T09:30:00.000Z", updatedAt: "2026-07-01T09:30:00.000Z",
             completedAt: completed ? "2026-07-01T10:00:00.000Z" : nil
         )

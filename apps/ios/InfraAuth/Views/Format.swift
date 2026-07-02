@@ -21,19 +21,20 @@ enum Format {
         )
     }
 
-    private static func pad(_ n: Int) -> String { String(format: "%02d", n) }
+    private static func pad(_ value: Int) -> String { String(format: "%02d", value) }
 
     /// `YYYY-MM-DD` in local time.
     static func date(_ iso: String) -> String {
-        guard let c = components(iso), let y = c.year, let mo = c.month, let d = c.day else { return iso }
-        return "\(y)-\(pad(mo))-\(pad(d))"
+        guard let comps = components(iso), let year = comps.year, let month = comps.month,
+              let day = comps.day else { return iso }
+        return "\(year)-\(pad(month))-\(pad(day))"
     }
 
     /// `YYYY-MM-DD HH:mm` in local time, stable width for mono columns.
     static func dateTime(_ iso: String) -> String {
-        guard let c = components(iso), let y = c.year, let mo = c.month, let d = c.day,
-              let h = c.hour, let mi = c.minute else { return iso }
-        return "\(y)-\(pad(mo))-\(pad(d)) \(pad(h)):\(pad(mi))"
+        guard let comps = components(iso), let year = comps.year, let month = comps.month,
+              let day = comps.day, let hour = comps.hour, let minute = comps.minute else { return iso }
+        return "\(year)-\(pad(month))-\(pad(day)) \(pad(hour)):\(pad(minute))"
     }
 
     static func platformLabel(_ platform: Platform) -> String {

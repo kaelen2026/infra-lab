@@ -1,5 +1,5 @@
-import XCTest
 @testable import InfraAuth
+import XCTest
 
 final class AuthClientTests: XCTestCase {
     private let baseURL = URL(string: "http://localhost:3001")!
@@ -14,7 +14,8 @@ final class AuthClientTests: XCTestCase {
     }
 
     private func json(_ object: [String: Any]) -> Data {
-        try! JSONSerialization.data(withJSONObject: object)
+        // A broken fixture yields empty Data, which fails the test loudly.
+        (try? JSONSerialization.data(withJSONObject: object)) ?? Data()
     }
 
     func testRequestOtpParsesResponse() async throws {
@@ -33,12 +34,12 @@ final class AuthClientTests: XCTestCase {
                 "ok": true,
                 "user": [
                     "id": "u1", "phone": "+8613800138000", "displayName": NSNull(),
-                    "avatarUrl": NSNull(), "createdAt": "2026-06-30T00:00:00.000Z", "isNew": true,
+                    "avatarUrl": NSNull(), "createdAt": "2026-06-30T00:00:00.000Z", "isNew": true
                 ],
                 "tokens": [
                     "accessToken": "at", "accessTokenExpiresIn": 900,
-                    "refreshToken": "rt", "refreshTokenExpiresIn": 2_592_000, "tokenType": "Bearer",
-                ],
+                    "refreshToken": "rt", "refreshTokenExpiresIn": 2_592_000, "tokenType": "Bearer"
+                ]
             ]))
         }
         let res = try await makeClient(store: store).verifyOtp(phone: "+8613800138000", code: "123456", device: nil)
@@ -69,7 +70,7 @@ final class AuthClientTests: XCTestCase {
         MockURLProtocol.handler = { _ in
             (200, self.json(["ok": true, "tokens": [
                 "accessToken": "new", "accessTokenExpiresIn": 900,
-                "refreshToken": "newR", "refreshTokenExpiresIn": 2_592_000, "tokenType": "Bearer",
+                "refreshToken": "newR", "refreshTokenExpiresIn": 2_592_000, "tokenType": "Bearer"
             ]]))
         }
         let rotated = try await makeClient(store: store).refresh()
@@ -89,8 +90,8 @@ final class AuthClientTests: XCTestCase {
                 "devices": [[
                     "id": "d1", "platform": "ios", "deviceId": "device-1",
                     "model": "iPhone", "osVersion": "17.0", "appVersion": "0.1.0",
-                    "lastSeenAt": "2026-07-01T09:30:00.000Z", "createdAt": "2026-06-30T00:00:00.000Z",
-                ]],
+                    "lastSeenAt": "2026-07-01T09:30:00.000Z", "createdAt": "2026-06-30T00:00:00.000Z"
+                ]]
             ]))
         }
         let devices = try await makeClient().listDevices()
@@ -107,8 +108,8 @@ final class AuthClientTests: XCTestCase {
                     ["id": "e1", "platform": "web", "ip": NSNull(), "success": false,
                      "createdAt": "2026-06-30T22:10:00.000Z"],
                     ["id": "e2", "platform": "ios", "ip": "203.0.113.7", "success": true,
-                     "createdAt": "2026-07-01T09:30:00.000Z"],
-                ],
+                     "createdAt": "2026-07-01T09:30:00.000Z"]
+                ]
             ]))
         }
         let events = try await makeClient().listLoginEvents()

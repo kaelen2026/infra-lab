@@ -1,11 +1,11 @@
 import Foundation
 
-/// Swift mirror of `@infra/shared`'s auth contracts — the single source of truth
-/// for request/response shapes, error codes and limits shared by every client.
-///
-/// Keep this in lockstep with `packages/shared/src/contracts/auth.ts`. The server
-/// emits camelCase JSON, so the default `Codable` synthesis maps 1:1 with no
-/// custom key strategy.
+// Swift mirror of `@infra/shared`'s auth contracts — the single source of truth
+// for request/response shapes, error codes and limits shared by every client.
+//
+// Keep this in lockstep with `packages/shared/src/contracts/auth.ts`. The server
+// emits camelCase JSON, so the default `Codable` synthesis maps 1:1 with no
+// custom key strategy.
 
 // MARK: - Platforms
 
@@ -32,12 +32,14 @@ enum OTPLimits {
 
 enum AuthValidation {
     /// E.164: leading `+` and 8–15 digits. Clients normalize before sending.
-    private static let phoneRegex = try! NSRegularExpression(pattern: #"^\+[1-9]\d{7,14}$"#)
+    /// The pattern is a constant, so compilation can only fail if it is edited;
+    /// `try?` keeps the failure mode "reject every phone" instead of crashing.
+    private static let phoneRegex = try? NSRegularExpression(pattern: #"^\+[1-9]\d{7,14}$"#)
 
     static func isValidPhone(_ phone: String) -> Bool {
-        let s = phone.trimmingCharacters(in: .whitespaces)
-        let range = NSRange(s.startIndex..., in: s)
-        return phoneRegex.firstMatch(in: s, range: range) != nil
+        let trimmed = phone.trimmingCharacters(in: .whitespaces)
+        let range = NSRange(trimmed.startIndex..., in: trimmed)
+        return phoneRegex?.firstMatch(in: trimmed, range: range) != nil
     }
 
     static func isValidCode(_ code: String) -> Bool {
