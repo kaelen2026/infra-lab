@@ -48,6 +48,10 @@ const CoreEnvSchema = z
     // the XFF list (see `clientIp` in auth.routes.ts). Default 0 = XFF is untrusted,
     // so a directly-reachable API cannot be spoofed into trusting a client-set header.
     TRUSTED_PROXY_COUNT: z.coerce.number().int().min(0).default(0),
+    // Local directory where timeline image uploads are written (first-cut storage;
+    // swap for object storage later). Relative paths resolve against the API's cwd
+    // (apps/api). Served back read-only from GET /uploads/:name.
+    UPLOADS_DIR: optionalNonEmpty.pipe(z.string().default(".uploads")),
     // ── APNS (Apple Push Notification service), all optional ──────────────────────
     // Token-based (.p8) provider auth for pushing to the iOS client. All five are
     // optional so the API boots without push configured (`apnsConfigFromEnv` returns

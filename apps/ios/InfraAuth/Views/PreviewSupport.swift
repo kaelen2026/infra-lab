@@ -30,6 +30,20 @@ final class PreviewTodoClient: TodoClient {
     func remove(id: String) async throws {}
 }
 
+/// Canned ``TimelineClient`` for SwiftUI previews — no network, deterministic data.
+final class PreviewTimelineClient: TimelineClient {
+    func list() async throws -> [TimelinePostDTO] {
+        [.preview(1, imageCount: 0), .preview(2, imageCount: 2)]
+    }
+    func uploadImage(_ data: Data, contentType: TimelineImageContentType) async throws -> TimelineImage {
+        TimelineImage(url: "/uploads/preview.jpg")
+    }
+    func create(text: String, images: [TimelineImage]) async throws -> TimelinePostDTO {
+        .preview(99, text: text, imageCount: images.count)
+    }
+    func remove(id: String) async throws {}
+}
+
 extension AuthUser {
     static let preview = AuthUser(
         id: "preview",
@@ -66,6 +80,18 @@ extension TodoDTO {
             id: "t\(index)", title: title ?? "示例待办 \(index)", completed: completed,
             createdAt: "2026-07-01T09:30:00.000Z", updatedAt: "2026-07-01T09:30:00.000Z",
             completedAt: completed ? "2026-07-01T10:00:00.000Z" : nil
+        )
+    }
+}
+
+extension TimelinePostDTO {
+    static func preview(_ index: Int, text: String? = nil, imageCount: Int) -> TimelinePostDTO {
+        TimelinePostDTO(
+            id: "p\(index)",
+            text: text ?? "示例动态 \(index):今天写了一段代码。",
+            images: (0..<imageCount).map { TimelineImage(url: "/uploads/preview-\(index)-\($0).jpg") },
+            createdAt: "2026-07-01T09:30:00.000Z",
+            updatedAt: "2026-07-01T09:30:00.000Z"
         )
     }
 }

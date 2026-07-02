@@ -10,9 +10,12 @@ import { createLogger } from "./observability/logger.js";
 import { type ObsEnv, observability } from "./observability/middleware.js";
 import { createAuthRoutes } from "./routes/auth.routes.js";
 import { createNotificationRoutes } from "./routes/notification.routes.js";
+import { createTimelineRoutes } from "./routes/timeline.routes.js";
 import { createTodoRoutes } from "./routes/todo.routes.js";
 import { createApnsClient } from "./services/apns-client.js";
+import { createLocalImageStore } from "./services/image-store.js";
 import { createSessionService } from "./services/session-service.js";
+import { createTimelineRepository } from "./services/timeline-repository.js";
 import { createTodoRepository } from "./services/todo-repository.js";
 import { createUserRepository } from "./services/user-repository.js";
 
@@ -39,6 +42,10 @@ const auth = createAuth({
 const otp = createOtpService({ store: createRedisOtpStore(redis), secret: env.OTP_SECRET });
 const users = createUserRepository(db);
 const todos = createTodoRepository(db);
+const timeline = createTimelineRepository(db);
+// Timeline image uploads: local-directory storage (first cut), served read-only
+// from GET /uploads/:name. UPLOADS_DIR resolves against the API cwd (apps/api).
+const images = createLocalImageStore({ dir: env.UPLOADS_DIR });
 const sessions = createSessionService({
   db,
   auth,
@@ -95,6 +102,16 @@ app.route(
 );
 // Per-user todo routes (protected; reuse the session resolver for Cookie + Bearer).
 app.route("/", createTodoRoutes({ todos, requireUser: (h) => sessions.requireUser(h) }));
+// Per-user timeline routes (protected) plus the public GET /uploads/:name image
+// server. Same session resolver for Cookie + Bearer.
+app.route(
+  "/",
+  createTimelineRoutes({
+    posts: timeline,
+    images,
+    requireUser: (h) => sessions.requireUser(h),
+  }),
+);
 
 // Push notifications (APNS). Optional: only when the provider is configured. The
 // dev-only self-push test route is additionally gated on the debug flag so it can
