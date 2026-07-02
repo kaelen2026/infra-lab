@@ -102,8 +102,10 @@ jobs:
           fi
           # 分区标记：FINDINGS 报告的第二行（容错：任意位置、取最后一个）。解析不到则留空，
           # 下游按 default 负责人兜底——宁可 @ 不精准，不漏通知。
+          # `|| true`:CLEAN 报告没有该行是常态,bash -eo pipefail 下 grep 落空的管道
+          # 会终止整步并连锁吞掉 issue——必须安全落空串(reviewer #59 抓的真实缺陷)。
           areas="$(grep -iE '^[[:space:]]*SECURITY_PATROL_AREAS:' raw-report.md | tail -1 \
-            | sed -E 's/^[[:space:]]*[Ss][Ee][Cc][Uu][Rr][Ii][Tt][Yy]_[Pp][Aa][Tt][Rr][Oo][Ll]_[Aa][Rr][Ee][Aa][Ss]:[[:space:]]*//')"
+            | sed -E 's/^[[:space:]]*[Ss][Ee][Cc][Uu][Rr][Ii][Tt][Yy]_[Pp][Aa][Tt][Rr][Oo][Ll]_[Aa][Rr][Ee][Aa][Ss]:[[:space:]]*//' || true)"
           echo "areas=$areas" >> "$GITHUB_OUTPUT"
           # 报告正文剥掉标记行（在任意位置的都剥掉）。
           grep -vE '^[[:space:]]*SECURITY_PATROL_(STATUS|AREAS):' raw-report.md > report.md || cp raw-report.md report.md
