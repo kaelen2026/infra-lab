@@ -96,11 +96,42 @@ describe("parseCoreEnv", () => {
       parseCoreEnv({ ...base, NODE_ENV: "development", OTP_DEBUG_RETURN_CODE: "true" })
         .OTP_DEBUG_RETURN_CODE,
     ).toBe(true);
-    // Production is fine as long as the debug flag is off (with a distinct auth secret).
+    // Production is fine as long as the debug flag is off (with a distinct auth secret
+    // and secure cookies, both required in production).
     expect(
-      parseCoreEnv({ ...base, NODE_ENV: "production", BETTER_AUTH_SECRET: "b".repeat(32) })
-        .OTP_DEBUG_RETURN_CODE,
+      parseCoreEnv({
+        ...base,
+        NODE_ENV: "production",
+        BETTER_AUTH_SECRET: "b".repeat(32),
+        COOKIE_SECURE: "true",
+      }).OTP_DEBUG_RETURN_CODE,
     ).toBe(false);
+  });
+
+  it("M1 — requires COOKIE_SECURE=true in production, but allows it off otherwise", () => {
+    // Production defaults COOKIE_SECURE to false → refuse to boot (no plaintext cookies).
+    let message = "";
+    try {
+      parseCoreEnv({ ...base, NODE_ENV: "production", BETTER_AUTH_SECRET: "b".repeat(32) });
+    } catch (e) {
+      message = e instanceof Error ? e.message : String(e);
+    }
+    expect(message).toContain("COOKIE_SECURE");
+    // The guardrail error must never echo a raw secret value.
+    expect(message).not.toContain(base.OTP_SECRET);
+
+    // Production with COOKIE_SECURE=true and a distinct auth secret is accepted.
+    expect(
+      parseCoreEnv({
+        ...base,
+        NODE_ENV: "production",
+        BETTER_AUTH_SECRET: "b".repeat(32),
+        COOKIE_SECURE: "true",
+      }).COOKIE_SECURE,
+    ).toBe(true);
+
+    // Non-production keeps the insecure-cookie default usable for local dev.
+    expect(parseCoreEnv({ ...base, NODE_ENV: "development" }).COOKIE_SECURE).toBe(false);
   });
 
   it("L4 — requires a distinct BETTER_AUTH_SECRET in production (key separation)", () => {
@@ -120,8 +151,12 @@ describe("parseCoreEnv", () => {
 
     // Set and distinct in production: accepted, no fallback applied.
     expect(
-      parseCoreEnv({ ...base, NODE_ENV: "production", BETTER_AUTH_SECRET: "b".repeat(32) })
-        .BETTER_AUTH_SECRET,
+      parseCoreEnv({
+        ...base,
+        NODE_ENV: "production",
+        BETTER_AUTH_SECRET: "b".repeat(32),
+        COOKIE_SECURE: "true",
+      }).BETTER_AUTH_SECRET,
     ).toBe("b".repeat(32));
 
     // Non-production still allows the dev fallback (BETTER_AUTH_SECRET ?? OTP_SECRET).
