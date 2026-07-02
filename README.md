@@ -49,6 +49,7 @@ pnpm build        # 构建（tsup 各包 + next build；按依赖拓扑顺序）
 pnpm test         # vitest，纯内存测试，无需真实 Redis/Postgres
 pnpm typecheck    # 各包 tsc --noEmit
 pnpm lint         # biome 检查（pnpm lint:fix 自动修复 + 格式化）
+pnpm knip         # 本地死代码检查（未使用的文件/依赖/导出）；不进 CI，输出仅供参考
 
 # 单个测试
 pnpm vitest run packages/auth/test/otp.test.ts
