@@ -98,8 +98,7 @@ final class HTTPTodoClient: TodoClient {
         }
 
         guard (200..<300).contains(http.statusCode) else {
-            struct Body: Decodable { let code: TodoErrorCode? }
-            let parsed = try? decoder.decode(Body.self, from: data)
+            let parsed = try? decoder.decode(TodoErrorBody.self, from: data)
             throw TodoClientError.http(status: http.statusCode, code: parsed?.code ?? .unknown)
         }
 
@@ -109,4 +108,9 @@ final class HTTPTodoClient: TodoClient {
             throw TodoClientError.decoding(error)
         }
     }
+}
+
+/// Error payload shape shared by the todo endpoints (mirrors AuthErrorBody).
+struct TodoErrorBody: Decodable {
+    let code: TodoErrorCode?
 }
