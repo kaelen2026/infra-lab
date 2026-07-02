@@ -22,6 +22,11 @@ settings:
     CODE_SIGN_STYLE: Manual
     CODE_SIGN_IDENTITY: "-"
     DEVELOPMENT_TEAM: ""
+    # Build-time API endpoint override, substituted into Info.plist's
+    # API_BASE_URL (see AppConfig.swift). Empty → the app falls back to
+    # http://localhost:3001. Release builds pass it via `make ... API_URL=…`
+    # so no machine-specific address is ever committed.
+    API_BASE_URL: ""
 
 targets:
   InfraAuth:
@@ -51,9 +56,13 @@ targets:
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-        # Dev convenience: allow cleartext HTTP to localhost (the API on :3001).
+        API_BASE_URL: $(API_BASE_URL)
+        # Lab app: the API is a dev server reached over cleartext HTTP
+        # (localhost or a LAN IP via API_BASE_URL), so allow arbitrary loads.
+        # Distribution is TestFlight-only; revisit before any App Store release.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
+          NSAllowsArbitraryLoads: true
         # Standard HTTPS only — exempt from export compliance, so TestFlight
         # builds skip the per-build encryption questionnaire.
         ITSAppUsesNonExemptEncryption: false

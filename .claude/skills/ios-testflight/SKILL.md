@@ -38,6 +38,7 @@ credentials are injected on the `make` command line and **never committed**.
 | `ASC_ISSUER_ID` | Issuer id shown next to the API keys |
 | `ASC_KEY_PATH` | `.p8` path if not in `~/.appstoreconnect/private_keys/` |
 | `BUILD` | Optional `CURRENT_PROJECT_VERSION` override for this archive |
+| `API_URL` | API endpoint baked into the build — a deployed HTTPS URL, or `http://<mac-lan-ip>:3001` for same-Wi-Fi testing. Empty → `http://localhost:3001`, which only works in the simulator: **always set this for TestFlight builds** or the app reports network errors on device |
 
 ## Steps
 
