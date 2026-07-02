@@ -16,6 +16,11 @@ endif
 ifneq ($(BUILD),)
 BUILD_OVERRIDE = CURRENT_PROJECT_VERSION=$(BUILD)
 endif
+ifneq ($(API_URL),)
+# Bakes the API endpoint into Info.plist via the API_BASE_URL build setting
+# (see AppConfig.swift); empty keeps the http://localhost:3001 fallback.
+API_OVERRIDE = "API_BASE_URL=$(API_URL)"
+endif
 
 .PHONY: project build test lint format clean archive ipa upload
 
@@ -40,7 +45,7 @@ archive: project ## Signed device archive (needs TEAM_ID from a paid Developer P
 	@test -n "$(TEAM_ID)" || { echo "TEAM_ID is empty — pass TEAM_ID=<team id> (paid Apple Developer Program)"; exit 1; }
 	xcodebuild archive -project InfraAuth.xcodeproj -scheme $(SCHEME) \
 		-destination "generic/platform=iOS" -archivePath $(ARCHIVE) \
-		CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM=$(TEAM_ID) $(BUILD_OVERRIDE) $(ASC_AUTH)
+		CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM=$(TEAM_ID) $(BUILD_OVERRIDE) $(API_OVERRIDE) $(ASC_AUTH)
 
 ipa: archive ## Export build/export/InfraAuth.ipa from the archive
 	xcodebuild -exportArchive -archivePath $(ARCHIVE) \
