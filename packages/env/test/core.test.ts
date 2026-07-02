@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseCoreEnv } from "../src/core.js";
+import { apnsConfigFromEnv, parseCoreEnv } from "../src/core.js";
 
 const base = {
   DATABASE_URL: "postgres://app:app@localhost:5432/app",
@@ -207,5 +207,60 @@ describe("parseCoreEnv", () => {
 
     // Non-production keeps the safe default (XFF untrusted) usable for local dev.
     expect(parseCoreEnv({ ...base, NODE_ENV: "development" }).TRUSTED_PROXY_COUNT).toBe(0);
+  });
+});
+
+describe("APNS config", () => {
+  const apnsBase = {
+    APNS_KEY_ID: "KEY123",
+    APNS_TEAM_ID: "TEAM456",
+    APNS_BUNDLE_ID: "ai.deeplang.infra.ios",
+    APNS_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\\nMIG...\\n-----END PRIVATE KEY-----",
+  };
+
+  it("apnsConfigFromEnv returns null when no APNS var is set", () => {
+    expect(apnsConfigFromEnv(parseCoreEnv(base))).toBeNull();
+  });
+
+  it("builds config from a full inline key, un-escaping \\n in the PEM", () => {
+    const cfg = apnsConfigFromEnv(parseCoreEnv({ ...base, ...apnsBase }));
+    expect(cfg).not.toBeNull();
+    expect(cfg?.keyId).toBe("KEY123");
+    expect(cfg?.teamId).toBe("TEAM456");
+    expect(cfg?.bundleId).toBe("ai.deeplang.infra.ios");
+    expect(cfg?.production).toBe(false);
+    // The escaped \n sequences become real newlines for the PEM parser.
+    expect(cfg?.privateKey).toContain("\n");
+    expect(cfg?.privateKey).not.toContain("\\n");
+  });
+
+  it("honours APNS_PRODUCTION", () => {
+    const cfg = apnsConfigFromEnv(parseCoreEnv({ ...base, ...apnsBase, APNS_PRODUCTION: "true" }));
+    expect(cfg?.production).toBe(true);
+  });
+
+  it("rejects a partial config (any APNS_* set requires the full set)", () => {
+    let message = "";
+    try {
+      parseCoreEnv({ ...base, APNS_KEY_ID: "KEY123" });
+    } catch (e) {
+      message = e instanceof Error ? e.message : String(e);
+    }
+    expect(message).toContain("APNS_TEAM_ID");
+    expect(message).toContain("APNS_BUNDLE_ID");
+  });
+
+  it("rejects setting both an inline key and a key path", () => {
+    let message = "";
+    try {
+      parseCoreEnv({
+        ...base,
+        ...apnsBase,
+        APNS_PRIVATE_KEY_PATH: "/tmp/key.p8",
+      });
+    } catch (e) {
+      message = e instanceof Error ? e.message : String(e);
+    }
+    expect(message).toContain("APNS_PRIVATE_KEY");
   });
 });

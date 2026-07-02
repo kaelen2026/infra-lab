@@ -42,6 +42,10 @@ targets:
         # Xcode 16 splits the app into a preview "debug dylib"; that breaks
         # hosted unit tests run via xcodebuild (runner crashes at <external symbol>).
         ENABLE_DEBUG_DYLIB: false
+        # Push Notifications capability (aps-environment). Simulator ignores it; a
+        # device / TestFlight build needs a provisioning profile that carries the
+        # Push Notifications entitlement (Automatic signing + DEVELOPMENT_TEAM).
+        CODE_SIGN_ENTITLEMENTS: InfraAuth/InfraAuth.entitlements
     info:
       path: InfraAuth/Info.plist
       properties:

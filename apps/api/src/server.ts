@@ -1,7 +1,7 @@
 import { serve } from "@hono/node-server";
 import { createAuth, createOtpService } from "@infra/auth";
 import { createDb, schema } from "@infra/db";
-import { loadCoreEnv } from "@infra/env/core";
+import { apnsConfigFromEnv, loadCoreEnv } from "@infra/env/core";
 import { createRedis, createRedisOtpStore } from "@infra/redis";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -9,7 +9,9 @@ import { checkReadiness } from "./observability/health.js";
 import { createLogger } from "./observability/logger.js";
 import { type ObsEnv, observability } from "./observability/middleware.js";
 import { createAuthRoutes } from "./routes/auth.routes.js";
+import { createNotificationRoutes } from "./routes/notification.routes.js";
 import { createTodoRoutes } from "./routes/todo.routes.js";
+import { createApnsClient } from "./services/apns-client.js";
 import { createSessionService } from "./services/session-service.js";
 import { createTodoRepository } from "./services/todo-repository.js";
 import { createUserRepository } from "./services/user-repository.js";
@@ -93,6 +95,25 @@ app.route(
 );
 // Per-user todo routes (protected; reuse the session resolver for Cookie + Bearer).
 app.route("/", createTodoRoutes({ todos, requireUser: (h) => sessions.requireUser(h) }));
+
+// Push notifications (APNS). Optional: only when the provider is configured. The
+// dev-only self-push test route is additionally gated on the debug flag so it can
+// never be reached in production. A real business trigger can call the same
+// apns client + user repository directly once defined.
+const apnsConfig = apnsConfigFromEnv(env);
+if (apnsConfig) {
+  const apns = createApnsClient(apnsConfig);
+  if (env.OTP_DEBUG_RETURN_CODE) {
+    app.route(
+      "/",
+      createNotificationRoutes({ apns, push: users, requireUser: (h) => sessions.requireUser(h) }),
+    );
+    log.warn("dev push test route mounted at POST /notifications/test");
+  }
+  log.info("apns push configured", { production: apnsConfig.production });
+} else {
+  log.info("apns push not configured (set APNS_* to enable)");
+}
 
 // Centralized error handling: log the stack with the request id and return a
 // generic 500 so internals never leak to the client.

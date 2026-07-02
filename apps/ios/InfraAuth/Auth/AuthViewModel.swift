@@ -95,7 +95,9 @@ final class AuthViewModel: ObservableObject {
         busy = true
         defer { busy = false }
         do {
-            let device = DeviceMetadata.current()
+            // Include the APNS token in the device record when we already have one; a
+            // token that only arrives after login is reported later via updatePushToken.
+            let device = DeviceMetadata.current(pushToken: PushRegistration.shared.deviceToken)
             let res = try await client.verifyOtp(phone: phone, code: code, device: device)
             user = res.user
             step = .done

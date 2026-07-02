@@ -10,6 +10,7 @@ import {
   type Platform,
   refreshSchema,
   requestOtpSchema,
+  updatePushTokenSchema,
   verifyOtpSchema,
 } from "@infra/shared";
 import { type Context, Hono } from "hono";
@@ -43,8 +44,23 @@ export interface UserRepository {
   }): Promise<void>;
   /** Registered devices for the account dashboard, most-recently-seen first. */
   listDevices(userId: string): Promise<DeviceDTO[]>;
+  /**
+   * Update the push token on this user's device row (matched by stable deviceId).
+   * Returns whether a row was actually updated (false ⇒ no such device for this user).
+   */
+  updatePushToken(userId: string, deviceId: string, pushToken: string): Promise<boolean>;
+  /** This user's non-null push tokens for a platform (the send fan-out target). */
+  listPushTokens(userId: string, platform: Platform): Promise<PushTarget[]>;
+  /** Clear a device's push token (called when APNS reports it unregistered/invalid). */
+  clearPushToken(userId: string, deviceId: string): Promise<void>;
   /** Recent login attempts for the account dashboard, newest first. */
   listLoginEvents(userId: string, limit?: number): Promise<LoginEventDTO[]>;
+}
+
+/** One push destination: a device's stable id plus its current push token. */
+export interface PushTarget {
+  deviceId: string;
+  pushToken: string;
 }
 
 export interface SessionContext {
@@ -292,6 +308,25 @@ export function createAuthRoutes(deps: AuthRouteDeps): Hono<ObsEnv> {
     const user = await sessions.requireUser(c.req.raw.headers);
     if (!user) return fail(c, "UNAUTHORIZED");
     return c.json({ ok: true, devices: await users.listDevices(user.id) });
+  });
+
+  // ── Update this device's push token (native acquires it after login) ─────────
+  app.post("/auth/devices/push-token", async (c) => {
+    const user = await sessions.requireUser(c.req.raw.headers);
+    if (!user) return fail(c, "UNAUTHORIZED");
+
+    const parsed = updatePushTokenSchema.safeParse(await readJson(c));
+    if (!parsed.success) return fail(c, "INVALID_REQUEST", { issues: parsed.error.issues });
+
+    const updated = await users.updatePushToken(
+      user.id,
+      parsed.data.deviceId,
+      parsed.data.pushToken,
+    );
+    // A missing device row means the client never registered this deviceId at verify
+    // time; treat as an idempotent no-op (nothing to leak, nothing to error on).
+    if (!updated) c.get("log").debug("push token update matched no device");
+    return c.json({ ok: true });
   });
 
   // ── Account dashboard: this user's recent login attempts ─────────────────────

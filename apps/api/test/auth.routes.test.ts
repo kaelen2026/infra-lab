@@ -81,6 +81,21 @@ class FakeUserRepository implements UserRepository {
         createdAt: "2026-06-30T00:00:00.000Z",
       }));
   }
+  async updatePushToken(userId: string, deviceId: string, pushToken: string): Promise<boolean> {
+    const entry = this.devices.find((d) => d.userId === userId && d.device.deviceId === deviceId);
+    if (!entry) return false;
+    entry.device = { ...entry.device, pushToken };
+    return true;
+  }
+  async listPushTokens(userId: string, platform: Platform) {
+    return this.devices
+      .filter((d) => d.userId === userId && d.device.platform === platform && d.device.pushToken)
+      .map((d) => ({ deviceId: d.device.deviceId, pushToken: d.device.pushToken as string }));
+  }
+  async clearPushToken(userId: string, deviceId: string): Promise<void> {
+    const entry = this.devices.find((d) => d.userId === userId && d.device.deviceId === deviceId);
+    if (entry) entry.device = { ...entry.device, pushToken: undefined };
+  }
   async listLoginEvents(userId: string) {
     return this.events
       .filter((e) => e.userId === userId)
@@ -98,6 +113,8 @@ class FakeUserRepository implements UserRepository {
 // ── Fake session service ────────────────────────────────────────────────────────
 class FakeSessionService implements SessionService {
   issuedTokens: AuthTokens[] = [];
+  /** Switchable current user for protected-route tests (null ⇒ unauthenticated). */
+  currentUser: UserRecord | null = null;
   private refreshStore = new Map<string, string>(); // refreshToken -> userId
   private seq = 0;
 
@@ -135,7 +152,7 @@ class FakeSessionService implements SessionService {
     };
   }
   async requireUser(): Promise<UserRecord | null> {
-    return null;
+    return this.currentUser;
   }
   async revoke(): Promise<{ cookies: string[] }> {
     // Sign-out-all: drop every issued refresh token, mirroring the real service.
@@ -443,5 +460,71 @@ describe("POST /auth/logout", () => {
 
     const reuse = await post(app, "/auth/refresh", { refreshToken: tokens.refreshToken });
     expect(reuse.status).toBe(401);
+  });
+});
+
+describe("POST /auth/devices/push-token", () => {
+  it("401s when unauthenticated", async () => {
+    const { app } = setup();
+    const res = await post(app, "/auth/devices/push-token", {
+      deviceId: "iphone-1",
+      pushToken: "abc",
+    });
+    expect(res.status).toBe(401);
+    expect((await readJson(res)).code).toBe("UNAUTHORIZED");
+  });
+
+  it("rejects a missing token with 400", async () => {
+    const { app, sessions } = setup();
+    sessions.currentUser = {
+      id: "user_1",
+      phone: PHONE,
+      displayName: null,
+      avatarUrl: null,
+      createdAt: new Date(),
+    };
+    const res = await post(app, "/auth/devices/push-token", { deviceId: "iphone-1" });
+    expect(res.status).toBe(400);
+    expect((await readJson(res)).code).toBe("INVALID_REQUEST");
+  });
+
+  it("updates the token on the caller's device row", async () => {
+    const { app, sessions, users } = setup();
+    sessions.currentUser = {
+      id: "user_1",
+      phone: PHONE,
+      displayName: null,
+      avatarUrl: null,
+      createdAt: new Date(),
+    };
+    // Seed a device row for this user (as verify would have).
+    await users.recordDevice("user_1", { platform: "ios", deviceId: "iphone-1" });
+
+    const res = await post(app, "/auth/devices/push-token", {
+      deviceId: "iphone-1",
+      pushToken: "apns-token-xyz",
+    });
+    expect(res.status).toBe(200);
+    expect((await readJson(res)).ok).toBe(true);
+
+    const tokens = await users.listPushTokens("user_1", "ios");
+    expect(tokens).toEqual([{ deviceId: "iphone-1", pushToken: "apns-token-xyz" }]);
+  });
+
+  it("is an idempotent no-op (still 200) when the device is unknown", async () => {
+    const { app, sessions } = setup();
+    sessions.currentUser = {
+      id: "user_1",
+      phone: PHONE,
+      displayName: null,
+      avatarUrl: null,
+      createdAt: new Date(),
+    };
+    const res = await post(app, "/auth/devices/push-token", {
+      deviceId: "never-registered",
+      pushToken: "abc",
+    });
+    expect(res.status).toBe(200);
+    expect((await readJson(res)).ok).toBe(true);
   });
 });

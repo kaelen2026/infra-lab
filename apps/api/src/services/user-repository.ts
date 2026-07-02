@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { type Db, device as deviceTable, loginEvent, profile, user } from "@infra/db";
 import type { DeviceInfo, Platform } from "@infra/shared";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import type { UserRecord, UserRepository } from "../routes/auth.routes.js";
 
 /** Drizzle-backed {@link UserRepository}. */
@@ -100,6 +100,33 @@ export function createUserRepository(db: Db): UserRepository {
         lastSeenAt: r.lastSeenAt.toISOString(),
         createdAt: r.createdAt.toISOString(),
       }));
+    },
+
+    async updatePushToken(userId, deviceId, pushToken) {
+      const updated = await db
+        .update(deviceTable)
+        .set({ pushToken, lastSeenAt: new Date() })
+        .where(and(eq(deviceTable.userId, userId), eq(deviceTable.deviceId, deviceId)))
+        .returning({ id: deviceTable.id });
+      return updated.length > 0;
+    },
+
+    async listPushTokens(userId, platform) {
+      const rows = await db
+        .select({ deviceId: deviceTable.deviceId, pushToken: deviceTable.pushToken })
+        .from(deviceTable)
+        .where(and(eq(deviceTable.userId, userId), eq(deviceTable.platform, platform)));
+      // Drop rows without a token; narrow `string | null` → `string` for the caller.
+      return rows.flatMap((r) =>
+        r.pushToken ? [{ deviceId: r.deviceId, pushToken: r.pushToken }] : [],
+      );
+    },
+
+    async clearPushToken(userId, deviceId) {
+      await db
+        .update(deviceTable)
+        .set({ pushToken: null })
+        .where(and(eq(deviceTable.userId, userId), eq(deviceTable.deviceId, deviceId)));
     },
 
     async listLoginEvents(userId, limit = 10) {
