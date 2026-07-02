@@ -60,6 +60,17 @@ const CoreEnvSchema = z
         message: "must not be enabled when NODE_ENV=production (would leak OTP codes)",
       });
     }
+    // M1 — transport guardrail: a 30-day session cookie sent without `Secure` can be
+    // captured over a plaintext hop and replayed (session hijack). COOKIE_SECURE
+    // defaults to false for local dev, so refuse to boot in production unless it is
+    // explicitly enabled, rather than silently downgrade cookie security.
+    if (e.NODE_ENV === "production" && e.COOKIE_SECURE !== true) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["COOKIE_SECURE"],
+        message: "must be true when NODE_ENV=production (session cookies require Secure)",
+      });
+    }
     // L4 — key separation: in production the Better-Auth / JWT signing secret must be
     // set explicitly and must NOT reuse OTP_SECRET, so one leaked secret can't
     // compromise OTP hashing AND session signing. Non-prod keeps the dev fallback

@@ -204,4 +204,43 @@ describe("OTP service — verifyCode", () => {
     if (res.ok) throw new Error("unreachable");
     expect(res.error).toBe("CODE_EXPIRED");
   });
+
+  it("does not burn an attempt when verifying a phone with no active code", async () => {
+    const { store, otp } = setup();
+
+    // No code issued: repeated verifies must not accrue attempts or lock the phone,
+    // otherwise anyone could lock out a victim by spamming verify against their number.
+    for (let i = 0; i < 10; i++) {
+      const res = await otp.verifyCode({ phone: PHONE, code: "000000" });
+      expect(res.ok).toBe(false);
+      if (res.ok) throw new Error("unreachable");
+      expect(res.error).toBe("CODE_EXPIRED");
+    }
+    expect(await store.exists(OTP_KEYS.attempt(PHONE))).toBe(false);
+    expect(await store.exists(OTP_KEYS.lock(PHONE))).toBe(false);
+  });
+
+  it("H1 — bounds concurrent verifications to the attempt quota (closes the TOCTOU)", async () => {
+    const { otp } = setup();
+    const { code } = await requestOk(otp);
+
+    // Burn all but one of the 5 attempts with sequential wrong guesses.
+    for (let i = 0; i < 4; i++) {
+      const r = await otp.verifyCode({ phone: PHONE, code: "999999" });
+      expect(r.ok).toBe(false);
+      if (r.ok || r.error !== "INVALID_CODE") throw new Error("expected INVALID_CODE");
+    }
+
+    // One attempt remains. Fire a burst of *correct* codes concurrently: the per-phone
+    // gate must let exactly one comparison through. On the pre-fix TOCTOU every request
+    // read the still-present hash, all matched, and every one returned ok — letting a
+    // concurrent burst blow past the 5-try limit.
+    const results = await Promise.all(
+      Array.from({ length: 20 }, () => otp.verifyCode({ phone: PHONE, code })),
+    );
+    const okCount = results.filter((r) => r.ok).length;
+    expect(okCount).toBe(1);
+    // Everything past the quota is rejected as LOCKED, not silently accepted.
+    expect(results.filter((r) => !r.ok && r.error === "LOCKED").length).toBe(19);
+  });
 });
