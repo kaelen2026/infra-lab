@@ -10,7 +10,7 @@
 | **评论提及**（tag 模式） | 在 issue 评论、PR 评论或 PR 行内评论里写 `@infra-lab-bot <你的问题>` | 以 `infra-lab-bot[bot]` 身份**在同一线程回复** |
 | **手动派发**（dispatch） | `gh workflow run infra-lab-bot.yml -f prompt="..."`，或 Actions 页面点 “Run workflow” | 无线程，**结果在该次运行日志里**（`show_full_output` 仅对 dispatch 开启） |
 | **飞书 @**（`@infra/bot`） | 在飞书群 @ bot 或私聊它 | bot 先 react + 安抚，再 dispatch 本工作流；跑完**把结果回帖到发起消息的飞书话题**；之后**在话题里直接追问即可（免 @）**，同话题多轮共享记忆 |
-| **工单接单**（label） | 给 issue 打上 **`bot` 标签** | bot 在 issue 里评论开工计划 → 切 `bot/<编号>-<slug>` 分支实施 → 开 PR（`Closes #N`）并回帖链接；之后自动返工链接手（见下节） |
+| **工单接单**（label） | 给 issue 打上 **`bot` 标签** | bot 在 issue 里评论开工计划（方案 + 任务拆分清单） → 切 `bot/<编号>-<slug>` 分支实施 → 开 PR（`Closes #N`，正文带勾选进度）并回帖链接；之后自动返工链接手（见下节） |
 
 示例：
 
@@ -59,10 +59,11 @@ gh workflow run infra-lab-bot.yml -f prompt="分析当前项目架构与主要�
 
 给一个 issue 打上 **`bot` 标签**即完成派单，之后全自动：
 
-1. **接单**（`infra-lab-bot.yml`）：bot 读 issue 与全部评论，在 issue 里评论开工计划；
+1. **接单**（`infra-lab-bot.yml`）：bot 读 issue 与全部评论，在 issue 里评论开工计划——
+   **方案 + 任务拆分清单**（GitHub Markdown 复选框，可勾选、可追踪进度）；
    需求不清则评论追问并停（不开分支、不开 PR）。
-2. **实施**：从最新 `main` 切 `bot/<issue编号>-<slug>` 分支，本地自检
-   （lint / typecheck / build / test）后开 PR（`Closes #N`），回 issue 贴 PR 链接。
+2. **实施**：从最新 `main` 切 `bot/<issue编号>-<slug>` 分支，按清单推进，本地自检
+   （lint / typecheck / build / test）后开 PR（`Closes #N`，正文带勾选到进度的清单），回 issue 贴 PR 链接。
 3. **审查与返工**（`rework.yml`）：每次 push 后 CI + reviewer 自动跑；reviewer 顶层总结
    末行输出 `VERDICT: LGTM|REWORK`。rework 在 **CI 与 reviewer 都出结论**后决策：
    CI 非绿或 REWORK（或解析不到判定——宁可多跑，不静默漏单）→ bot 自动处理审查意见、
