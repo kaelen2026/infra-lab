@@ -2,7 +2,22 @@
 SCHEME = InfraAuth
 DESTINATION ?= platform=iOS Simulator,name=iPhone 17 Pro
 
-.PHONY: project build test lint format clean
+# Release / TestFlight knobs (see .claude/skills/ios-testflight/SKILL.md).
+# The committed project.yml signs ad-hoc for offline simulator builds; release
+# signing is injected here on the command line and never committed.
+ARCHIVE = build/InfraAuth.xcarchive
+TEAM_ID ?= $(shell sed -n 's/^ *DEVELOPMENT_TEAM: *//p' project.yml | head -1)
+ASC_KEY_PATH ?= $(HOME)/.appstoreconnect/private_keys/AuthKey_$(ASC_KEY_ID).p8
+ifneq ($(ASC_KEY_ID),)
+# With an App Store Connect API key, xcodebuild manages distribution signing
+# assets itself (cloud signing) — no Xcode account login needed.
+ASC_AUTH = -allowProvisioningUpdates -authenticationKeyPath "$(ASC_KEY_PATH)" -authenticationKeyID $(ASC_KEY_ID) -authenticationKeyIssuerID $(ASC_ISSUER_ID)
+endif
+ifneq ($(BUILD),)
+BUILD_OVERRIDE = CURRENT_PROJECT_VERSION=$(BUILD)
+endif
+
+.PHONY: project build test lint format clean archive ipa upload
 
 project: ## Generate InfraAuth.xcodeproj from project.yml
 	xcodegen generate
@@ -20,6 +35,21 @@ build: project ## Build the app for the simulator
 test: project ## Run the unit tests on the simulator
 	xcodebuild test -project InfraAuth.xcodeproj -scheme $(SCHEME) \
 		-destination "$(DESTINATION)"
+
+archive: project ## Signed device archive (needs TEAM_ID from a paid Developer Program team)
+	@test -n "$(TEAM_ID)" || { echo "TEAM_ID is empty — pass TEAM_ID=<team id> (paid Apple Developer Program)"; exit 1; }
+	xcodebuild archive -project InfraAuth.xcodeproj -scheme $(SCHEME) \
+		-destination "generic/platform=iOS" -archivePath $(ARCHIVE) \
+		CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM=$(TEAM_ID) $(BUILD_OVERRIDE) $(ASC_AUTH)
+
+ipa: archive ## Export build/export/InfraAuth.ipa from the archive
+	xcodebuild -exportArchive -archivePath $(ARCHIVE) \
+		-exportOptionsPlist ExportOptions.plist -exportPath build/export $(ASC_AUTH)
+
+upload: archive ## Archive + upload straight to App Store Connect (TestFlight)
+	@test -n "$(ASC_KEY_ID)" && test -n "$(ASC_ISSUER_ID)" || { echo "ASC_KEY_ID / ASC_ISSUER_ID are required for upload"; exit 1; }
+	xcodebuild -exportArchive -archivePath $(ARCHIVE) \
+		-exportOptionsPlist ExportOptionsUpload.plist -exportPath build/upload $(ASC_AUTH)
 
 clean:
 	rm -rf InfraAuth.xcodeproj build DerivedData
