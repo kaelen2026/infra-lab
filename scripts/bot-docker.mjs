@@ -1,8 +1,9 @@
-// Build and run @infra/bot in Docker.  `pnpm run bot`
+// Build and run @infra/bot in Docker.  `pnpm bot:up` / `pnpm bot:down`
 //
-// Always rebuilds the image (so it runs the current code), then runs the container
-// in the foreground (Ctrl-C stops it; --rm cleans up). The bot is a pure outbound
+// `up` (default): always rebuilds the image (so it runs the current code), then runs the
+// container in the foreground (Ctrl-C stops it; --rm cleans up). The bot is a pure outbound
 // long-connection service — no ports.
+// `down`: stops the running container from another terminal (--rm then removes it).
 //
 // Config comes from apps/bot/.env via --env-file. The App private key needs to be
 // INSIDE the container: if apps/bot/.env sets INFRA_LAB_BOT_PRIVATE_KEY_PATH to a host
@@ -11,7 +12,7 @@
 // pass the key inline via INFRA_LAB_BOT_PRIVATE_KEY, no mount is needed.
 //
 // Slow / blocked npm registry (e.g. in China): set NPM_REGISTRY to a mirror, e.g.
-//   NPM_REGISTRY=https://registry.npmmirror.com pnpm run bot
+//   NPM_REGISTRY=https://registry.npmmirror.com pnpm bot:up
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -22,6 +23,13 @@ const envFile = resolve(repoRoot, "apps/bot/.env");
 const IMAGE = "infra-bot";
 const CONTAINER = "infra-bot";
 const KEY_MOUNT_TARGET = "/run/secrets/bot-key.pem";
+
+// `pnpm bot:down`：优雅停掉容器（SIGTERM；--rm 随后自动清理）。不需要 .env，所以在校验之前处理。
+if (process.argv[2] === "down") {
+  const status = docker(["stop", CONTAINER], { fatal: false });
+  if (status !== 0) console.log(`ℹ 容器 ${CONTAINER} 不在运行，无需停止。`);
+  process.exit(0);
+}
 
 if (!existsSync(envFile)) {
   console.error(`✗ 缺少 ${envFile}\n  先 cp apps/bot/.env.example apps/bot/.env 并填好凭证。`);
