@@ -65,12 +65,13 @@ export function createUserRepository(db: Db): UserRepository {
     },
 
     async recordLoginEvent(event: {
-      userId: string;
+      userId: string | null;
       phone: string;
       platform: Platform;
       ip: string;
       deviceId?: string;
       success: boolean;
+      reason?: string;
     }) {
       await db.insert(loginEvent).values({
         id: randomUUID(),
@@ -79,6 +80,7 @@ export function createUserRepository(db: Db): UserRepository {
         platform: event.platform,
         ip: event.ip,
         success: event.success,
+        reason: event.reason ?? null,
       });
     },
 
@@ -112,6 +114,7 @@ export function createUserRepository(db: Db): UserRepository {
         platform: r.platform,
         ip: r.ip,
         success: r.success,
+        reason: r.reason,
         createdAt: r.createdAt.toISOString(),
       }));
     },

@@ -1,7 +1,10 @@
 import { createOtpService } from "@infra/auth";
 import { FakeRedis } from "@infra/auth/testing";
 import type { AuthTokens, DeviceInfo, Platform } from "@infra/shared";
+import { Hono } from "hono";
 import { describe, expect, it } from "vitest";
+import { createLogger } from "../src/observability/logger.js";
+import { type ObsEnv, observability } from "../src/observability/middleware.js";
 import {
   createAuthRoutes,
   type SessionContext,
@@ -20,7 +23,13 @@ const readJson = (res: Response): Promise<any> => res.json() as Promise<any>;
 class FakeUserRepository implements UserRepository {
   users = new Map<string, UserRecord>();
   devices: Array<{ userId: string; device: DeviceInfo }> = [];
-  events: Array<{ userId: string; platform: Platform; success: boolean }> = [];
+  events: Array<{
+    userId: string | null;
+    phone: string;
+    platform: Platform;
+    success: boolean;
+    reason?: string;
+  }> = [];
   private seq = 0;
 
   async findByPhone(phone: string): Promise<UserRecord | null> {
@@ -42,14 +51,21 @@ class FakeUserRepository implements UserRepository {
     this.devices.push({ userId, device });
   }
   async recordLoginEvent(e: {
-    userId: string;
+    userId: string | null;
     phone: string;
     platform: Platform;
     ip: string;
     deviceId?: string;
     success: boolean;
+    reason?: string;
   }): Promise<void> {
-    this.events.push({ userId: e.userId, platform: e.platform, success: e.success });
+    this.events.push({
+      userId: e.userId,
+      phone: e.phone,
+      platform: e.platform,
+      success: e.success,
+      reason: e.reason,
+    });
   }
   async listDevices(userId: string) {
     return this.devices
@@ -73,6 +89,7 @@ class FakeUserRepository implements UserRepository {
         platform: e.platform,
         ip: null,
         success: e.success,
+        reason: e.reason ?? null,
         createdAt: "2026-06-30T00:00:00.000Z",
       }));
   }
@@ -133,7 +150,7 @@ function setup() {
   const users = new FakeUserRepository();
   const sessions = new FakeSessionService();
   const sentSms: Array<{ phone: string; code: string }> = [];
-  const app = createAuthRoutes({
+  const routes = createAuthRoutes({
     otp,
     users,
     sessions,
@@ -142,6 +159,11 @@ function setup() {
     },
     config: { debugReturnCode: false },
   });
+  // Mount behind the observability middleware, exactly as server.ts does, so handlers
+  // can read the request-scoped logger (`c.get("log")`). Quiet level keeps test output clean.
+  const app = new Hono<ObsEnv>();
+  app.use("*", observability(createLogger({ level: "error" })));
+  app.route("/", routes);
   return { app, store, otp, users, sessions, sentSms };
 }
 
@@ -265,6 +287,53 @@ describe("POST /auth/otp/verify — failure paths", () => {
     expect(body.remainingAttempts).toBe(4);
   });
 
+  it("audits a failed attempt with success:false + reason (unknown phone → null userId)", async () => {
+    const { app, sentSms, users } = setup();
+    await getCode(sentSms, app);
+    await post(app, "/auth/otp/verify", { phone: PHONE, code: "000000", platform: "web" });
+    // A brand-new phone has no user yet: the failure is audited keyed on phone.
+    expect(users.events.at(-1)).toMatchObject({
+      success: false,
+      reason: "INVALID_CODE",
+      phone: PHONE,
+      userId: null,
+      platform: "web",
+    });
+  });
+
+  it("audits a failed attempt against an existing account with its userId", async () => {
+    const { app, store, sentSms, users } = setup();
+    // First, register the phone via a successful login.
+    const code = await getCode(sentSms, app);
+    await post(app, "/auth/otp/verify", { phone: PHONE, code, platform: "web" });
+    const user = await users.findByPhone(PHONE);
+    expect(user).not.toBeNull();
+
+    // Then a wrong code: the failure event carries the existing user's id + reason.
+    store.advance(60);
+    await getCode(sentSms, app);
+    await post(app, "/auth/otp/verify", { phone: PHONE, code: "000000", platform: "web" });
+    expect(users.events.at(-1)).toMatchObject({
+      success: false,
+      reason: "INVALID_CODE",
+      userId: user?.id,
+    });
+  });
+
+  it("does not audit a CODE_EXPIRED miss (no unauthenticated, unbounded DB write)", async () => {
+    const { app, sentSms, users } = setup();
+    const code = await getCode(sentSms, app);
+    await post(app, "/auth/otp/verify", { phone: PHONE, code, platform: "web" });
+    const before = users.events.length;
+    // CODE_EXPIRED returns before any attempt counter increments and can never lock the
+    // phone; with no per-IP rate limit on /auth/otp/verify, auditing it would be an
+    // unbounded write amplification. Replaying the now-consumed code must write nothing.
+    const res = await post(app, "/auth/otp/verify", { phone: PHONE, code, platform: "web" });
+    expect((await readJson(res)).code).toBe("CODE_EXPIRED");
+    expect(users.events.length).toBe(before);
+    expect(users.events.every((e) => e.reason !== "CODE_EXPIRED")).toBe(true);
+  });
+
   it("locks the phone after 5 wrong codes (423 LOCKED)", async () => {
     const { app, sentSms } = setup();
     await getCode(sentSms, app);
@@ -274,6 +343,42 @@ describe("POST /auth/otp/verify — failure paths", () => {
     }
     expect(res.status).toBe(423);
     expect((await readJson(res)).code).toBe("LOCKED");
+  });
+
+  it("audits the lock-tripping guess exactly once, not repeat LOCKED hits (bounded, no DoS)", async () => {
+    const { app, sentSms, users } = setup();
+    await getCode(sentSms, app);
+    // Drive the phone into a locked state, then keep hammering it while locked.
+    for (let i = 0; i < 8; i++) {
+      await post(app, "/auth/otp/verify", { phone: PHONE, code: "111111", platform: "web" });
+    }
+    // The 5 code-verifying guesses are audited: 4× INVALID_CODE + the 5th that trips
+    // the lock (reason LOCKED, the brute-force signal). Every already-locked hit after
+    // that short-circuits from Redis and writes nothing, so the total is bounded by the
+    // per-code quota — no per-request DB amplification.
+    const lockedEvents = users.events.filter((e) => e.reason === "LOCKED");
+    expect(lockedEvents.length).toBe(1);
+    expect(users.events.every((e) => e.reason === "INVALID_CODE" || e.reason === "LOCKED")).toBe(
+      true,
+    );
+    expect(users.events.length).toBeLessThanOrEqual(5);
+  });
+
+  it("still returns the auth error when the audit write fails (no coupling to Postgres)", async () => {
+    const { app, sentSms, users } = setup();
+    await getCode(sentSms, app);
+    // Simulate a transient Postgres outage on the audit write.
+    users.recordLoginEvent = async () => {
+      throw new Error("db down");
+    };
+    const res = await post(app, "/auth/otp/verify", {
+      phone: PHONE,
+      code: "000000",
+      platform: "web",
+    });
+    // The failed verification must still surface as 401 INVALID_CODE, not a 500.
+    expect(res.status).toBe(401);
+    expect((await readJson(res)).code).toBe("INVALID_CODE");
   });
 
   it("accepts a correct code only once (replay rejected)", async () => {

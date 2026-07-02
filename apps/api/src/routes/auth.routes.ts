@@ -14,6 +14,7 @@ import {
 } from "@infra/shared";
 import { type Context, Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
+import type { ObsEnv } from "../observability/middleware.js";
 
 // ── Ports the routes depend on (implemented in src/services with db + better-auth) ──
 export interface UserRecord {
@@ -30,12 +31,15 @@ export interface UserRepository {
   createWithProfile(phone: string): Promise<UserRecord>;
   recordDevice(userId: string, device: DeviceInfo): Promise<void>;
   recordLoginEvent(event: {
-    userId: string;
+    /** `null` for failed attempts on a phone with no existing account. */
+    userId: string | null;
     phone: string;
     platform: Platform;
     ip: string;
     deviceId?: string;
     success: boolean;
+    /** Auth error code for failed attempts (INVALID_CODE / LOCKED / CODE_EXPIRED). */
+    reason?: string;
   }): Promise<void>;
   /** Registered devices for the account dashboard, most-recently-seen first. */
   listDevices(userId: string): Promise<DeviceDTO[]>;
@@ -136,10 +140,10 @@ function toAuthUser(user: UserRecord, isNew: boolean): AuthUser {
   };
 }
 
-export function createAuthRoutes(deps: AuthRouteDeps): Hono {
+export function createAuthRoutes(deps: AuthRouteDeps): Hono<ObsEnv> {
   const { otp, users, sessions, sms, config } = deps;
   const trustedProxyCount = config.trustedProxyCount ?? 0;
-  const app = new Hono();
+  const app = new Hono<ObsEnv>();
 
   const fail = (c: Context, code: AuthErrorCode, extra: Record<string, unknown> = {}) =>
     c.json({ ok: false, code, ...extra }, ERROR_STATUS[code]);
@@ -181,6 +185,42 @@ export function createAuthRoutes(deps: AuthRouteDeps): Hono {
 
     const result = await otp.verifyCode({ phone, code });
     if (!result.ok) {
+      // Audit the two attempts that carry a brute-force signal AND are bounded by the
+      // per-code 5-attempt cap (otp.ts): a wrong guess (INVALID_CODE), and the wrong
+      // guess that trips the lock (LOCKED with justLocked). Everything else is skipped
+      // because /auth/otp/verify has no per-IP / global rate limit:
+      //   • CODE_EXPIRED returns before the attempt counter increments (otp.ts) for a
+      //     phone with no live code — an unauthenticated caller can hit it with any
+      //     phone+code and never trigger a lock, so auditing it is an unbounded DB write.
+      //   • an already-LOCKED phone returns straight from Redis with zero DB access; only
+      //     the one lock-tripping guess (justLocked) is audited, so repeat LOCKED hits
+      //     stay noise a caller cannot hammer to flood login_event / Postgres.
+      // A brand-new phone has no user row yet, so userId is null and the event is keyed on
+      // phone (login_event_phone_idx). The plaintext code is never recorded — only
+      // phone / ip / platform / reason.
+      const auditable =
+        result.error === "INVALID_CODE" ||
+        (result.error === "LOCKED" && result.justLocked === true);
+      if (auditable) {
+        try {
+          const existing = await users.findByPhone(phone);
+          await users.recordLoginEvent({
+            userId: existing?.id ?? null,
+            phone,
+            platform,
+            ip,
+            deviceId: device?.deviceId,
+            success: false,
+            reason: result.error,
+          });
+        } catch (err) {
+          // Auditing is best-effort: a transient Postgres outage must not turn a 401/423
+          // (which only needs Redis) into a 500. Log and return the real auth error.
+          c.get("log").warn("failed to audit login attempt", {
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
       const extra =
         result.error === "INVALID_CODE"
           ? { remainingAttempts: result.remainingAttempts }
