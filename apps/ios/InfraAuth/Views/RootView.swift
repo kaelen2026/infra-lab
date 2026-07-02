@@ -48,6 +48,8 @@ struct RootView: View {
     }
 }
 
+#if DEBUG
 #Preview("Phone") {
     RootView().environmentObject(AuthViewModel(client: PreviewAuthClient()))
 }
+#endif
