@@ -35,8 +35,10 @@ enum DeviceMetadata {
         )
     }
 
+    /// The stable per-install id used both as the `device` row key and the push-token
+    /// update target, so a token reported after login lands on the row created at verify.
     @MainActor
-    private static func stableDeviceId() -> String {
+    static func stableDeviceId() -> String {
         if let stored = UserDefaults.standard.string(forKey: deviceIdKey) {
             return stored
         }

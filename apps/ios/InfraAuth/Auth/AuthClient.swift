@@ -11,6 +11,8 @@ protocol AuthClient {
     func me() async throws -> AuthUser
     /// Registered client installs for the current user (account dashboard).
     func listDevices() async throws -> [DeviceDTO]
+    /// Update this device's APNS push token (acquired asynchronously after login).
+    func updatePushToken(deviceId: String, pushToken: String) async throws
     /// Recent OTP verification attempts for the current user (account dashboard).
     func listLoginEvents() async throws -> [LoginEventDTO]
     func logout() async throws
@@ -64,6 +66,11 @@ final class HTTPAuthClient: AuthClient {
         let res: DevicesResponse = try await send(AuthRoutes.devices, method: "GET",
                                                   body: Optional<RefreshInput>.none)
         return res.devices
+    }
+
+    func updatePushToken(deviceId: String, pushToken: String) async throws {
+        let input = UpdatePushTokenInput(deviceId: deviceId, pushToken: pushToken)
+        let _: OkResponse = try await send(AuthRoutes.pushToken, method: "POST", body: input)
     }
 
     func listLoginEvents() async throws -> [LoginEventDTO] {

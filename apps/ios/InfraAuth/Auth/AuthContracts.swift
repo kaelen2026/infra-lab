@@ -133,6 +133,12 @@ struct RefreshResponse: Decodable {
     let tokens: AuthTokens
 }
 
+/// Update this device's APNS push token after login. Mirrors `updatePushTokenSchema`.
+struct UpdatePushTokenInput: Encodable {
+    let deviceId: String
+    let pushToken: String
+}
+
 struct MeResponse: Decodable {
     let ok: Bool
     let user: AuthUser
@@ -180,5 +186,6 @@ enum AuthRoutes {
     static let logout = "/auth/logout"
     static let me = "/auth/me"
     static let devices = "/auth/devices"
+    static let pushToken = "/auth/devices/push-token"
     static let loginEvents = "/auth/login-events"
 }

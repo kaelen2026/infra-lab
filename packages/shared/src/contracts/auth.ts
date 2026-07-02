@@ -98,6 +98,22 @@ export const verifyOtpSchema = z.object({
 });
 export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
 
+// ── Request: update a device's push token ───────────────────────────────────────
+// A native install acquires its APNS/FCM/HMS push token asynchronously — usually
+// after login, and it can rotate independently of the session. This endpoint lets an
+// already-authenticated client refresh the token on its own `device` row (matched by
+// the same stable `deviceId` it sent at verify time). Never carries a secret; the
+// token is an opaque, device-scoped push address.
+export const updatePushTokenSchema = z.object({
+  deviceId: z.string().trim().min(1).max(128),
+  pushToken: z.string().trim().min(1).max(512),
+});
+export type UpdatePushTokenInput = z.infer<typeof updatePushTokenSchema>;
+
+export interface UpdatePushTokenResponse {
+  ok: true;
+}
+
 export interface AuthUser {
   id: string;
   phone: string;
@@ -185,6 +201,7 @@ export const AUTH_ROUTES = {
   logout: "/auth/logout",
   me: "/auth/me",
   devices: "/auth/devices",
+  pushToken: "/auth/devices/push-token",
   loginEvents: "/auth/login-events",
 } as const;
 

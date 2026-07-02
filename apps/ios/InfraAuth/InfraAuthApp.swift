@@ -5,6 +5,9 @@ import SwiftUI
 /// the auth, account and todo view models.
 @main
 struct InfraAuthApp: App {
+    // Bridges APNS remote-notification callbacks into PushRegistration.
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
     @StateObject private var auth: AuthViewModel
     @StateObject private var account: AccountViewModel
     @StateObject private var todos: TodoViewModel
@@ -17,6 +20,13 @@ struct InfraAuthApp: App {
         _auth = StateObject(wrappedValue: AuthViewModel(client: authClient))
         _account = StateObject(wrappedValue: AccountViewModel(client: authClient))
         _todos = StateObject(wrappedValue: TodoViewModel(client: todoClient))
+
+        // Ship any fresh APNS token to the API. Pre-login the request is unauthorized
+        // and the update is a server-side no-op; post-login it updates this device row.
+        PushRegistration.shared.onToken { token in
+            let deviceId = await DeviceMetadata.stableDeviceId()
+            try? await authClient.updatePushToken(deviceId: deviceId, pushToken: token)
+        }
     }
 
     var body: some Scene {

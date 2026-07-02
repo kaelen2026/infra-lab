@@ -10,7 +10,7 @@
 // NEVER log a parsed value — zod issue messages carry the var name and constraint,
 // never the input, so throwing `error.issues` is safe. Do not add value echoing.
 
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { z } from "zod";
 
@@ -48,6 +48,20 @@ const CoreEnvSchema = z
     // the XFF list (see `clientIp` in auth.routes.ts). Default 0 = XFF is untrusted,
     // so a directly-reachable API cannot be spoofed into trusting a client-set header.
     TRUSTED_PROXY_COUNT: z.coerce.number().int().min(0).default(0),
+    // ── APNS (Apple Push Notification service), all optional ──────────────────────
+    // Token-based (.p8) provider auth for pushing to the iOS client. All five are
+    // optional so the API boots without push configured (`apnsConfigFromEnv` returns
+    // null → push is simply disabled). When ANY is set, the superRefine below requires
+    // the full set, so a half-configured provider fails fast instead of at send time.
+    // APNS_PRIVATE_KEY holds the .p8 PEM inline (\n-escaped); APNS_PRIVATE_KEY_PATH
+    // points at the file instead. Never logged. See services/apns-client.ts.
+    APNS_KEY_ID: optionalNonEmpty,
+    APNS_TEAM_ID: optionalNonEmpty,
+    APNS_BUNDLE_ID: optionalNonEmpty,
+    APNS_PRIVATE_KEY: optionalNonEmpty,
+    APNS_PRIVATE_KEY_PATH: optionalNonEmpty,
+    // Which APNS host to hit: true → api.push.apple.com, false (default) → sandbox.
+    APNS_PRODUCTION: envFlag.default(false),
   })
   .superRefine((e, ctx) => {
     // Hard production guardrail: OTP_DEBUG_RETURN_CODE echoes the code into responses
@@ -105,6 +119,40 @@ const CoreEnvSchema = z
         });
       }
     }
+    // APNS all-or-nothing: push is opt-in (all unset ⇒ disabled), but a partial config
+    // is a deployment mistake — one missing var means every send fails with a confusing
+    // 4xx from Apple. Require the full set as soon as any APNS var is present, and
+    // require exactly one private-key source (inline OR path, not both/neither).
+    const apnsFields = [e.APNS_KEY_ID, e.APNS_TEAM_ID, e.APNS_BUNDLE_ID];
+    const apnsKeySources = [e.APNS_PRIVATE_KEY, e.APNS_PRIVATE_KEY_PATH];
+    const apnsTouched = [...apnsFields, ...apnsKeySources].some((v) => v !== undefined);
+    if (apnsTouched) {
+      if (e.APNS_KEY_ID === undefined)
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["APNS_KEY_ID"],
+          message: "required when any APNS_* is set",
+        });
+      if (e.APNS_TEAM_ID === undefined)
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["APNS_TEAM_ID"],
+          message: "required when any APNS_* is set",
+        });
+      if (e.APNS_BUNDLE_ID === undefined)
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["APNS_BUNDLE_ID"],
+          message: "required when any APNS_* is set",
+        });
+      if (apnsKeySources.filter((v) => v !== undefined).length !== 1)
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["APNS_PRIVATE_KEY"],
+          message:
+            "set exactly one of APNS_PRIVATE_KEY (inline .p8) or APNS_PRIVATE_KEY_PATH (file)",
+        });
+    }
   })
   .transform((e) => {
     // Allowlist for both hono CORS and Better Auth: BETTER_AUTH_URL (the web/auth origin,
@@ -148,6 +196,44 @@ function loadRootEnvFile(): void {
       return;
     }
   }
+}
+
+/** Fully-resolved APNS provider credentials (private key already loaded to PEM). */
+export interface ApnsEnvConfig {
+  keyId: string;
+  teamId: string;
+  bundleId: string;
+  /** .p8 private key PEM contents. Never logged. */
+  privateKey: string;
+  /** true → api.push.apple.com; false → api.sandbox.push.apple.com. */
+  production: boolean;
+}
+
+/** Resolve the .p8 private key from the inline var (\n-escaped) or the file path. */
+function resolveApnsPrivateKey(env: CoreEnv): string | undefined {
+  const inline = env.APNS_PRIVATE_KEY;
+  if (inline) return inline.includes("\\n") ? inline.replace(/\\n/g, "\n") : inline;
+  const path = env.APNS_PRIVATE_KEY_PATH;
+  if (path) return readFileSync(path, "utf8");
+  return undefined;
+}
+
+/**
+ * Build APNS provider config from validated env, or `null` when push is not
+ * configured (no APNS_* set). The schema's superRefine guarantees that a non-null
+ * result has every field present, so callers get all-or-nothing.
+ */
+export function apnsConfigFromEnv(env: CoreEnv): ApnsEnvConfig | null {
+  if (!env.APNS_KEY_ID || !env.APNS_TEAM_ID || !env.APNS_BUNDLE_ID) return null;
+  const privateKey = resolveApnsPrivateKey(env);
+  if (!privateKey) return null;
+  return {
+    keyId: env.APNS_KEY_ID,
+    teamId: env.APNS_TEAM_ID,
+    bundleId: env.APNS_BUNDLE_ID,
+    privateKey,
+    production: env.APNS_PRODUCTION,
+  };
 }
 
 let cached: CoreEnv | undefined;
