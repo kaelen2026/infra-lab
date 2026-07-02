@@ -19,6 +19,9 @@ const DAY = 60 * 60 * 24;
 // Load + validate the core env bucket once, fail-fast. See @infra/env/core.
 const env = loadCoreEnv();
 const baseURL = env.BETTER_AUTH_URL;
+// Origins allowed to call this API cross-origin with credentials: the web/auth origin
+// plus any extras (e.g. h5 on :3002). See TRUSTED_ORIGINS in @infra/env/core.
+const trustedOrigins = env.TRUSTED_ORIGINS;
 
 const db = createDb(env.DATABASE_URL);
 const redis = createRedis(env.REDIS_URL);
@@ -27,7 +30,7 @@ const auth = createAuth({
   schema,
   secret: env.BETTER_AUTH_SECRET,
   baseURL,
-  trustedOrigins: [baseURL],
+  trustedOrigins,
   cookie: { secure: env.COOKIE_SECURE, domain: env.COOKIE_DOMAIN },
 });
 
@@ -57,9 +60,10 @@ const app = new Hono<ObsEnv>();
 // First middleware: assign a request id, attach a request-scoped logger, and
 // emit one structured access-log line per request.
 app.use("*", observability(log));
-// Browser clients (web) call this API cross-origin and must send the session cookie,
-// so credentials are allowed and the origin is reflected from the configured web origin.
-app.use("*", cors({ origin: baseURL, credentials: true }));
+// Browser clients (web on :3000, h5 on :3002) call this API cross-origin and must send
+// the session cookie, so credentials are allowed and the request origin is reflected when
+// it is in the trusted allowlist (a fixed list, never "*", since credentials are enabled).
+app.use("*", cors({ origin: trustedOrigins, credentials: true }));
 
 // Liveness: process is up. Cheap, no dependency calls — safe for a tight probe.
 app.get("/health", (c) => c.json({ ok: true }));

@@ -18,6 +18,23 @@ describe("parseCoreEnv", () => {
     expect(env.PORT).toBe(3001);
   });
 
+  it("builds TRUSTED_ORIGINS = BETTER_AUTH_URL + extras (deduped, trimmed)", () => {
+    // default: web origin + the h5 dev origin
+    expect(parseCoreEnv(base).TRUSTED_ORIGINS).toEqual([
+      "http://localhost:3000",
+      "http://localhost:3002",
+    ]);
+    // explicit comma-separated extras are trimmed and appended
+    expect(
+      parseCoreEnv({ ...base, TRUSTED_ORIGINS: "https://a.example , https://b.example" })
+        .TRUSTED_ORIGINS,
+    ).toEqual(["http://localhost:3000", "https://a.example", "https://b.example"]);
+    // an extra equal to BETTER_AUTH_URL is deduped
+    expect(
+      parseCoreEnv({ ...base, TRUSTED_ORIGINS: "http://localhost:3000" }).TRUSTED_ORIGINS,
+    ).toEqual(["http://localhost:3000"]);
+  });
+
   it("defaults BETTER_AUTH_SECRET to OTP_SECRET when unset or empty", () => {
     expect(parseCoreEnv(base).BETTER_AUTH_SECRET).toBe(base.OTP_SECRET);
     expect(parseCoreEnv({ ...base, BETTER_AUTH_SECRET: "" }).BETTER_AUTH_SECRET).toBe(
