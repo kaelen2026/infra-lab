@@ -2,7 +2,7 @@
 // 「飞书 @ → 派发 workflow → 结果回到飞书」这条链路。
 //
 // 由 .github/workflows/infra-lab-bot.yml 在 claude-code-action 之后调用（仅
-// workflow_dispatch 且带 feishu_message_id 时）。零依赖，用 Node 全局 fetch。
+// workflow_dispatch 且带 feishu_message_id 时）。零第三方依赖，用 Node 全局 fetch。
 //
 // 读取环境变量：
 //   LARK_APP_ID / LARK_APP_SECRET  飞书应用凭证（换 tenant_access_token）
@@ -14,6 +14,7 @@
 
 import { readFileSync } from "node:fs";
 
+import { extractResultText, isSwallowedResume, parseMessages } from "./execution-result.mjs";
 import { linkifyGitHubRefs } from "./feishu-format.mjs";
 
 const appId = process.env.LARK_APP_ID;
@@ -39,56 +40,18 @@ const base =
 // 飞书 markdown 卡片单元素内容偏大时会被网关拒绝；截断到安全长度，尾部始终附运行链接。
 const MAX_BODY_CHARS = 4000;
 
-/** 从 claude-code-action 的 execution_file 里取最终回答文本。数组 / JSONL 两种落盘格式都兼容。 */
-function extractResultText(raw) {
-  let messages = null;
-  try {
-    const parsed = JSON.parse(raw);
-    messages = Array.isArray(parsed) ? parsed : [parsed];
-  } catch {
-    messages = raw
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line) => {
-        try {
-          return JSON.parse(line);
-        } catch {
-          return null;
-        }
-      })
-      .filter(Boolean);
-  }
-  if (!Array.isArray(messages) || messages.length === 0) return null;
-
-  // 优先取 stream-json 的最终 result 消息（{ type: "result", result: "<text>" }）。
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const m = messages[i];
-    if (m && m.type === "result" && typeof m.result === "string" && m.result.trim()) {
-      return m.result.trim();
-    }
-  }
-  // 兜底：最后一条 assistant 消息的 text 内容。
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const m = messages[i];
-    const content = m?.message?.content ?? m?.content;
-    if (m?.type === "assistant" && Array.isArray(content)) {
-      const text = content
-        .filter((c) => c?.type === "text" && typeof c.text === "string")
-        .map((c) => c.text)
-        .join("\n")
-        .trim();
-      if (text) return text;
-    }
-  }
-  return null;
-}
+// resume 被上一轮遗留的后台任务通知吞掉（isSwallowedResume）时的可操作提示：
+// 这种运行没有跑用户的消息，重发一次即可正常执行（遗留通知已被本次运行消费）。
+const SWALLOWED_RESUME_NOTICE =
+  "上一轮遗留的后台任务通知占用了这次运行，你这条消息还没有被处理。" +
+  "遗留状态已随本次运行清理，把刚才那条消息原样重发一次即可。";
 
 function buildBody() {
   let text = null;
   if (executionFile) {
     try {
-      text = extractResultText(readFileSync(executionFile, "utf8"));
+      const messages = parseMessages(readFileSync(executionFile, "utf8"));
+      text = isSwallowedResume(messages) ? SWALLOWED_RESUME_NOTICE : extractResultText(messages);
     } catch (err) {
       console.warn(
         `[feishu-reply] 读取 execution_file 失败：${err instanceof Error ? err.message : err}`,
