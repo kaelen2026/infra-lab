@@ -6,7 +6,10 @@ import UIKit
 /// `API_BASE_URL` entry in Info.plist for staging/prod builds.
 enum AppConfig {
     static let apiBaseURL: URL = {
+        // The key is always present (build-setting substitution); an unset
+        // API_URL leaves it empty, which must fall through to localhost.
         if let raw = Bundle.main.object(forInfoDictionaryKey: "API_BASE_URL") as? String,
+           !raw.isEmpty,
            let url = URL(string: raw) {
             return url
         }
