@@ -48,6 +48,8 @@ export interface AuthRoutes {
   refresh: string;
   logout: string;
   me: string;
+  devices: string;
+  loginEvents: string;
 }
 
 /** Endpoint paths — never hard-code strings elsewhere. */
@@ -57,6 +59,8 @@ export const AUTH_ROUTES: AuthRoutes = {
   refresh: "/auth/refresh",
   logout: "/auth/logout",
   me: "/auth/me",
+  devices: "/auth/devices",
+  loginEvents: "/auth/login-events",
 };
 
 export interface DeviceInfo {
@@ -127,6 +131,39 @@ export interface RefreshResponse {
 export interface MeResponse {
   ok: boolean;
   user: AuthUser;
+}
+
+/** A registered client install for the current user (account dashboard). */
+export interface DeviceDTO {
+  id: string;
+  platform: Platform;
+  deviceId: string;
+  model: string | null;
+  osVersion: string | null;
+  appVersion: string | null;
+  lastSeenAt: string;
+  createdAt: string;
+}
+
+export interface DevicesResponse {
+  ok: boolean;
+  devices: DeviceDTO[];
+}
+
+/** A single OTP verification attempt in the audit trail. */
+export interface LoginEventDTO {
+  id: string;
+  platform: Platform;
+  ip: string | null;
+  success: boolean;
+  /** Failure reason (auth error code) for `success: false`; `null` on success. */
+  reason: string | null;
+  createdAt: string;
+}
+
+export interface LoginEventsResponse {
+  ok: boolean;
+  events: LoginEventDTO[];
 }
 
 /** Error body shape returned by the API on non-2xx (mirrors AuthError). */

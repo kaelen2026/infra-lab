@@ -93,6 +93,7 @@ describe("todo routes — auth guard", () => {
       ["GET", "/todos", undefined],
       ["POST", "/todos", { title: "x" }],
       ["PATCH", "/todos/abc", { completed: true }],
+      ["PUT", "/todos/abc", { completed: true }],
       ["DELETE", "/todos/abc", undefined],
     ] as const) {
       const res = await req(app, method, path, body);
@@ -158,6 +159,16 @@ describe("todo CRUD lifecycle", () => {
     ).todo;
     expect(reopened.completed).toBe(false);
     expect(reopened.completedAt).toBeNull();
+  });
+
+  it("accepts PUT as an alias for PATCH (harmony has no PATCH method)", async () => {
+    const { app } = setup();
+    const { todo } = await readJson(await req(app, "POST", "/todos", { title: "x" }));
+    const put = await req(app, "PUT", `/todos/${todo.id}`, { completed: true });
+    expect(put.status).toBe(200);
+    const done = (await readJson(put)).todo;
+    expect(done.completed).toBe(true);
+    expect(done.completedAt).not.toBeNull();
   });
 });
 
