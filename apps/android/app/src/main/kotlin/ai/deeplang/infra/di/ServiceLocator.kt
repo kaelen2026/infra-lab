@@ -1,13 +1,15 @@
 package ai.deeplang.infra.di
 
-import android.content.Context
 import ai.deeplang.infra.BuildConfig
 import ai.deeplang.infra.data.AuthClient
 import ai.deeplang.infra.data.AuthClientImpl
 import ai.deeplang.infra.data.DeviceInfoProvider
+import ai.deeplang.infra.data.TodoClient
+import ai.deeplang.infra.data.TodoClientImpl
 import ai.deeplang.infra.data.net.NetworkModule
 import ai.deeplang.infra.data.token.EncryptedTokenStore
 import ai.deeplang.infra.data.token.TokenStore
+import android.content.Context
 
 /**
  * Tiny manual DI container — enough for a single-feature app, with no framework dependency.
@@ -16,6 +18,9 @@ import ai.deeplang.infra.data.token.TokenStore
 object ServiceLocator {
     @Volatile
     private var authClient: AuthClient? = null
+
+    @Volatile
+    private var todoClient: TodoClient? = null
 
     @Volatile
     private var tokenStore: TokenStore? = null
@@ -34,10 +39,14 @@ object ServiceLocator {
             tokenStore = tokens,
             device = DeviceInfoProvider(appContext),
         )
+        todoClient = TodoClientImpl(api = network.todoApi)
     }
 
     fun authClient(): AuthClient =
         authClient ?: error("ServiceLocator.init() must be called before authClient()")
+
+    fun todoClient(): TodoClient =
+        todoClient ?: error("ServiceLocator.init() must be called before todoClient()")
 
     fun tokenStore(): TokenStore =
         tokenStore ?: error("ServiceLocator.init() must be called before tokenStore()")

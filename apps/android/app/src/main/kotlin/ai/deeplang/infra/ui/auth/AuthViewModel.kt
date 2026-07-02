@@ -1,6 +1,8 @@
 package ai.deeplang.infra.ui.auth
 
 import ai.deeplang.infra.data.AuthClient
+import ai.deeplang.infra.data.AuthException
+import ai.deeplang.infra.data.contracts.AuthErrorCode
 import ai.deeplang.infra.data.contracts.OtpLimits
 import ai.deeplang.infra.di.ServiceLocator
 import androidx.lifecycle.ViewModel
@@ -24,6 +26,36 @@ class AuthViewModel(private val auth: AuthClient) : ViewModel() {
     val state: StateFlow<AuthUiState> = _state.asStateFlow()
 
     private var cooldownJob: Job? = null
+
+    /**
+     * Restore a session on launch: try `/auth/me`, refreshing once on 401. Mirrors the web
+     * `SessionProvider` mount effect and the iOS `bootstrap()`. Always clears [AuthUiState.restoring].
+     */
+    fun bootstrap() {
+        viewModelScope.launch {
+            runCatching { auth.me() }
+                .onSuccess { user -> _state.update { it.copy(user = user, step = AuthStep.DONE, restoring = false) } }
+                .onFailure { err ->
+                    if ((err as? AuthException)?.code == AuthErrorCode.UNAUTHORIZED) {
+                        restoreViaRefresh()
+                    } else {
+                        _state.update { it.copy(restoring = false) }
+                    }
+                }
+        }
+    }
+
+    private suspend fun restoreViaRefresh() {
+        val restored = runCatching {
+            if (auth.refresh() == null) null else auth.me()
+        }.getOrNull()
+        if (restored != null) {
+            _state.update { it.copy(user = restored, step = AuthStep.DONE, restoring = false) }
+        } else {
+            runCatching { auth.logout() }
+            _state.update { it.copy(restoring = false) }
+        }
+    }
 
     fun setPhone(value: String) = _state.update { it.copy(phone = OtpInput.normalizePhone(value)) }
 
@@ -54,17 +86,22 @@ class AuthViewModel(private val auth: AuthClient) : ViewModel() {
             _state.update { it.copy(busy = true, error = null) }
             runCatching { auth.verifyOtp(current.phone, current.code) }
                 .onSuccess { res ->
-                    _state.update {
-                        it.copy(
-                            busy = false,
-                            step = AuthStep.DONE,
-                            displayName = res.user.displayName ?: res.user.phone,
-                        )
-                    }
+                    _state.update { it.copy(busy = false, step = AuthStep.DONE, user = res.user) }
                 }
                 .onFailure { err ->
                     _state.update { it.copy(busy = false, error = AuthMessages.describe(err)) }
                 }
+        }
+    }
+
+    /** Clear the session (best-effort server revoke) and return to the phone step. */
+    fun logout() {
+        cooldownJob?.cancel()
+        viewModelScope.launch {
+            runCatching { auth.logout() }
+            _state.update {
+                AuthUiState(restoring = false)
+            }
         }
     }
 

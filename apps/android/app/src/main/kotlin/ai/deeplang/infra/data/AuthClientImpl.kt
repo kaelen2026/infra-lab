@@ -2,6 +2,8 @@ package ai.deeplang.infra.data
 
 import ai.deeplang.infra.data.contracts.AuthTokens
 import ai.deeplang.infra.data.contracts.AuthUser
+import ai.deeplang.infra.data.contracts.DeviceDTO
+import ai.deeplang.infra.data.contracts.LoginEventDTO
 import ai.deeplang.infra.data.contracts.Platform
 import ai.deeplang.infra.data.contracts.RefreshRequest
 import ai.deeplang.infra.data.contracts.RequestOtpRequest
@@ -54,6 +56,10 @@ class AuthClientImpl(
     }
 
     override suspend fun me(): AuthUser = unwrap(api.me()).user
+
+    override suspend fun listDevices(): List<DeviceDTO> = unwrap(api.devices()).devices
+
+    override suspend fun listLoginEvents(): List<LoginEventDTO> = unwrap(api.loginEvents()).events
 
     override suspend fun logout() {
         // Best-effort server revoke; always drop local tokens regardless of the outcome.

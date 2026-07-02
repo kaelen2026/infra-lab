@@ -1,5 +1,7 @@
 package ai.deeplang.infra.data.remote
 
+import ai.deeplang.infra.data.contracts.DevicesResponse
+import ai.deeplang.infra.data.contracts.LoginEventsResponse
 import ai.deeplang.infra.data.contracts.MeResponse
 import ai.deeplang.infra.data.contracts.RefreshRequest
 import ai.deeplang.infra.data.contracts.RefreshResponse
@@ -32,6 +34,12 @@ interface AuthApi {
 
     @GET("/auth/me")
     suspend fun me(): Response<MeResponse>
+
+    @GET("/auth/devices")
+    suspend fun devices(): Response<DevicesResponse>
+
+    @GET("/auth/login-events")
+    suspend fun loginEvents(): Response<LoginEventsResponse>
 }
 
 /**

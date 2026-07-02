@@ -1,5 +1,7 @@
 package ai.deeplang.infra.ui.auth
 
+import ai.deeplang.infra.data.contracts.AuthUser
+
 /** The three-step OTP flow, matching the web auth page. */
 enum class AuthStep { PHONE, CODE, DONE }
 
@@ -15,10 +17,15 @@ data class AuthUiState(
     val error: String? = null,
     /** Seconds left before the code may be resent (0 ⇒ allowed). */
     val cooldown: Int = 0,
-    /** Resolved name shown after a successful login. */
-    val displayName: String? = null,
+    /** The signed-in user once authenticated (drives the account dashboard). */
+    val user: AuthUser? = null,
+    /** True while the launch-time session restore is in flight. */
+    val restoring: Boolean = true,
 ) {
     val canSend: Boolean get() = !busy && OtpInput.canSend(phone)
     val canVerify: Boolean get() = !busy && OtpInput.canVerify(code)
     val canResend: Boolean get() = !busy && cooldown <= 0
+
+    /** Resolved name shown after a successful login (name, falling back to the phone). */
+    val displayName: String? get() = user?.let { it.displayName ?: it.phone }
 }
