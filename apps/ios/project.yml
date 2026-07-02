@@ -44,9 +44,19 @@ targets:
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+        # iPad multitasking requires all four orientations (ITMS-90474);
+        # the SwiftUI form adapts, so allow them all on iPad only.
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         # Dev convenience: allow cleartext HTTP to localhost (the API on :3001).
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
+        # Standard HTTPS only — exempt from export compliance, so TestFlight
+        # builds skip the per-build encryption questionnaire.
+        ITSAppUsesNonExemptEncryption: false
 
   InfraAuthTests:
     type: bundle.unit-test

@@ -66,3 +66,15 @@ the code step shows the returned code for convenience.
 
 The contracts here track `packages/shared/src/contracts/auth.ts` and
 `.../todo.ts` — update both together when a contract changes.
+
+## Release (TestFlight)
+
+```bash
+make ipa    TEAM_ID=<team> ASC_KEY_ID=<key> ASC_ISSUER_ID=<issuer>  # build/export/InfraAuth.ipa
+make upload TEAM_ID=<team> ASC_KEY_ID=<key> ASC_ISSUER_ID=<issuer>  # archive + upload to App Store Connect
+```
+
+Needs a **paid** Apple Developer Program team and an App Store Connect API key
+(`~/.appstoreconnect/private_keys/AuthKey_<KEY_ID>.p8`). Release signing is passed
+on the command line — the committed `project.yml` stays ad-hoc/simulator-only.
+Prerequisites and troubleshooting: [`.claude/skills/ios-testflight/SKILL.md`](../../.claude/skills/ios-testflight/SKILL.md).
