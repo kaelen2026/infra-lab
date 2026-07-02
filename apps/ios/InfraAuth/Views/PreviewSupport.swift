@@ -13,7 +13,20 @@ final class PreviewAuthClient: AuthClient {
 
     func refresh() async throws -> AuthTokens? { nil }
     func me() async throws -> AuthUser { .preview }
+    func listDevices() async throws -> [DeviceDTO] { [.preview] }
+    func listLoginEvents() async throws -> [LoginEventDTO] { [.previewSuccess, .previewFailure] }
     func logout() async throws {}
+}
+
+/// Canned ``TodoClient`` for SwiftUI previews — no network, deterministic data.
+final class PreviewTodoClient: TodoClient {
+    func list() async throws -> [TodoDTO] { [.preview(1, false), .preview(2, true)] }
+    func create(title: String) async throws -> TodoDTO { .preview(99, false, title: title) }
+    func update(id: String, patch: UpdateTodoInput) async throws -> TodoDTO {
+        .preview(1, patch.completed ?? false)
+    }
+    func toggle(id: String, completed: Bool) async throws -> TodoDTO { .preview(1, completed) }
+    func remove(id: String) async throws {}
 }
 
 extension AuthUser {
@@ -25,5 +38,34 @@ extension AuthUser {
         createdAt: "2026-06-30T00:00:00.000Z",
         isNew: true
     )
+}
+
+extension DeviceDTO {
+    static let preview = DeviceDTO(
+        id: "d1", platform: .ios, deviceId: "device-1", model: "iPhone",
+        osVersion: "17.0", appVersion: "0.1.0",
+        lastSeenAt: "2026-07-01T09:30:00.000Z", createdAt: "2026-06-30T00:00:00.000Z"
+    )
+}
+
+extension LoginEventDTO {
+    static let previewSuccess = LoginEventDTO(
+        id: "e1", platform: .ios, ip: "203.0.113.7", success: true,
+        createdAt: "2026-07-01T09:30:00.000Z"
+    )
+    static let previewFailure = LoginEventDTO(
+        id: "e2", platform: .web, ip: nil, success: false,
+        createdAt: "2026-06-30T22:10:00.000Z"
+    )
+}
+
+extension TodoDTO {
+    static func preview(_ n: Int, _ completed: Bool, title: String? = nil) -> TodoDTO {
+        TodoDTO(
+            id: "t\(n)", title: title ?? "示例待办 \(n)", completed: completed,
+            createdAt: "2026-07-01T09:30:00.000Z", updatedAt: "2026-07-01T09:30:00.000Z",
+            completedAt: completed ? "2026-07-01T10:00:00.000Z" : nil
+        )
+    }
 }
 #endif
