@@ -3,6 +3,7 @@ import { AuthErrorCode } from "../common/contracts";
 
 /** Canonical auth copy shared with web / ios / android. */
 export const BRAND: string = "infra-lab";
+export const TAGLINE: string = "手机号，一步登录";
 
 export const PHONE_TITLE: string = "手机号登录";
 export const PHONE_DESCRIPTION: string = "未注册的手机号将自动创建账号。";

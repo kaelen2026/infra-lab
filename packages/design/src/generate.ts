@@ -144,6 +144,7 @@ import Foundation
 /// Canonical auth copy shared with web / android / harmony.
 enum AuthCopy {
     static let brand = ${q(COPY.brand)}
+    static let tagline = ${q(COPY.tagline)}
 
     enum Phone {
         static let title = ${q(COPY.phone.title)}
@@ -199,6 +200,41 @@ ${errCases}
     }
 }
 `,
+  );
+
+  // Launch-window background as an asset-catalog color set. The iOS static launch
+  // screen (`UILaunchScreen` in project.yml) can only read an asset color, not the
+  // runtime `DesignTokens.swift` above, so the paper/charcoal background is emitted
+  // here to stay in lockstep with the palette (and under the CI drift gate).
+  const srgb = (role: keyof Palette, p: Palette) => {
+    const h = oklchToHex(p[role]).replace("#", "");
+    return {
+      "color-space": "srgb",
+      components: {
+        red: `0x${h.slice(0, 2)}`,
+        green: `0x${h.slice(2, 4)}`,
+        blue: `0x${h.slice(4, 6)}`,
+        alpha: "1.000",
+      },
+    };
+  };
+  write(
+    "apps/ios/InfraAuth/Assets.xcassets/LaunchBackground.colorset/Contents.json",
+    `${JSON.stringify(
+      {
+        colors: [
+          { color: srgb("background", light), idiom: "universal" },
+          {
+            appearances: [{ appearance: "luminosity", value: "dark" }],
+            color: srgb("background", dark),
+            idiom: "universal",
+          },
+        ],
+        info: { author: "@infra/design", version: 1 },
+      },
+      null,
+      2,
+    )}\n`,
   );
 }
 
@@ -274,6 +310,7 @@ import ai.deeplang.infra.data.contracts.AuthErrorCode
 /** Canonical auth copy shared with web / ios / harmony. */
 object AuthCopyGenerated {
     const val BRAND = ${q(COPY.brand)}
+    const val TAGLINE = ${q(COPY.tagline)}
 
     const val PHONE_TITLE = ${q(COPY.phone.title)}
     const val PHONE_DESCRIPTION = ${q(COPY.phone.description)}
@@ -353,6 +390,7 @@ import { AuthErrorCode } from "../common/contracts";
 
 /** Canonical auth copy shared with web / ios / android. */
 export const BRAND: string = ${q(COPY.brand)};
+export const TAGLINE: string = ${q(COPY.tagline)};
 
 export const PHONE_TITLE: string = ${q(COPY.phone.title)};
 export const PHONE_DESCRIPTION: string = ${q(COPY.phone.description)};

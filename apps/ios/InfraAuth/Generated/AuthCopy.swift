@@ -4,6 +4,7 @@ import Foundation
 /// Canonical auth copy shared with web / android / harmony.
 enum AuthCopy {
     static let brand = "infra-lab"
+    static let tagline = "手机号，一步登录"
 
     enum Phone {
         static let title = "手机号登录"

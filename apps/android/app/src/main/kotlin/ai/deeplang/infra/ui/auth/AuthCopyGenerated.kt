@@ -6,6 +6,7 @@ import ai.deeplang.infra.data.contracts.AuthErrorCode
 /** Canonical auth copy shared with web / ios / harmony. */
 object AuthCopyGenerated {
     const val BRAND = "infra-lab"
+    const val TAGLINE = "手机号，一步登录"
 
     const val PHONE_TITLE = "手机号登录"
     const val PHONE_DESCRIPTION = "未注册的手机号将自动创建账号。"
