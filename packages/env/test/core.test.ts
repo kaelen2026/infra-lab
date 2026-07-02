@@ -58,6 +58,19 @@ describe("parseCoreEnv", () => {
     );
   });
 
+  it("defaults and coerces the request-hardening knobs", () => {
+    const env = parseCoreEnv(base);
+    expect(env.MAX_REQUEST_BODY_BYTES).toBe(10 * 1024 * 1024);
+    expect(env.SLOW_REQUEST_MS).toBe(1000);
+    expect(parseCoreEnv({ ...base, MAX_REQUEST_BODY_BYTES: "2048" }).MAX_REQUEST_BODY_BYTES).toBe(
+      2048,
+    );
+    // 0 disables the slow-request escalation and is valid; the body limit must be positive.
+    expect(parseCoreEnv({ ...base, SLOW_REQUEST_MS: "0" }).SLOW_REQUEST_MS).toBe(0);
+    expect(() => parseCoreEnv({ ...base, MAX_REQUEST_BODY_BYTES: "0" })).toThrow();
+    expect(() => parseCoreEnv({ ...base, SLOW_REQUEST_MS: "-1" })).toThrow();
+  });
+
   it("coerces PORT to a number", () => {
     expect(parseCoreEnv({ ...base, PORT: "4000" }).PORT).toBe(4000);
   });
