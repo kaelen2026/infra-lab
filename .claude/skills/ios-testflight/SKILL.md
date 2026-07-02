@@ -18,11 +18,12 @@ credentials are injected on the `make` command line and **never committed**.
    from the release team).
 2. **App record in App Store Connect** for bundle id `ai.deeplang.infra.ios`
    (App Store Connect → Apps → New App). Upload fails without it.
-3. **App Store Connect API key** (role App Manager or Admin), downloaded once from
-   App Store Connect → Users and Access → Integrations. The `.p8` must sit at
-   `~/.appstoreconnect/private_keys/AuthKey_<KEY_ID>.p8` (override with
-   `ASC_KEY_PATH`). Check with `ls ~/.appstoreconnect/private_keys/` — never
-   `cat` the key or echo its contents.
+3. **App Store Connect API key with role Admin**, downloaded once from App Store
+   Connect → Users and Access → Integrations. An App Manager key is NOT enough:
+   cloud signing fails with "Cloud signing permission error" (seen 2026-07).
+   The `.p8` must sit at `~/.appstoreconnect/private_keys/AuthKey_<KEY_ID>.p8`
+   (override with `ASC_KEY_PATH`). Check with
+   `ls ~/.appstoreconnect/private_keys/` — never `cat` the key or echo its contents.
 4. Full Xcode (not just Command Line Tools: `xcode-select -p` should point into
    `Xcode.app`) and `xcodegen` (`brew install xcodegen`).
 5. An app icon in the asset catalog — App Store Connect rejects icon-less binaries
@@ -65,9 +66,18 @@ make upload TEAM_ID=<team> ASC_KEY_ID=<key> ASC_ISSUER_ID=<issuer>
 
 - **"Cannot create a iOS App Store provisioning profile" / personal team** —
   `TEAM_ID` is a free team; a paid Program membership is required.
-- **"No Accounts / No profiles for ai.deeplang.infra.ios"** — missing
+- **"Cloud signing permission error" (+ "No profiles for …" as fallout)** — the
+  API key's role is too low for cloud-managed distribution certs; recreate the
+  key with role **Admin**.
+- **"No Accounts / No profiles for ai.deeplang.infra.ios"** alone — missing
   `ASC_KEY_ID`/`ASC_ISSUER_ID`, so `-allowProvisioningUpdates` had no API key to
   do cloud signing with.
+- **ITMS-90474 (invalid bundle, orientations)** — iPhone+iPad apps must declare
+  all four orientations for iPad multitasking; fixed via
+  `UISupportedInterfaceOrientations~ipad` in `project.yml`.
+- **Release-only compile errors (e.g. missing `Preview*` symbols)** — code that
+  exists only under `#if DEBUG` referenced from an unguarded `#Preview`; guard
+  the preview too. Simulator Debug builds don't catch this.
 - **ITMS-90189 (redundant binary)** — that build number already exists; rely on
   `make upload`'s auto-bump or pass a higher `BUILD=<n>`.
 - **ITMS-90022 (missing icon)** — add an `AppIcon` (1024pt marketing icon
