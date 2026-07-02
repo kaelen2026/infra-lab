@@ -1,3 +1,6 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -14,6 +17,17 @@ detekt {
     autoCorrect = false
 }
 
+// Release signing (optional): if apps/android/keystore.properties exists, sign release
+// builds with it; otherwise fall back to the debug signing config so a release APK still
+// installs locally. keystore.properties and its .jks are gitignored — never commit signing
+// material. Expected keys: storeFile, storePassword, keyAlias, keyPassword.
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val hasReleaseKeystore = keystorePropertiesFile.exists()
+val keystoreProperties =
+    Properties().apply {
+        if (hasReleaseKeystore) FileInputStream(keystorePropertiesFile).use { load(it) }
+    }
+
 android {
     namespace = "ai.deeplang.infra"
     compileSdk = 36
@@ -28,10 +42,52 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    buildTypes {
-        debug {
+    signingConfigs {
+        // Only define a real release config when keystore.properties is present; release
+        // otherwise falls back to debug signing (see buildTypes.release below).
+        if (hasReleaseKeystore) {
+            create("release") {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
+    // Environment switching: an `env` flavor dimension selects the API base URL and an
+    // applicationId suffix so dev/staging/prod can be installed side by side. Crossed with
+    // the debug/release build types this yields devDebug … prodRelease — build any variant
+    // with `assemble<Env><BuildType>` (e.g. assembleProdRelease).
+    flavorDimensions += "env"
+    productFlavors {
+        create("dev") {
+            dimension = "env"
+            isDefault = true
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
             // Android emulator reaches the host machine's localhost via 10.0.2.2.
             buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:3001\"")
+        }
+        create("staging") {
+            dimension = "env"
+            applicationIdSuffix = ".staging"
+            versionNameSuffix = "-staging"
+            // Replace with the real staging API before using this flavor.
+            buildConfigField("String", "API_BASE_URL", "\"https://staging-api.example.com\"")
+        }
+        create("prod") {
+            dimension = "env"
+            // No suffix: prod keeps the canonical applicationId ai.deeplang.infra.
+            // Replace with the real production API before shipping.
+            buildConfigField("String", "API_BASE_URL", "\"https://api.example.com\"")
+        }
+    }
+
+    buildTypes {
+        debug {
+            // API_BASE_URL now comes from the selected env flavor; debug stays debuggable
+            // and unminified by default.
         }
         release {
             isMinifyEnabled = true
@@ -39,8 +95,13 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            // Point this at the deployed API before shipping a release build.
-            buildConfigField("String", "API_BASE_URL", "\"https://api.example.com\"")
+            // Real keystore when configured, else debug signing so the APK still installs.
+            signingConfig =
+                if (hasReleaseKeystore) {
+                    signingConfigs.getByName("release")
+                } else {
+                    signingConfigs.getByName("debug")
+                }
         }
     }
 

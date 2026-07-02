@@ -41,8 +41,10 @@ Quality gate is **local**: `cd apps/android && ./gradlew detekt` (config in
 
 - Tokens live only in EncryptedSharedPreferences via the token store — never in
   plain `SharedPreferences`, a log, or an analytics event. Logout must clear them.
-- `API_BASE_URL` is a `buildConfigField` per build type; don't hardcode URLs. The
-  OkHttp logging interceptor must never log at `BODY` level in release.
+- `API_BASE_URL` is a `buildConfigField` on the `env` product flavor (`dev`/`staging`/`prod`
+  in `app/build.gradle.kts`), not per build type; don't hardcode URLs elsewhere. Build a
+  variant with `assemble<Env><BuildType>` (or the `/android-build` skill). The OkHttp logging
+  interceptor must never log at `BODY` level in release.
 
 ## Design tokens
 

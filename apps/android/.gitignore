@@ -11,3 +11,8 @@
 .cxx/
 *.apk
 *.aab
+
+# Release signing material — never commit.
+/keystore.properties
+*.jks
+*.keystore
