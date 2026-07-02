@@ -27,6 +27,10 @@
     {
       "name": "danger",
       "value": "#C53732"
+    },
+    {
+      "name": "border",
+      "value": "#E0DED8"
     }
   ]
 }

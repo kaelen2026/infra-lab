@@ -327,6 +327,7 @@ function emitHarmony(): void {
     { name: "text_primary", role: "foreground" as const },
     { name: "text_secondary", role: "mutedForeground" as const },
     { name: "danger", role: "destructive" as const },
+    { name: "border", role: "border" as const },
   ];
   write(
     "apps/harmony/entry/src/main/resources/base/element/color.json",

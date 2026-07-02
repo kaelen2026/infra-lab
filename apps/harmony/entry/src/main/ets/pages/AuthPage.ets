@@ -4,13 +4,16 @@ import { HuksTokenStore } from "../sdk/HuksTokenStore";
 import { describeAuthError } from "../sdk/messages";
 import { API_BASE_URL, getDeviceInfo } from "../common/config";
 import { AuthUser, DeviceInfo, OTP_LIMITS, RequestOtpResponse, VerifyOtpResponse } from "../common/contracts";
+import { MainShell } from "../views/MainShell";
 
 type Step = "phone" | "code" | "done";
 
 /**
  * Phone-OTP login (login == register), the harmony face of the same flow `apps/web`
- * ships: phone → 6-digit code → done. All state and SDK calls live here; the API is
- * the sole authority for code issuance, limits and lockout — the UI only reflects them.
+ * ships: phone → 6-digit code → the app shell. All auth state and SDK calls live here;
+ * the API is the sole authority for code issuance, limits and lockout — the UI only
+ * reflects them. Once verified, {@link MainShell} takes over with the Account + Todos
+ * tabs (mirroring `apps/h5`).
  */
 @Entry
 @Component
@@ -21,7 +24,12 @@ struct AuthPage {
   @State busy: boolean = false;
   @State errorText: string = "";
   @State cooldown: number = 0;
-  @State user: AuthUser | null = null;
+  // Flattened user fields for MainShell (avoids passing a nullable object as a prop).
+  @State userPhone: string = "";
+  @State userDisplayName: string = "";
+  @State userAvatarUrl: string = "";
+  @State userCreatedAt: string = "";
+  @State userIsNew: boolean = false;
 
   private client: HarmonyAuthClient | null = null;
   private cooldownTimer: number = -1;
@@ -89,7 +97,12 @@ struct AuthPage {
         platform: "harmony",
         device: device,
       });
-      this.user = res.user;
+      const u: AuthUser = res.user;
+      this.userPhone = u.phone;
+      this.userDisplayName = u.displayName ?? "";
+      this.userAvatarUrl = u.avatarUrl ?? "";
+      this.userCreatedAt = u.createdAt;
+      this.userIsNew = u.isNew;
       this.step = "done";
       this.stopCooldown();
     } catch (err) {
@@ -99,19 +112,12 @@ struct AuthPage {
     }
   }
 
-  private async logout(): Promise<void> {
-    this.busy = true;
-    try {
-      await this.getClient().logout();
-    } catch (_err) {
-      // Best-effort: clear local state regardless of server response.
-    } finally {
-      this.user = null;
-      this.code = "";
-      this.errorText = "";
-      this.step = "phone";
-      this.busy = false;
-    }
+  /** Reset to the phone step after MainShell has logged out (and cleared tokens). */
+  private handleLoggedOut(): void {
+    this.code = "";
+    this.errorText = "";
+    this.cooldown = 0;
+    this.step = "phone";
   }
 
   private changePhone(): void {
@@ -237,38 +243,31 @@ struct AuthPage {
     .width("100%");
   }
 
-  @Builder
-  DoneStep() {
-    Column({ space: 8 }) {
-      this.Header(
-        this.user?.isNew === true ? "欢迎加入 🎉" : "欢迎回来",
-        `已登录：${this.user?.phone ?? ""}`,
-      );
-      Text(this.user?.isNew === true ? "账号已为你自动创建。" : "登录状态已就绪。")
-        .fontSize(15)
-        .fontColor($r("app.color.text_secondary"))
-        .width("100%");
-      this.PrimaryButton("退出登录", () => {
-        void this.logout();
-      });
-    }
-    .width("100%");
-  }
-
   build() {
-    Column() {
-      if (this.step === "phone") {
-        this.PhoneStep();
-      } else if (this.step === "code") {
-        this.CodeStep();
-      } else {
-        this.DoneStep();
+    if (this.step === "done") {
+      MainShell({
+        userPhone: this.userPhone,
+        userDisplayName: this.userDisplayName,
+        userAvatarUrl: this.userAvatarUrl,
+        userCreatedAt: this.userCreatedAt,
+        userIsNew: this.userIsNew,
+        onLogout: () => {
+          this.handleLoggedOut();
+        },
+      });
+    } else {
+      Column() {
+        if (this.step === "phone") {
+          this.PhoneStep();
+        } else {
+          this.CodeStep();
+        }
       }
+      .width("100%")
+      .height("100%")
+      .padding({ left: 24, right: 24, top: 96 })
+      .alignItems(HorizontalAlign.Start)
+      .backgroundColor($r("app.color.page_background"));
     }
-    .width("100%")
-    .height("100%")
-    .padding({ left: 24, right: 24, top: 96 })
-    .alignItems(HorizontalAlign.Start)
-    .backgroundColor($r("app.color.page_background"));
   }
 }

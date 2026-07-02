@@ -5,6 +5,10 @@ import {
   AuthErrorCode,
   AuthTokens,
   AuthUser,
+  DeviceDTO,
+  DevicesResponse,
+  LoginEventDTO,
+  LoginEventsResponse,
   MeResponse,
   Platform,
   RefreshResponse,
@@ -61,6 +65,10 @@ export interface AuthClient {
   verifyOtp(input: VerifyOtpInput): Promise<VerifyOtpResponse>;
   refresh(): Promise<AuthTokens | null>;
   me(): Promise<AuthUser>;
+  /** Registered client installs for the current user (account dashboard). */
+  listDevices(): Promise<DeviceDTO[]>;
+  /** Recent OTP verification attempts for the current user (account dashboard). */
+  listLoginEvents(): Promise<LoginEventDTO[]>;
   logout(): Promise<void>;
 }
 
@@ -140,6 +148,24 @@ export class HarmonyAuthClient implements AuthClient {
   async me(): Promise<AuthUser> {
     const res: MeResponse = await this.request<MeResponse>(AUTH_ROUTES.me, undefined, true);
     return res.user;
+  }
+
+  async listDevices(): Promise<DeviceDTO[]> {
+    const res: DevicesResponse = await this.request<DevicesResponse>(
+      AUTH_ROUTES.devices,
+      undefined,
+      true,
+    );
+    return res.devices;
+  }
+
+  async listLoginEvents(): Promise<LoginEventDTO[]> {
+    const res: LoginEventsResponse = await this.request<LoginEventsResponse>(
+      AUTH_ROUTES.loginEvents,
+      undefined,
+      true,
+    );
+    return res.events;
   }
 
   async logout(): Promise<void> {

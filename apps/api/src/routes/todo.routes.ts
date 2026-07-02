@@ -95,17 +95,22 @@ export function createTodoRoutes(deps: TodoRouteDeps): Hono {
   });
 
   // ── Update a todo (title and/or completed) ────────────────────────────────────
-  app.patch("/todos/:id", async (c) => {
+  // Registered for both PATCH and PUT: HarmonyOS's NetworkKit `http.RequestMethod`
+  // enum has no PATCH member, so the harmony client updates via PUT. Same handler,
+  // same semantics (partial update) for every client.
+  const handleUpdate = async (c: Context, id: string) => {
     const user = await requireUser(c.req.raw.headers);
     if (!user) return fail(c, "UNAUTHORIZED");
 
     const parsed = updateTodoSchema.safeParse(await readJson(c));
     if (!parsed.success) return fail(c, "INVALID_REQUEST", { issues: parsed.error.issues });
 
-    const record = await todos.update(user.id, c.req.param("id"), parsed.data);
+    const record = await todos.update(user.id, id, parsed.data);
     if (!record) return fail(c, "TODO_NOT_FOUND");
     return c.json({ ok: true, todo: toTodoDTO(record) });
-  });
+  };
+  app.patch("/todos/:id", (c) => handleUpdate(c, c.req.param("id")));
+  app.put("/todos/:id", (c) => handleUpdate(c, c.req.param("id")));
 
   // ── Delete a todo ─────────────────────────────────────────────────────────────
   app.delete("/todos/:id", async (c) => {

@@ -24,13 +24,25 @@ apps/harmony/
          ├─ entryability/EntryAbility.ets    loads pages/AuthPage
          ├─ common/
          │  ├─ contracts.ets                 ArkTS mirror of @infra/shared auth contracts
+         │  ├─ todo.ets                       ArkTS mirror of @infra/shared todo contracts
          │  └─ config.ets                    API base URL + DeviceInfo builder
          ├─ sdk/
          │  ├─ AuthClient.ets                AuthClient over @ohos.net.http + HttpAuthError
+         │  ├─ TodoClient.ets                TodoClient (Bearer, PUT for update — no PATCH)
          │  ├─ HuksTokenStore.ets            AES-256-GCM via HUKS, ciphertext in Preferences
+         │  ├─ format.ets                    date / platform-label formatting (mirrors h5)
          │  └─ messages.ets                  error code → user copy (mirrors web)
-         └─ pages/AuthPage.ets               ArkUI: phone → code → done
+         ├─ pages/AuthPage.ets               ArkUI: phone → code, then hands off to MainShell
+         └─ views/MainShell.ets              signed-in shell: Account + Todos tabs (mirrors h5)
 ```
+
+Feature parity with `apps/h5`: after login the client shows a bottom tab bar over an
+**Account** tab (profile, current session, registered devices, login history) and a
+**Todos** tab (per-user list with add / toggle / delete) — the same surfaces web/h5 ship.
+
+> **Update uses PUT, not PATCH.** NetworkKit's `http.RequestMethod` enum has no PATCH
+> member, so `HarmonyTodoClient` updates todos via **PUT**; the API accepts PUT as an
+> alias for the same partial-update handler (`apps/api/src/routes/todo.routes.ts`).
 
 ## How it maps to the contract
 
