@@ -14,8 +14,11 @@
 //   NOTIFY_MENTION_OPEN_IDS        要 @ 的 open_id（逗号分隔,可选;卡片末尾追加 <at> 真实提醒,
 //                                  负责人映射见 .github/security-owners.json）
 //   RUN_URL                        本次 Actions 运行链接（附在正文尾部）
+//   GITHUB_REPOSITORY / GITHUB_SERVER_URL  Actions 内置变量，`#57` 之类引用转链接时用
 
 import { readFileSync } from "node:fs";
+
+import { linkifyGitHubRefs } from "./feishu-format.mjs";
 
 const appId = process.env.LARK_APP_ID;
 const appSecret = process.env.LARK_APP_SECRET;
@@ -53,6 +56,8 @@ function buildBody() {
     }
   }
   text = text.trim() || "安全巡检已运行，但没取到可展示的文本输出。";
+  // GitHub 简写引用（`#57` 等）在飞书卡片里不可点，发送前统一转成 markdown 链接。
+  text = linkifyGitHubRefs(text, process.env.GITHUB_REPOSITORY, process.env.GITHUB_SERVER_URL);
   if (text.length > MAX_BODY_CHARS) {
     text = `${text.slice(0, MAX_BODY_CHARS)}\n\n…（输出过长已截断）`;
   }
