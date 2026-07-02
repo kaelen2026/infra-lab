@@ -1,6 +1,7 @@
 "use client";
 
 import type { AuthUser } from "@infra/sdk";
+import { useQueryClient } from "@tanstack/react-query";
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 
 import { authClient } from "@/lib/auth-client";
@@ -22,6 +23,7 @@ const SessionContext = createContext<SessionValue | null>(null);
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [status, setStatus] = useState<SessionStatus>("loading");
+  const queryClient = useQueryClient();
 
   const refresh = useCallback(async () => {
     try {
@@ -40,8 +42,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setUser(null);
       setStatus("unauthenticated");
+      // Drop every cached query so the next login can't briefly see the previous
+      // user's todos/account data on a shared device.
+      queryClient.clear();
     }
-  }, []);
+  }, [queryClient]);
 
   useEffect(() => {
     void refresh();

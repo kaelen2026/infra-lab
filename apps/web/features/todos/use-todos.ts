@@ -1,7 +1,8 @@
 "use client";
 
 import type { TodoDTO } from "@infra/sdk";
-import { useCallback, useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useState } from "react";
 
 import { todoClient } from "@/lib/todo-client";
 
@@ -18,96 +19,104 @@ export interface UseTodos {
   remove: (id: string) => Promise<void>;
 }
 
+const TODOS_KEY = ["todos"] as const;
+
 /**
- * Owns the current user's todo list plus its create/toggle/delete mutations.
- * Mutations update local state from the server's returned DTO (no full re-fetch),
+ * Owns the current user's todo list plus its create/toggle/delete mutations,
+ * backed by TanStack Query. The list is a cached query (`["todos"]`); mutations
+ * write the server's returned DTO straight into the cache (no full re-fetch),
  * keeping the list authoritative without a flash.
  */
 export function useTodos(enabled: boolean): UseTodos {
-  const [todos, setTodos] = useState<TodoDTO[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
+  const queryClient = useQueryClient();
+  const [actionError, setActionError] = useState<string | null>(null);
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    if (!enabled) return;
-    let active = true;
-    (async () => {
-      try {
-        const list = await todoClient.list();
-        if (active) setTodos(list);
-      } catch {
-        if (active) setError("无法加载待办，请稍后重试。");
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [enabled]);
+  const query = useQuery({
+    queryKey: TODOS_KEY,
+    queryFn: () => todoClient.list(),
+    enabled,
+  });
 
-  const withPending = useCallback(async (id: string, fn: () => Promise<void>) => {
+  const addPending = useCallback((id: string) => {
     setPendingIds((prev) => new Set(prev).add(id));
-    try {
-      await fn();
-    } finally {
-      setPendingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-    }
   }, []);
 
-  const create = useCallback(async (title: string) => {
-    setError(null);
-    setCreating(true);
-    try {
-      const created = await todoClient.create({ title });
+  const removePending = useCallback((id: string) => {
+    setPendingIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }, []);
+
+  const createMutation = useMutation({
+    mutationFn: (title: string) => todoClient.create({ title }),
+    onMutate: () => setActionError(null),
+    onSuccess: (created) => {
       // List is newest-first; the new item leads.
-      setTodos((prev) => [created, ...(prev ?? [])]);
-    } catch {
-      setError("创建失败，请重试。");
-    } finally {
-      setCreating(false);
-    }
-  }, []);
+      queryClient.setQueryData<TodoDTO[]>(TODOS_KEY, (prev) => [created, ...(prev ?? [])]);
+    },
+    onError: () => setActionError("创建失败，请重试。"),
+  });
 
-  const toggle = useCallback(
-    (todo: TodoDTO) =>
-      withPending(todo.id, async () => {
-        setError(null);
-        try {
-          const updated = await todoClient.toggle(todo.id, !todo.completed);
-          setTodos((prev) => prev?.map((t) => (t.id === updated.id ? updated : t)) ?? null);
-        } catch {
-          setError("更新失败,请重试。");
-        }
-      }),
-    [withPending],
+  const toggleMutation = useMutation({
+    mutationFn: (todo: TodoDTO) => todoClient.toggle(todo.id, !todo.completed),
+    onMutate: (todo) => {
+      setActionError(null);
+      addPending(todo.id);
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData<TodoDTO[]>(
+        TODOS_KEY,
+        (prev) => prev?.map((t) => (t.id === updated.id ? updated : t)) ?? prev,
+      );
+    },
+    onError: () => setActionError("更新失败,请重试。"),
+    onSettled: (_data, _err, todo) => removePending(todo.id),
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: (id: string) => todoClient.remove(id),
+    onMutate: (id) => {
+      setActionError(null);
+      addPending(id);
+    },
+    onSuccess: (_data, id) => {
+      queryClient.setQueryData<TodoDTO[]>(
+        TODOS_KEY,
+        (prev) => prev?.filter((t) => t.id !== id) ?? prev,
+      );
+    },
+    onError: () => setActionError("删除失败,请重试。"),
+    onSettled: (_data, _err, id) => removePending(id),
+  });
+
+  // Mutations swallow their rejection here: errors surface via `error`, and callers
+  // (forms/rows) treat the action as settled either way — as before the migration.
+  const create = useCallback(
+    (title: string) => createMutation.mutateAsync(title).then(noop, noop),
+    [createMutation],
   );
-
+  const toggle = useCallback(
+    (todo: TodoDTO) => toggleMutation.mutateAsync(todo).then(noop, noop),
+    [toggleMutation],
+  );
   const remove = useCallback(
-    (id: string) =>
-      withPending(id, async () => {
-        setError(null);
-        try {
-          await todoClient.remove(id);
-          setTodos((prev) => prev?.filter((t) => t.id !== id) ?? null);
-        } catch {
-          setError("删除失败,请重试。");
-        }
-      }),
-    [withPending],
+    (id: string) => removeMutation.mutateAsync(id).then(noop, noop),
+    [removeMutation],
   );
 
   return {
-    todos,
-    loading: enabled && !error && todos === null,
-    error,
-    creating,
+    todos: query.data ?? null,
+    loading: query.isLoading,
+    error: actionError ?? (query.isError ? "无法加载待办，请稍后重试。" : null),
+    creating: createMutation.isPending,
     pendingIds,
     create,
     toggle,
     remove,
   };
 }
+
+function noop(): void {}

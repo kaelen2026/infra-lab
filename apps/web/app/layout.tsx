@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import { ThemeProvider } from "@/components/theme-provider";
+import { QueryProvider } from "@/features/query";
 import { SessionProvider } from "@/features/session";
 import { mono, sans, serif } from "@/lib/fonts";
 import "./globals.css";
@@ -25,7 +26,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           enableSystem={false}
           disableTransitionOnChange
         >
-          <SessionProvider>{children}</SessionProvider>
+          <QueryProvider>
+            <SessionProvider>{children}</SessionProvider>
+          </QueryProvider>
         </ThemeProvider>
       </body>
     </html>
