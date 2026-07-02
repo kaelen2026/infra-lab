@@ -71,6 +71,21 @@ const CoreEnvSchema = z
         message: "must be true when NODE_ENV=production (session cookies require Secure)",
       });
     }
+    // L1 — per-IP rate-limit guardrail: with TRUSTED_PROXY_COUNT === 0 the client IP
+    // falls back to a constant (`0.0.0.0` in `clientIp`), collapsing the per-IP OTP
+    // quota into one global bucket shared by every caller — both unenforceable per
+    // attacker and self-DoS-able by normal traffic. A direct-connect API cannot read
+    // the real client IP from headers at all (even `x-real-ip` is proxy-injected), so
+    // refuse to boot in production unless the operator declares the real trusted-proxy
+    // hop count, rather than silently degrade the per-IP defence.
+    if (e.NODE_ENV === "production" && e.TRUSTED_PROXY_COUNT === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["TRUSTED_PROXY_COUNT"],
+        message:
+          "must be > 0 when NODE_ENV=production (declare the trusted-proxy hop count so per-IP rate limiting is not degraded to a single global bucket)",
+      });
+    }
     // L4 — key separation: in production the Better-Auth / JWT signing secret must be
     // set explicitly and must NOT reuse OTP_SECRET, so one leaked secret can't
     // compromise OTP hashing AND session signing. Non-prod keeps the dev fallback

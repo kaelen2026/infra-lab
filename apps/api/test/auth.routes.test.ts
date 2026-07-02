@@ -20,7 +20,13 @@ const readJson = (res: Response): Promise<any> => res.json() as Promise<any>;
 class FakeUserRepository implements UserRepository {
   users = new Map<string, UserRecord>();
   devices: Array<{ userId: string; device: DeviceInfo }> = [];
-  events: Array<{ userId: string; platform: Platform; success: boolean }> = [];
+  events: Array<{
+    userId: string | null;
+    phone: string;
+    platform: Platform;
+    success: boolean;
+    reason?: string;
+  }> = [];
   private seq = 0;
 
   async findByPhone(phone: string): Promise<UserRecord | null> {
@@ -42,14 +48,21 @@ class FakeUserRepository implements UserRepository {
     this.devices.push({ userId, device });
   }
   async recordLoginEvent(e: {
-    userId: string;
+    userId: string | null;
     phone: string;
     platform: Platform;
     ip: string;
     deviceId?: string;
     success: boolean;
+    reason?: string;
   }): Promise<void> {
-    this.events.push({ userId: e.userId, platform: e.platform, success: e.success });
+    this.events.push({
+      userId: e.userId,
+      phone: e.phone,
+      platform: e.platform,
+      success: e.success,
+      reason: e.reason,
+    });
   }
   async listDevices(userId: string) {
     return this.devices
@@ -73,6 +86,7 @@ class FakeUserRepository implements UserRepository {
         platform: e.platform,
         ip: null,
         success: e.success,
+        reason: e.reason ?? null,
         createdAt: "2026-06-30T00:00:00.000Z",
       }));
   }
@@ -263,6 +277,48 @@ describe("POST /auth/otp/verify — failure paths", () => {
     const body = await readJson(res);
     expect(body.code).toBe("INVALID_CODE");
     expect(body.remainingAttempts).toBe(4);
+  });
+
+  it("audits a failed attempt with success:false + reason (unknown phone → null userId)", async () => {
+    const { app, sentSms, users } = setup();
+    await getCode(sentSms, app);
+    await post(app, "/auth/otp/verify", { phone: PHONE, code: "000000", platform: "web" });
+    // A brand-new phone has no user yet: the failure is audited keyed on phone.
+    expect(users.events.at(-1)).toMatchObject({
+      success: false,
+      reason: "INVALID_CODE",
+      phone: PHONE,
+      userId: null,
+      platform: "web",
+    });
+  });
+
+  it("audits a failed attempt against an existing account with its userId", async () => {
+    const { app, store, sentSms, users } = setup();
+    // First, register the phone via a successful login.
+    const code = await getCode(sentSms, app);
+    await post(app, "/auth/otp/verify", { phone: PHONE, code, platform: "web" });
+    const user = await users.findByPhone(PHONE);
+    expect(user).not.toBeNull();
+
+    // Then a wrong code: the failure event carries the existing user's id + reason.
+    store.advance(60);
+    await getCode(sentSms, app);
+    await post(app, "/auth/otp/verify", { phone: PHONE, code: "000000", platform: "web" });
+    expect(users.events.at(-1)).toMatchObject({
+      success: false,
+      reason: "INVALID_CODE",
+      userId: user?.id,
+    });
+  });
+
+  it("audits an expired/replayed code as success:false + CODE_EXPIRED", async () => {
+    const { app, sentSms, users } = setup();
+    const code = await getCode(sentSms, app);
+    await post(app, "/auth/otp/verify", { phone: PHONE, code, platform: "web" });
+    // Replaying the now-consumed code is a failed attempt and must be audited.
+    await post(app, "/auth/otp/verify", { phone: PHONE, code, platform: "web" });
+    expect(users.events.at(-1)).toMatchObject({ success: false, reason: "CODE_EXPIRED" });
   });
 
   it("locks the phone after 5 wrong codes (423 LOCKED)", async () => {

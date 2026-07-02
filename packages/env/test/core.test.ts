@@ -104,6 +104,7 @@ describe("parseCoreEnv", () => {
         NODE_ENV: "production",
         BETTER_AUTH_SECRET: "b".repeat(32),
         COOKIE_SECURE: "true",
+        TRUSTED_PROXY_COUNT: "1",
       }).OTP_DEBUG_RETURN_CODE,
     ).toBe(false);
   });
@@ -127,6 +128,7 @@ describe("parseCoreEnv", () => {
         NODE_ENV: "production",
         BETTER_AUTH_SECRET: "b".repeat(32),
         COOKIE_SECURE: "true",
+        TRUSTED_PROXY_COUNT: "1",
       }).COOKIE_SECURE,
     ).toBe(true);
 
@@ -156,6 +158,7 @@ describe("parseCoreEnv", () => {
         NODE_ENV: "production",
         BETTER_AUTH_SECRET: "b".repeat(32),
         COOKIE_SECURE: "true",
+        TRUSTED_PROXY_COUNT: "1",
       }).BETTER_AUTH_SECRET,
     ).toBe("b".repeat(32));
 
@@ -171,5 +174,38 @@ describe("parseCoreEnv", () => {
     expect(parseCoreEnv({ ...base, TRUSTED_PROXY_COUNT: "2" }).TRUSTED_PROXY_COUNT).toBe(2);
     const negative = () => parseCoreEnv({ ...base, TRUSTED_PROXY_COUNT: "-1" });
     expect(negative).toThrow(/TRUSTED_PROXY_COUNT/);
+  });
+
+  it("L1 — requires TRUSTED_PROXY_COUNT > 0 in production, but allows 0 otherwise", () => {
+    // Production defaults TRUSTED_PROXY_COUNT to 0 → refuse to boot, so per-IP rate
+    // limiting can't silently collapse into one global 0.0.0.0 bucket.
+    let message = "";
+    try {
+      parseCoreEnv({
+        ...base,
+        NODE_ENV: "production",
+        BETTER_AUTH_SECRET: "b".repeat(32),
+        COOKIE_SECURE: "true",
+      });
+    } catch (e) {
+      message = e instanceof Error ? e.message : String(e);
+    }
+    expect(message).toContain("TRUSTED_PROXY_COUNT");
+    // The guardrail error must never echo a raw secret value.
+    expect(message).not.toContain(base.OTP_SECRET);
+
+    // Production with a declared proxy hop count is accepted.
+    expect(
+      parseCoreEnv({
+        ...base,
+        NODE_ENV: "production",
+        BETTER_AUTH_SECRET: "b".repeat(32),
+        COOKIE_SECURE: "true",
+        TRUSTED_PROXY_COUNT: "1",
+      }).TRUSTED_PROXY_COUNT,
+    ).toBe(1);
+
+    // Non-production keeps the safe default (XFF untrusted) usable for local dev.
+    expect(parseCoreEnv({ ...base, NODE_ENV: "development" }).TRUSTED_PROXY_COUNT).toBe(0);
   });
 });

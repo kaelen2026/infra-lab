@@ -167,6 +167,8 @@ export interface LoginEventDTO {
   platform: Platform;
   ip: string | null;
   success: boolean;
+  /** Failure reason (auth error code) for `success: false` events; `null` on success. */
+  reason: string | null;
   createdAt: string; // ISO 8601
 }
 

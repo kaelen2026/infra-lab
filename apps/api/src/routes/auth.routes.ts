@@ -30,12 +30,15 @@ export interface UserRepository {
   createWithProfile(phone: string): Promise<UserRecord>;
   recordDevice(userId: string, device: DeviceInfo): Promise<void>;
   recordLoginEvent(event: {
-    userId: string;
+    /** `null` for failed attempts on a phone with no existing account. */
+    userId: string | null;
     phone: string;
     platform: Platform;
     ip: string;
     deviceId?: string;
     success: boolean;
+    /** Auth error code for failed attempts (INVALID_CODE / LOCKED / CODE_EXPIRED). */
+    reason?: string;
   }): Promise<void>;
   /** Registered devices for the account dashboard, most-recently-seen first. */
   listDevices(userId: string): Promise<DeviceDTO[]>;
@@ -181,6 +184,20 @@ export function createAuthRoutes(deps: AuthRouteDeps): Hono {
 
     const result = await otp.verifyCode({ phone, code });
     if (!result.ok) {
+      // Audit the failed attempt (INVALID_CODE / LOCKED / CODE_EXPIRED) so brute-force
+      // and anomalous logins are observable. A brand-new phone has no user row yet, so
+      // userId is null and the event is keyed on phone (login_event_phone_idx). The
+      // plaintext code is never recorded — only phone / ip / platform / reason.
+      const existing = await users.findByPhone(phone);
+      await users.recordLoginEvent({
+        userId: existing?.id ?? null,
+        phone,
+        platform,
+        ip,
+        deviceId: device?.deviceId,
+        success: false,
+        reason: result.error,
+      });
       const extra =
         result.error === "INVALID_CODE"
           ? { remainingAttempts: result.remainingAttempts }
