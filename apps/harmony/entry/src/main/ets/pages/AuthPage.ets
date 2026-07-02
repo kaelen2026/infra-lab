@@ -4,6 +4,7 @@ import { HuksTokenStore } from "../sdk/HuksTokenStore";
 import { describeAuthError } from "../sdk/messages";
 import { API_BASE_URL, getDeviceInfo } from "../common/config";
 import { AuthUser, DeviceInfo, OTP_LIMITS, RequestOtpResponse, VerifyOtpResponse } from "../common/contracts";
+import { applyTheme, getInitialTheme, persistTheme, ThemeMode } from "../common/theme";
 import { MainShell } from "../views/MainShell";
 
 type Step = "phone" | "code" | "done";
@@ -30,12 +31,31 @@ struct AuthPage {
   @State userAvatarUrl: string = "";
   @State userCreatedAt: string = "";
   @State userIsNew: boolean = false;
+  /** Current theme, mirrored into the top-right glyph; the source of truth is the app color mode. */
+  @State theme: ThemeMode = "dark";
 
   private client: HarmonyAuthClient | null = null;
   private cooldownTimer: number = -1;
 
+  aboutToAppear(): void {
+    void this.initTheme();
+  }
+
   aboutToDisappear(): void {
     this.stopCooldown();
+  }
+
+  private async initTheme(): Promise<void> {
+    const ctx: common.Context = getContext(this) as common.Context;
+    this.theme = await getInitialTheme(ctx);
+  }
+
+  private async toggleTheme(): Promise<void> {
+    const ctx: common.Context = getContext(this) as common.Context;
+    const next: ThemeMode = this.theme === "dark" ? "light" : "dark";
+    this.theme = next;
+    applyTheme(ctx, next);
+    await persistTheme(ctx, next);
   }
 
   private getClient(): HarmonyAuthClient {
@@ -118,6 +138,8 @@ struct AuthPage {
     this.errorText = "";
     this.cooldown = 0;
     this.step = "phone";
+    // Re-sync the glyph in case the theme was toggled from inside MainShell.
+    void this.initTheme();
   }
 
   private changePhone(): void {
@@ -257,6 +279,19 @@ struct AuthPage {
       });
     } else {
       Column() {
+        Row() {
+          // Sun when dark (tap → light), moon when light — matching web/h5's toggle glyph.
+          Text(this.theme === "dark" ? "☀" : "☾")
+            .fontSize(18)
+            .fontColor($r("app.color.text_secondary"))
+            .onClick(() => {
+              void this.toggleTheme();
+            });
+        }
+        .width("100%")
+        .justifyContent(FlexAlign.End)
+        .margin({ bottom: 24 });
+
         if (this.step === "phone") {
           this.PhoneStep();
         } else {
@@ -265,7 +300,7 @@ struct AuthPage {
       }
       .width("100%")
       .height("100%")
-      .padding({ left: 24, right: 24, top: 96 })
+      .padding({ left: 24, right: 24, top: 60 })
       .alignItems(HorizontalAlign.Start)
       .backgroundColor($r("app.color.page_background"));
     }

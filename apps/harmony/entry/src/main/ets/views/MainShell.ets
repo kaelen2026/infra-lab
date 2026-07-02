@@ -6,6 +6,7 @@ import { formatDate, formatDateTime, platformLabel } from "../sdk/format";
 import { API_BASE_URL } from "../common/config";
 import { DeviceDTO, LoginEventDTO } from "../common/contracts";
 import { TITLE_MAX_LENGTH, TodoDTO } from "../common/todo";
+import { applyTheme, getInitialTheme, persistTheme, ThemeMode } from "../common/theme";
 
 /**
  * The signed-in shell (mirrors `apps/h5`): a brand header + a bottom tab bar over
@@ -25,6 +26,8 @@ export struct MainShell {
   onLogout: () => void = () => {};
 
   @State private currentIndex: number = 0;
+  /** Current theme, mirrored into a glyph in the top bar; the source of truth is the app color mode. */
+  @State private theme: ThemeMode = "dark";
 
   // Account tab state.
   @State private devices: DeviceDTO[] = [];
@@ -45,8 +48,22 @@ export struct MainShell {
   private todoClient: HarmonyTodoClient | null = null;
 
   aboutToAppear(): void {
+    void this.initTheme();
     void this.loadAccount();
     void this.loadTodos();
+  }
+
+  private async initTheme(): Promise<void> {
+    const ctx: common.Context = getContext(this) as common.Context;
+    this.theme = await getInitialTheme(ctx);
+  }
+
+  private async toggleTheme(): Promise<void> {
+    const ctx: common.Context = getContext(this) as common.Context;
+    const next: ThemeMode = this.theme === "dark" ? "light" : "dark";
+    this.theme = next;
+    applyTheme(ctx, next);
+    await persistTheme(ctx, next);
   }
 
   private auth(): HarmonyAuthClient {
@@ -218,12 +235,22 @@ export struct MainShell {
         Circle({ width: 8, height: 8 }).fill($r("app.color.brand"));
         Text("infra-lab").fontSize(18).fontWeight(FontWeight.Medium).fontColor($r("app.color.text_primary"));
       }
-      Text("退出")
-        .fontSize(15)
-        .fontColor($r("app.color.brand"))
-        .onClick(() => {
-          void this.logout();
-        });
+      Row({ space: 20 }) {
+        // Sun when dark (tap → light), moon when light — matching web/h5's toggle glyph.
+        Text(this.theme === "dark" ? "☀" : "☾")
+          .fontSize(18)
+          .fontColor($r("app.color.text_secondary"))
+          .onClick(() => {
+            void this.toggleTheme();
+          });
+        Text("退出")
+          .fontSize(15)
+          .fontColor($r("app.color.brand"))
+          .onClick(() => {
+            void this.logout();
+          });
+      }
+      .alignItems(VerticalAlign.Center);
     }
     .width("100%")
     .height(52)

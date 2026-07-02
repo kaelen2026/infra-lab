@@ -329,14 +329,17 @@ function emitHarmony(): void {
     { name: "danger", role: "destructive" as const },
     { name: "border", role: "border" as const },
   ];
-  write(
-    "apps/harmony/entry/src/main/resources/base/element/color.json",
+  // ArkUI auto-resolves `$r('app.color.*')` from the resource set matching the app's
+  // color mode: `resources/base` for light, `resources/dark` for dark. Same names in
+  // both files; the runtime toggle (see `common/theme.ets`) flips the active set.
+  const colorFile = (p: Palette) =>
     `${JSON.stringify(
-      { color: colors.map((c) => ({ name: c.name, value: oklchToHex(light[c.role]) })) },
+      { color: colors.map((c) => ({ name: c.name, value: oklchToHex(p[c.role]) })) },
       null,
       2,
-    )}\n`,
-  );
+    )}\n`;
+  write("apps/harmony/entry/src/main/resources/base/element/color.json", colorFile(light));
+  write("apps/harmony/entry/src/main/resources/dark/element/color.json", colorFile(dark));
 
   const errCases = AUTH_ERROR_CODES.map(
     (code) => `    case ${q(code)}:\n      return ${q(COPY.errors.messages[code])};`,
