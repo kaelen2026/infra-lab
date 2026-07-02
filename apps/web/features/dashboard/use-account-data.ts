@@ -1,7 +1,7 @@
 "use client";
 
 import type { DeviceDTO, LoginEventDTO } from "@infra/sdk";
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { authClient } from "@/lib/auth-client";
 
@@ -14,32 +14,24 @@ interface AccountData {
 
 /** Loads the current user's devices + login history once `enabled` (authenticated). */
 export function useAccountData(enabled: boolean): AccountData {
-  const [devices, setDevices] = useState<DeviceDTO[] | null>(null);
-  const [events, setEvents] = useState<LoginEventDTO[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const devicesQuery = useQuery({
+    queryKey: ["account", "devices"],
+    queryFn: () => authClient.listDevices(),
+    enabled,
+  });
+  const eventsQuery = useQuery({
+    queryKey: ["account", "loginEvents"],
+    queryFn: () => authClient.listLoginEvents(),
+    enabled,
+  });
 
-  useEffect(() => {
-    if (!enabled) return;
-    let active = true;
-    (async () => {
-      try {
-        const [d, e] = await Promise.all([authClient.listDevices(), authClient.listLoginEvents()]);
-        if (!active) return;
-        setDevices(d);
-        setEvents(e);
-      } catch {
-        if (active) setError("无法加载账户数据，请稍后重试。");
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [enabled]);
+  const error =
+    devicesQuery.isError || eventsQuery.isError ? "无法加载账户数据，请稍后重试。" : null;
 
   return {
-    devices,
-    events,
+    devices: devicesQuery.data ?? null,
+    events: eventsQuery.data ?? null,
     error,
-    loading: enabled && !error && (devices === null || events === null),
+    loading: devicesQuery.isLoading || eventsQuery.isLoading,
   };
 }
