@@ -136,6 +136,39 @@ struct MeResponse: Decodable {
     let user: AuthUser
 }
 
+// MARK: - Account dashboard: devices & login history
+
+/// A registered client install for the current user. Mirrors `DeviceDTO`.
+struct DeviceDTO: Decodable, Identifiable, Equatable {
+    let id: String
+    let platform: Platform
+    let deviceId: String
+    let model: String?
+    let osVersion: String?
+    let appVersion: String?
+    let lastSeenAt: String // ISO 8601
+    let createdAt: String // ISO 8601
+}
+
+struct DevicesResponse: Decodable {
+    let ok: Bool
+    let devices: [DeviceDTO]
+}
+
+/// A single OTP verification attempt in the audit trail. Mirrors `LoginEventDTO`.
+struct LoginEventDTO: Decodable, Identifiable, Equatable {
+    let id: String
+    let platform: Platform
+    let ip: String?
+    let success: Bool
+    let createdAt: String // ISO 8601
+}
+
+struct LoginEventsResponse: Decodable {
+    let ok: Bool
+    let events: [LoginEventDTO]
+}
+
 // MARK: - Endpoint paths (shared so the client never hard-codes strings)
 
 enum AuthRoutes {
@@ -144,4 +177,6 @@ enum AuthRoutes {
     static let refresh = "/auth/refresh"
     static let logout = "/auth/logout"
     static let me = "/auth/me"
+    static let devices = "/auth/devices"
+    static let loginEvents = "/auth/login-events"
 }

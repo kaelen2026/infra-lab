@@ -82,6 +82,42 @@ final class AuthClientTests: XCTestCase {
         XCTAssertNil(rotated)
     }
 
+    func testListDevicesParsesResponse() async throws {
+        MockURLProtocol.handler = { _ in
+            (200, self.json([
+                "ok": true,
+                "devices": [[
+                    "id": "d1", "platform": "ios", "deviceId": "device-1",
+                    "model": "iPhone", "osVersion": "17.0", "appVersion": "0.1.0",
+                    "lastSeenAt": "2026-07-01T09:30:00.000Z", "createdAt": "2026-06-30T00:00:00.000Z",
+                ]],
+            ]))
+        }
+        let devices = try await makeClient().listDevices()
+        XCTAssertEqual(devices.count, 1)
+        XCTAssertEqual(devices.first?.platform, .ios)
+        XCTAssertEqual(devices.first?.model, "iPhone")
+    }
+
+    func testListLoginEventsParsesNullIpAndPlatform() async throws {
+        MockURLProtocol.handler = { _ in
+            (200, self.json([
+                "ok": true,
+                "events": [
+                    ["id": "e1", "platform": "web", "ip": NSNull(), "success": false,
+                     "createdAt": "2026-06-30T22:10:00.000Z"],
+                    ["id": "e2", "platform": "ios", "ip": "203.0.113.7", "success": true,
+                     "createdAt": "2026-07-01T09:30:00.000Z"],
+                ],
+            ]))
+        }
+        let events = try await makeClient().listLoginEvents()
+        XCTAssertEqual(events.count, 2)
+        XCTAssertNil(events.first?.ip)
+        XCTAssertEqual(events.first?.success, false)
+        XCTAssertEqual(events.last?.platform, .ios)
+    }
+
     func testUnknownErrorCodeDecodesToUnknown() async {
         MockURLProtocol.handler = { _ in
             (500, self.json(["ok": false, "code": "SOMETHING_NEW"]))

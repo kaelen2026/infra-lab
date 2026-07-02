@@ -9,6 +9,10 @@ protocol AuthClient {
     /// Reads the Keychain refresh token and rotates it; nil when none is stored.
     func refresh() async throws -> AuthTokens?
     func me() async throws -> AuthUser
+    /// Registered client installs for the current user (account dashboard).
+    func listDevices() async throws -> [DeviceDTO]
+    /// Recent OTP verification attempts for the current user (account dashboard).
+    func listLoginEvents() async throws -> [LoginEventDTO]
     func logout() async throws
 }
 
@@ -54,6 +58,18 @@ final class HTTPAuthClient: AuthClient {
     func me() async throws -> AuthUser {
         let res: MeResponse = try await send(AuthRoutes.me, method: "GET", body: Optional<RefreshInput>.none)
         return res.user
+    }
+
+    func listDevices() async throws -> [DeviceDTO] {
+        let res: DevicesResponse = try await send(AuthRoutes.devices, method: "GET",
+                                                  body: Optional<RefreshInput>.none)
+        return res.devices
+    }
+
+    func listLoginEvents() async throws -> [LoginEventDTO] {
+        let res: LoginEventsResponse = try await send(AuthRoutes.loginEvents, method: "GET",
+                                                      body: Optional<RefreshInput>.none)
+        return res.events
     }
 
     func logout() async throws {
