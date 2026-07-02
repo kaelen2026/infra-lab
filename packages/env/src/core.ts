@@ -32,6 +32,12 @@ const CoreEnvSchema = z
     // Falls back to OTP_SECRET when unset (see the object-level transform below).
     BETTER_AUTH_SECRET: optionalNonEmpty,
     BETTER_AUTH_URL: optionalNonEmpty.pipe(z.string().default("http://localhost:3000")),
+    // Extra browser origins allowed to call the API cross-origin (comma-separated), on
+    // top of BETTER_AUTH_URL. Needed because h5 (a separate browser client reusing web's
+    // cookie transport) runs on its own origin. Defaults to the h5 dev origin so `pnpm dev`
+    // works out of the box; set explicitly in production. Combined + deduped in the
+    // transform below into the TRUSTED_ORIGINS allowlist.
+    TRUSTED_ORIGINS: optionalNonEmpty.pipe(z.string().default("http://localhost:3002")),
     COOKIE_SECURE: envFlag.default(false),
     COOKIE_DOMAIN: optionalNonEmpty,
     OTP_DEBUG_RETURN_CODE: envFlag.default(false),
@@ -74,10 +80,18 @@ const CoreEnvSchema = z
       }
     }
   })
-  .transform((e) => ({
-    ...e,
-    BETTER_AUTH_SECRET: e.BETTER_AUTH_SECRET ?? e.OTP_SECRET,
-  }));
+  .transform((e) => {
+    // Allowlist for both hono CORS and Better Auth: BETTER_AUTH_URL (the web/auth origin,
+    // always trusted) plus the comma-separated TRUSTED_ORIGINS extras, trimmed + deduped.
+    const extras = e.TRUSTED_ORIGINS.split(",")
+      .map((o) => o.trim())
+      .filter(Boolean);
+    return {
+      ...e,
+      BETTER_AUTH_SECRET: e.BETTER_AUTH_SECRET ?? e.OTP_SECRET,
+      TRUSTED_ORIGINS: [...new Set([e.BETTER_AUTH_URL, ...extras])],
+    };
+  });
 
 export type CoreEnv = z.infer<typeof CoreEnvSchema>;
 
