@@ -97,6 +97,8 @@ jobs:
           AUDIT_RESULT: ${{ needs.audit.result }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          # 每日扫描失败没有分区概念,cc 默认安全负责人(.github/security-owners.json)。
+          cc="$(jq -r '.default.github // empty' .github/security-owners.json)"
           {
             echo "**每日安全扫描发现问题** ⚠️（$(date -u +%Y-%m-%d) UTC）"
             echo ""
@@ -106,6 +108,7 @@ jobs:
             echo "| pnpm audit（依赖） | $AUDIT_RESULT |"
             echo ""
             echo "详情见运行日志。"
+            [ -n "$cc" ] && echo "" && echo "**请关注**：@$cc"
             echo ""
             echo "[运行日志]($RUN_URL)"
           } > scan-report.md
@@ -127,4 +130,7 @@ jobs:
           NOTIFY_TITLE: "🚨 每日安全扫描失败"
           NOTIFY_FILE: scan-report.md
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: node .github/scripts/feishu-notify.mjs
+        # 扫描失败一律 @ 默认安全负责人(飞书卡片 <at> 真实提醒)。
+        run: |
+          NOTIFY_MENTION_OPEN_IDS="$(jq -r '.default.feishu_open_id // empty' .github/security-owners.json)" \
+            node .github/scripts/feishu-notify.mjs

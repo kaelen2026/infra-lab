@@ -29,7 +29,24 @@ OTP 生成/有效期/一次性消费/重放、限流与锁定绕过、令牌与�
 
 巡检报告首行是机器可读状态 `SECURITY_PATROL_STATUS: CLEAN|FINDINGS`：
 `FINDINGS` 时开一个 `security` 标签的 issue 并推飞书；`CLEAN` 不开 issue，只推一条飞书周报心跳。
-巡检**只读**——不改文件、不提交、不开 PR，issue / 通知全由 workflow 侧确定性完成。
+`FINDINGS` 时第二行是分区标记 `SECURITY_PATROL_AREAS: otp,logging,…`（8 个区域对应巡检范围 8 项），
+决定通知 @ 谁（见下节）。巡检**只读**——不改文件、不提交、不开 PR，issue / 通知全由 workflow 侧确定性完成。
+
+## 通知 @ 负责人（security-owners.json）
+
+[`.github/security-owners.json`](../.github/security-owners.json) 是「分区 → 负责人」映射表：
+
+- **巡检**（patrol）：workflow 解析报告的 `SECURITY_PATROL_AREAS` 标记 → 按表取负责人 →
+  飞书卡片末尾用 `<at id=open_id></at>` **真实 @**（红点提醒），GitHub issue 正文追加 `cc @github用户名`。
+  解析不到分区、或某区未配置（`null`）→ 一律落 `default`，宁可 @ 不精准，不漏通知；
+  `CLEAN` 不 @ 任何人。
+- **扫描**（scan）：每日扫描失败没有分区概念，飞书与 issue 都 @ `default` 负责人。
+
+给某个区指派负责人：把 `areas.<区域>` 从 `null` 改成
+`{ "name": "…", "feishu_open_id": "ou_…", "github": "…" }`。
+`feishu_open_id` 是**本飞书应用视角**的 open_id（按应用隔离）——最省事的拿法：
+让负责人**私聊 bot 发一句话**，`apps/bot` 日志里 `receive_v1` 的 `sender_open_id` 就是，
+无需申请通讯录权限。
 
 ## 需要配置的 secrets / vars
 

@@ -43,6 +43,17 @@ SECURITY_PATROL_STATUS: FINDINGS
 ```
 （发现任何中/高危问题时）
 
+状态为 `FINDINGS` 时，**第二行必须**是分区标记（同样机器可读、单独一行、不加前后缀），
+列出发现所命中的巡检范围，逗号分隔、全小写：
+
+```
+SECURITY_PATROL_AREAS: otp,logging
+```
+
+区域取值与上方「巡检范围」一一对应：`otp`(1) `ratelimit`(2) `session`(3) `secrets`(4)
+`logging`(5) `contracts`(6) `ci`(7) `input`(8)。这行会被 workflow 解析成「@ 哪些负责人」
+（映射见 `.github/security-owners.json`）；**CLEAN 时不要输出该行**。
+
 随后是中文报告，结论先行，按严重度（高 / 中 / 低）分组，每条包含：
 **问题** → **依据(`路径:行号`)** → **影响面** → **修复建议(标注大致成本)**。
 无高危时也简述已核对项与残留低危 / 加固建议。篇幅与发现匹配，不硬凑。
