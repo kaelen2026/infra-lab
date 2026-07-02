@@ -10,8 +10,11 @@
 //   FEISHU_MESSAGE_ID              要回复的原消息 id（reply_in_thread 落到其 thread）
 //   EXECUTION_FILE                 claude-code-action 的 execution_file 输出路径（可能为空）
 //   RUN_URL                        本次 Actions 运行链接（footer + 兜底文案用）
+//   GITHUB_REPOSITORY / GITHUB_SERVER_URL  Actions 内置变量，`#57` 之类引用转链接时用
 
 import { readFileSync } from "node:fs";
+
+import { linkifyGitHubRefs } from "./feishu-format.mjs";
 
 const appId = process.env.LARK_APP_ID;
 const appSecret = process.env.LARK_APP_SECRET;
@@ -96,6 +99,8 @@ function buildBody() {
     // Claude 步骤失败 / 没有可解析输出时的兜底：至少让 thread 里的人知道任务已结束。
     text = "任务已结束，但没取到可回帖的文本输出。";
   }
+  // GitHub 简写引用（`#57` 等）在飞书卡片里不可点，发送前统一转成 markdown 链接。
+  text = linkifyGitHubRefs(text, process.env.GITHUB_REPOSITORY, process.env.GITHUB_SERVER_URL);
   if (text.length > MAX_BODY_CHARS) {
     text = `${text.slice(0, MAX_BODY_CHARS)}\n\n…（输出过长已截断）`;
   }
