@@ -2,6 +2,8 @@ package ai.deeplang.infra.data
 
 import ai.deeplang.infra.data.contracts.AuthTokens
 import ai.deeplang.infra.data.contracts.AuthUser
+import ai.deeplang.infra.data.contracts.DeviceDTO
+import ai.deeplang.infra.data.contracts.LoginEventDTO
 import ai.deeplang.infra.data.contracts.RequestOtpResponse
 import ai.deeplang.infra.data.contracts.VerifyOtpResponse
 
@@ -22,6 +24,12 @@ interface AuthClient {
     suspend fun refresh(): AuthTokens?
 
     suspend fun me(): AuthUser
+
+    /** Registered client installs for the current user (account dashboard). */
+    suspend fun listDevices(): List<DeviceDTO>
+
+    /** Recent OTP verification attempts for the current user (account dashboard). */
+    suspend fun listLoginEvents(): List<LoginEventDTO>
 
     suspend fun logout()
 }

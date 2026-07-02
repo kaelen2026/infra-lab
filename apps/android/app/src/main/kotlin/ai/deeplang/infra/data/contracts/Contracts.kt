@@ -12,10 +12,17 @@ import kotlinx.serialization.Serializable
 // ── Platforms ────────────────────────────────────────────────────────────────
 @Serializable
 enum class Platform {
-    @SerialName("web") WEB,
-    @SerialName("ios") IOS,
-    @SerialName("android") ANDROID,
-    @SerialName("harmony") HARMONY,
+    @SerialName("web")
+    WEB,
+
+    @SerialName("ios")
+    IOS,
+
+    @SerialName("android")
+    ANDROID,
+
+    @SerialName("harmony")
+    HARMONY,
 }
 
 // ── Limits (mirrors the OTP service config; the UI uses these for hints) ───────
@@ -50,6 +57,8 @@ object AuthRoutes {
     const val REFRESH = "/auth/refresh"
     const val LOGOUT = "/auth/logout"
     const val ME = "/auth/me"
+    const val DEVICES = "/auth/devices"
+    const val LOGIN_EVENTS = "/auth/login-events"
 }
 
 // ── Requests ───────────────────────────────────────────────────────────────────
@@ -132,6 +141,44 @@ data class RefreshResponse(
 data class MeResponse(
     val ok: Boolean = true,
     val user: AuthUser,
+)
+
+// ── Account dashboard: devices & login history ─────────────────────────────────
+/** A registered client install for the current user (mirrors the shared `DeviceDTO`). */
+@Serializable
+data class DeviceDTO(
+    val id: String,
+    val platform: Platform,
+    val deviceId: String,
+    val model: String? = null,
+    val osVersion: String? = null,
+    val appVersion: String? = null,
+    val lastSeenAt: String,
+    val createdAt: String,
+)
+
+@Serializable
+data class DevicesResponse(
+    val ok: Boolean = true,
+    val devices: List<DeviceDTO>,
+)
+
+/** A single OTP verification attempt in the audit trail (mirrors the shared `LoginEventDTO`). */
+@Serializable
+data class LoginEventDTO(
+    val id: String,
+    val platform: Platform,
+    val ip: String? = null,
+    val success: Boolean,
+    /** Failure reason (auth error code) for `success: false`; null on success. */
+    val reason: String? = null,
+    val createdAt: String,
+)
+
+@Serializable
+data class LoginEventsResponse(
+    val ok: Boolean = true,
+    val events: List<LoginEventDTO>,
 )
 
 /** Error envelope: the API returns `{ ok: false, code, message?, retryAfter?, remainingAttempts? }`. */

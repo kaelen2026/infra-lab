@@ -2,13 +2,14 @@ package ai.deeplang.infra.data.net
 
 import ai.deeplang.infra.data.remote.AuthApi
 import ai.deeplang.infra.data.remote.RefreshApi
+import ai.deeplang.infra.data.remote.TodoApi
 import ai.deeplang.infra.data.token.TokenStore
+import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
-import kotlinx.serialization.json.Json
 import java.util.concurrent.TimeUnit
 
 /**
@@ -47,16 +48,24 @@ class NetworkModule(
         retrofit(client).create(RefreshApi::class.java)
     }
 
-    val authApi: AuthApi by lazy {
-        val client = OkHttpClient.Builder()
+    /**
+     * The main authenticated client, shared by every protected API: attaches the Bearer header
+     * ([AuthInterceptor]) and refreshes once on 401 ([TokenAuthenticator], via the bare
+     * [refreshApi]). Building one client keeps the auth and todo transports in lock-step.
+     */
+    private val authedClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
             .addInterceptor(AuthInterceptor(tokenStore))
             .addInterceptor(loggingInterceptor())
             .authenticator(TokenAuthenticator(tokenStore, refreshApi))
             .build()
-        retrofit(client).create(AuthApi::class.java)
     }
+
+    val authApi: AuthApi by lazy { retrofit(authedClient).create(AuthApi::class.java) }
+
+    val todoApi: TodoApi by lazy { retrofit(authedClient).create(TodoApi::class.java) }
 
     private fun retrofit(client: OkHttpClient): Retrofit = Retrofit.Builder()
         .baseUrl(normalizedBaseUrl)
