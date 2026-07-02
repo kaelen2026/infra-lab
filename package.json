@@ -9,9 +9,10 @@
   },
   "scripts": {
     "build": "turbo run build",
-    "dev": "turbo run dev",
+    "dev": "turbo run dev --filter=!@infra/bot",
     "dev:api": "turbo run dev --filter @infra/api",
     "dev:web": "turbo run dev --filter @infra/web",
+    "dev:h5": "turbo run dev --filter @infra/h5",
     "bot": "node scripts/bot-docker.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
