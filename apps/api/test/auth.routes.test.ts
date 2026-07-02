@@ -1,7 +1,10 @@
 import { createOtpService } from "@infra/auth";
 import { FakeRedis } from "@infra/auth/testing";
 import type { AuthTokens, DeviceInfo, Platform } from "@infra/shared";
+import { Hono } from "hono";
 import { describe, expect, it } from "vitest";
+import { createLogger } from "../src/observability/logger.js";
+import { type ObsEnv, observability } from "../src/observability/middleware.js";
 import {
   createAuthRoutes,
   type SessionContext,
@@ -147,7 +150,7 @@ function setup() {
   const users = new FakeUserRepository();
   const sessions = new FakeSessionService();
   const sentSms: Array<{ phone: string; code: string }> = [];
-  const app = createAuthRoutes({
+  const routes = createAuthRoutes({
     otp,
     users,
     sessions,
@@ -156,6 +159,11 @@ function setup() {
     },
     config: { debugReturnCode: false },
   });
+  // Mount behind the observability middleware, exactly as server.ts does, so handlers
+  // can read the request-scoped logger (`c.get("log")`). Quiet level keeps test output clean.
+  const app = new Hono<ObsEnv>();
+  app.use("*", observability(createLogger({ level: "error" })));
+  app.route("/", routes);
   return { app, store, otp, users, sessions, sentSms };
 }
 
@@ -330,6 +338,37 @@ describe("POST /auth/otp/verify — failure paths", () => {
     }
     expect(res.status).toBe(423);
     expect((await readJson(res)).code).toBe("LOCKED");
+  });
+
+  it("does not audit the LOCKED short-circuit (no DoS-amplifying DB write per request)", async () => {
+    const { app, sentSms, users } = setup();
+    await getCode(sentSms, app);
+    // Drive the phone into a locked state, then keep hammering it while locked.
+    for (let i = 0; i < 8; i++) {
+      await post(app, "/auth/otp/verify", { phone: PHONE, code: "111111", platform: "web" });
+    }
+    // Only the code-verifying attempts (INVALID_CODE) are audited; the LOCKED
+    // short-circuit writes nothing, so the count is bounded by the attempt quota.
+    expect(users.events.every((e) => e.reason !== "LOCKED")).toBe(true);
+    expect(users.events.every((e) => e.reason === "INVALID_CODE")).toBe(true);
+    expect(users.events.length).toBeLessThanOrEqual(5);
+  });
+
+  it("still returns the auth error when the audit write fails (no coupling to Postgres)", async () => {
+    const { app, sentSms, users } = setup();
+    await getCode(sentSms, app);
+    // Simulate a transient Postgres outage on the audit write.
+    users.recordLoginEvent = async () => {
+      throw new Error("db down");
+    };
+    const res = await post(app, "/auth/otp/verify", {
+      phone: PHONE,
+      code: "000000",
+      platform: "web",
+    });
+    // The failed verification must still surface as 401 INVALID_CODE, not a 500.
+    expect(res.status).toBe(401);
+    expect((await readJson(res)).code).toBe("INVALID_CODE");
   });
 
   it("accepts a correct code only once (replay rejected)", async () => {

@@ -14,6 +14,7 @@ import {
 } from "@infra/shared";
 import { type Context, Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
+import type { ObsEnv } from "../observability/middleware.js";
 
 // ── Ports the routes depend on (implemented in src/services with db + better-auth) ──
 export interface UserRecord {
@@ -139,10 +140,10 @@ function toAuthUser(user: UserRecord, isNew: boolean): AuthUser {
   };
 }
 
-export function createAuthRoutes(deps: AuthRouteDeps): Hono {
+export function createAuthRoutes(deps: AuthRouteDeps): Hono<ObsEnv> {
   const { otp, users, sessions, sms, config } = deps;
   const trustedProxyCount = config.trustedProxyCount ?? 0;
-  const app = new Hono();
+  const app = new Hono<ObsEnv>();
 
   const fail = (c: Context, code: AuthErrorCode, extra: Record<string, unknown> = {}) =>
     c.json({ ok: false, code, ...extra }, ERROR_STATUS[code]);
@@ -184,20 +185,35 @@ export function createAuthRoutes(deps: AuthRouteDeps): Hono {
 
     const result = await otp.verifyCode({ phone, code });
     if (!result.ok) {
-      // Audit the failed attempt (INVALID_CODE / LOCKED / CODE_EXPIRED) so brute-force
-      // and anomalous logins are observable. A brand-new phone has no user row yet, so
-      // userId is null and the event is keyed on phone (login_event_phone_idx). The
-      // plaintext code is never recorded — only phone / ip / platform / reason.
-      const existing = await users.findByPhone(phone);
-      await users.recordLoginEvent({
-        userId: existing?.id ?? null,
-        phone,
-        platform,
-        ip,
-        deviceId: device?.deviceId,
-        success: false,
-        reason: result.error,
-      });
+      // Audit only attempts that actually verified a code (INVALID_CODE / CODE_EXPIRED)
+      // so brute-force and anomalous logins are observable. The LOCKED short-circuit is
+      // deliberately NOT audited: it returns straight from Redis with zero DB access, and
+      // the attempt that *caused* the lock (the last INVALID_CODE) is already recorded —
+      // auditing every subsequent LOCKED would let an unauthenticated caller hammer a
+      // locked phone to flood login_event / Postgres (a DoS amplification) for no signal.
+      // A brand-new phone has no user row yet, so userId is null and the event is keyed on
+      // phone (login_event_phone_idx). The plaintext code is never recorded — only
+      // phone / ip / platform / reason.
+      if (result.error !== "LOCKED") {
+        try {
+          const existing = await users.findByPhone(phone);
+          await users.recordLoginEvent({
+            userId: existing?.id ?? null,
+            phone,
+            platform,
+            ip,
+            deviceId: device?.deviceId,
+            success: false,
+            reason: result.error,
+          });
+        } catch (err) {
+          // Auditing is best-effort: a transient Postgres outage must not turn a 401/423
+          // (which only needs Redis) into a 500. Log and return the real auth error.
+          c.get("log").warn("failed to audit login attempt", {
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
       const extra =
         result.error === "INVALID_CODE"
           ? { remainingAttempts: result.remainingAttempts }
