@@ -100,8 +100,37 @@ jobs:
           else
             echo "status=UNKNOWN" >> "$GITHUB_OUTPUT"
           fi
+          # 分区标记：FINDINGS 报告的第二行（容错：任意位置、取最后一个）。解析不到则留空，
+          # 下游按 default 负责人兜底——宁可 @ 不精准，不漏通知。
+          # `|| true`:CLEAN 报告没有该行是常态,bash -eo pipefail 下 grep 落空的管道
+          # 会终止整步并连锁吞掉 issue——必须安全落空串(reviewer #59 抓的真实缺陷)。
+          areas="$(grep -iE '^[[:space:]]*SECURITY_PATROL_AREAS:' raw-report.md | tail -1 \
+            | sed -E 's/^[[:space:]]*[Ss][Ee][Cc][Uu][Rr][Ii][Tt][Yy]_[Pp][Aa][Tt][Rr][Oo][Ll]_[Aa][Rr][Ee][Aa][Ss]:[[:space:]]*//' || true)"
+          echo "areas=$areas" >> "$GITHUB_OUTPUT"
           # 报告正文剥掉标记行（在任意位置的都剥掉）。
-          grep -vE '^[[:space:]]*SECURITY_PATROL_STATUS:' raw-report.md > report.md || cp raw-report.md report.md
+          grep -vE '^[[:space:]]*SECURITY_PATROL_(STATUS|AREAS):' raw-report.md > report.md || cp raw-report.md report.md
+
+      # 分区 → 负责人（.github/security-owners.json）：命中区域缺失/未配置一律落 default。
+      # 输出两份名单：飞书 open_id（逗号分隔，卡片 <at> 用）+ GitHub 用户名（issue cc 用）。
+      - name: Resolve owners to mention
+        id: owners
+        if: always() && (steps.report.outputs.status == 'FINDINGS' || steps.report.outputs.status == 'UNKNOWN')
+        env:
+          AREAS: ${{ steps.report.outputs.areas }}
+        run: |
+          resolved="$(jq -r --arg areas "$AREAS" '
+            .default as $def | (.areas // {}) as $map |
+            ($areas | ascii_downcase | gsub("\\s"; "") | split(",") | map(select(length > 0))) as $ks |
+            (if ($ks | length) == 0 then [$def] else [$ks[] | ($map[.] // $def)] end
+             | map(select(. != null)) | unique) as $owners |
+            [($owners | map(.feishu_open_id // empty) | unique | join(",")),
+             ($owners | map(.github // empty) | unique | map("@" + .) | join(" "))] | @tsv
+          ' .github/security-owners.json)"
+          {
+            echo "open_ids=${resolved%%$'\t'*}"
+            echo "githubs=${resolved#*$'\t'}"
+          } >> "$GITHUB_OUTPUT"
+          echo "命中区域:[${AREAS:-无,落 default}] → 飞书 @ ${resolved%%$'\t'*} / issue cc ${resolved#*$'\t'}"
 
       # 发现问题 **或** 状态未知时都开 issue：宁可多开也不漏报（fail-safe）——UNKNOWN 往往
       # 意味着解析没跟上模型输出，此时若不开 issue 就会像首个版本那样静默吞掉真实发现。
@@ -112,6 +141,7 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           STATUS: ${{ steps.report.outputs.status }}
+          CC: ${{ steps.owners.outputs.githubs }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           gh label create security --color B60205 --description "安全巡检 / 安全扫描" --force >/dev/null 2>&1 || true
@@ -122,6 +152,7 @@ jobs:
           fi
           {
             cat report.md
+            [ -n "$CC" ] && printf '\n**请关注**：%s\n' "$CC"
             printf '\n\n---\n_由 security-patrol 自动生成 · [运行日志](%s)_\n' "$RUN_URL"
           } > issue-body.md
           url="$(gh issue create --title "$title" --body-file issue-body.md --label security)"
@@ -139,6 +170,8 @@ jobs:
           FEISHU_CHAT_ID: ${{ vars.SECURITY_PATROL_CHAT_ID }}
           NOTIFY_TITLE: "🛡️ 每周安全巡检"
           NOTIFY_FILE: feishu-body.md
+          # CLEAN 时 owners 步骤被跳过、输出为空 → 不 @ 任何人;FINDINGS/UNKNOWN 才 @ 负责人。
+          NOTIFY_MENTION_OPEN_IDS: ${{ steps.owners.outputs.open_ids }}
           STATUS: ${{ steps.report.outputs.status }}
           ISSUE_URL: ${{ steps.issue.outputs.url }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

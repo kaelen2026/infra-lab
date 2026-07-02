@@ -11,6 +11,8 @@
 //   NOTIFY_TITLE                   卡片标题（可选）
 //   NOTIFY_TEXT                    卡片正文 markdown（与 NOTIFY_FILE 二选一，优先 TEXT）
 //   NOTIFY_FILE                    从文件读正文 markdown（NOTIFY_TEXT 为空时用）
+//   NOTIFY_MENTION_OPEN_IDS        要 @ 的 open_id（逗号分隔,可选;卡片末尾追加 <at> 真实提醒,
+//                                  负责人映射见 .github/security-owners.json）
 //   RUN_URL                        本次 Actions 运行链接（附在正文尾部）
 
 import { readFileSync } from "node:fs";
@@ -91,6 +93,19 @@ const tokenJson = await fetchWithRetry(
 const token = tokenJson.tenant_access_token;
 
 const elements = [{ tag: "markdown", content: buildBody() }];
+
+// @ 指定负责人:卡片 markdown 的 <at id=open_id></at> 会触发真实的 @ 提醒(红点/加急面板),
+// 不是纯文本。放在独立元素里,避免与正文截断逻辑互相影响。
+const mentionIds = (process.env.NOTIFY_MENTION_OPEN_IDS ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+if (mentionIds.length > 0) {
+  elements.push({
+    tag: "markdown",
+    content: `请关注:${mentionIds.map((id) => `<at id=${id}></at>`).join(" ")}`,
+  });
+}
 const card = {
   schema: "2.0",
   ...(title ? { header: { title: { tag: "plain_text", content: title } } } : {}),

@@ -1,0 +1,24 @@
+{
+  "_doc": [
+    "安全巡检/扫描通知的负责人映射:巡检报告尾部的 SECURITY_PATROL_AREAS 标记命中哪些区域,",
+    "通知就 @ 哪些人(飞书卡片 <at> + GitHub issue cc)。区域为 null 或缺失一律落到 default。",
+    "feishu_open_id 是**本飞书应用视角**的 open_id(按应用隔离):让负责人私聊 bot 发一句话,",
+    "apps/bot 日志里 receive_v1 的 sender_open_id 就是,无需通讯录权限。",
+    "区域 key 对应 .github/prompts/security-patrol.md 的「巡检范围」8 项。"
+  ],
+  "default": {
+    "name": "侯佳林",
+    "feishu_open_id": "ou_776b9ee6408fb61e55284153876c8cac",
+    "github": "kaelen2026"
+  },
+  "areas": {
+    "otp": null,
+    "ratelimit": null,
+    "session": null,
+    "secrets": null,
+    "logging": null,
+    "contracts": null,
+    "ci": null,
+    "input": null
+  }
+}
