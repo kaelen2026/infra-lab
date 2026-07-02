@@ -1,0 +1,189 @@
+name: rework
+
+# 自动返工链:工单闭环的"跟单"一半(接单在 infra-lab-bot.yml 的 `bot` 标签触发)。
+#
+# 监听 reviewer 与 CI 的完成事件,只处理 bot 工单分支(`bot/*`)的同仓 PR:
+#   - 双完成闸:CI 与 reviewer 都对当前 head SHA 出了结论才决策(先完成的那个事件
+#     会因另一个还没跑完而跳过,由后完成的事件进入决策),保证每轮 push 恰好一次决策。
+#   - 判定:CI 非绿,或 reviewer 顶层评论末行的 `VERDICT:` 标记为 REWORK(解析不到
+#     也按 REWORK——宁可多跑一轮,不静默漏单;与 security-patrol 对 UNKNOWN 同一哲学)。
+#   - 刹车:每个 PR 最多自动返工 2 轮,用 PR 标签 `bot-rework:1/2` 计数;超限评论
+#     @ 维护者并停。想再给一轮:摘掉 `bot-rework:*` 标签后重跑 reviewer(或 push)。
+#
+# 两套凭证分工:App 安装令牌(infra-lab-bot[bot])负责评论/标签/推代码的归属;
+# job 的 GITHUB_TOKEN 只用来读 workflow run 结论(App 未授 Actions 权限)。
+#
+# 注意:workflow_run 只对**默认分支**上的本文件生效——合入 main 后闭环才通电。
+on:
+  workflow_run:
+    workflows: [reviewer, CI]
+    types: [completed]
+
+# 同一工单分支的返工串行化,不取消进行中的一轮(取消会浪费已计数的轮次)。
+concurrency:
+  group: rework-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+# job 令牌只读 run 结论;写操作(评论/标签/push)全走 App 令牌。
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  rework:
+    name: Auto rework
+    runs-on: ubuntu-latest
+    # 只管 bot 工单分支的同仓 PR;cancelled/skipped 的触发运行(如被新 push 顶掉的旧
+    # CI)不含有效结论,直接忽略——新 SHA 的完成事件会再进来。
+    if: |
+      github.event.workflow_run.event == 'pull_request' &&
+      startsWith(github.event.workflow_run.head_branch, 'bot/') &&
+      github.event.workflow_run.conclusion != 'cancelled' &&
+      github.event.workflow_run.conclusion != 'skipped' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    steps:
+      - name: Generate infra-lab-bot app token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0 (Node 24)
+        with:
+          # Client ID(公开值,非 secret)——v3 弃用了数字 `app-id`。
+          client-id: Iv23liQcsfKzRONudnfm
+          private-key: ${{ secrets.INFRA_LAB_BOT_PRIVATE_KEY }}
+
+      # 决策闸:陈旧防护 → 双完成闸 → 判定 → 轮次刹车。输出 go/round/reason/pr。
+      - name: Decide whether to rework
+        id: gate
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          ACTIONS_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          skip() { echo "$1 — skip."; echo "go=false" >>"$GITHUB_OUTPUT"; exit 0; }
+
+          # 该分支对应的打开状态 PR;没有说明已合并/关闭。
+          pr="$(gh pr list --repo "$REPO" --head "$HEAD_BRANCH" --state open \
+            --json number --jq '.[0].number // empty')"
+          [ -n "$pr" ] || skip "No open PR for $HEAD_BRANCH"
+          echo "pr=$pr" >>"$GITHUB_OUTPUT"
+
+          # 陈旧防护:PR 头指针已前移,本事件针对旧提交,交给新一轮事件。
+          head_now="$(gh pr view "$pr" --repo "$REPO" --json headRefOid --jq '.headRefOid')"
+          [ "$head_now" = "$HEAD_SHA" ] || skip "Stale event (PR head moved on)"
+
+          # 双完成闸:CI 与 reviewer 都要对这个 SHA 完成。读 run 用 job 令牌(App 无 Actions 权限)。
+          ci_conclusion="$(GH_TOKEN="$ACTIONS_TOKEN" gh run list --repo "$REPO" \
+            --workflow ci.yml --commit "$HEAD_SHA" \
+            --json status,conclusion --jq '.[0] | select(.status == "completed") | .conclusion')" || ci_conclusion=""
+          rev_line="$(GH_TOKEN="$ACTIONS_TOKEN" gh run list --repo "$REPO" \
+            --workflow reviewer.yml --commit "$HEAD_SHA" \
+            --json status,conclusion,createdAt \
+            --jq '.[0] | select(.status == "completed") | [.conclusion, .createdAt] | join(" ")')" || rev_line=""
+          [ -n "$ci_conclusion" ] || skip "CI not concluded for $HEAD_SHA yet"
+          [ -n "$rev_line" ] || skip "Reviewer not concluded for $HEAD_SHA yet"
+          read -r rev_conclusion rev_created <<<"$rev_line"
+
+          # 手动取消的 CI 不是红灯;reviewer 崩溃(非 success)没有可执行的意见——
+          # 两者都交给人,失败/取消的检查在 PR 上可见。
+          [ "$ci_conclusion" != "cancelled" ] || skip "CI was cancelled"
+          [ "$rev_conclusion" = "success" ] || skip "Reviewer concluded $rev_conclusion (no actionable verdict)"
+
+          # 判定:本轮 reviewer 运行之后的评论里最后一个 VERDICT 标记;缺失按 REWORK。
+          verdict="$(gh api "repos/$REPO/issues/$pr/comments" --paginate \
+            --jq ".[] | select(.created_at >= \"$rev_created\") | .body" \
+            | grep -oE 'VERDICT: (LGTM|REWORK)' | tail -1 || true)"
+          if [ "$ci_conclusion" = "success" ] && [ "$verdict" = "VERDICT: LGTM" ]; then
+            skip "CI green + LGTM — nothing to do"
+          fi
+          reason="CI=$ci_conclusion, reviewer=${verdict:-VERDICT missing}"
+
+          # 轮次刹车:bot-rework:1/2 标签计数,超限评论维护者并停(只评一次,靠 marker 去重)。
+          labels="$(gh pr view "$pr" --repo "$REPO" --json labels --jq '[.labels[].name] | join(",")')"
+          rounds=0
+          case ",$labels," in
+            *",bot-rework:2,"*) rounds=2 ;;
+            *",bot-rework:1,"*) rounds=1 ;;
+          esac
+          if [ "$rounds" -ge 2 ]; then
+            marker='<!-- infra-lab-bot:rework-limit -->'
+            owner="${REPO%%/*}"
+            if gh api "repos/$REPO/issues/$pr/comments" --paginate --jq '.[].body' \
+              | grep -qF "$marker"; then
+              skip "Rework limit reached (already reported)"
+            fi
+            gh pr comment "$pr" --repo "$REPO" --body "$marker
+          ⚠️ 已达自动返工上限(2 轮),停止自动处理。当前状态:${reason}。
+          剩余问题请人工裁决 @${owner} 。要再给一轮:摘掉 \`bot-rework:*\` 标签后重跑 reviewer。
+          本次运行:$RUN_URL"
+            skip "Rework limit reached"
+          fi
+
+          next=$((rounds + 1))
+          gh pr edit "$pr" --repo "$REPO" --add-label "bot-rework:$next"
+          {
+            echo "go=true"
+            echo "round=$next"
+            echo "reason=$reason"
+          } >>"$GITHUB_OUTPUT"
+          echo "Rework round $next for PR #$pr ($reason)."
+
+      - name: Checkout PR branch
+        if: steps.gate.outputs.go == 'true'
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
+          fetch-depth: 1
+          # 用 App 令牌检出,返工的提交/push 归属到 infra-lab-bot[bot]。
+          token: ${{ steps.app-token.outputs.token }}
+
+      # prompt = 基础模板 + 返工模式说明 + 本次 PR 引用。全部为可信静态文本,经 env 传入。
+      - name: Build rework prompt
+        id: build-prompt
+        if: steps.gate.outputs.go == 'true'
+        env:
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.gate.outputs.pr }}
+          ROUND: ${{ steps.gate.outputs.round }}
+          REASON: ${{ steps.gate.outputs.reason }}
+        run: |
+          {
+            echo 'value<<PROMPT_EOF'
+            cat .github/prompts/infra-lab-bot.md
+            cat .github/prompts/rework.md
+            printf '\n本次返工:REPO=%s PR NUMBER=#%s,第 %s/2 轮。触发原因:%s。(PR 分支已检出到当前工作目录)\n' \
+              "$REPO" "$PR_NUMBER" "$ROUND" "$REASON"
+            echo 'PROMPT_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run Claude Code (rework)
+        if: steps.gate.outputs.go == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # 以 infra-lab-bot App 身份提交/评论,而非默认 claude[bot]。
+          github_token: ${{ steps.app-token.outputs.token }}
+          # 触发链源头是 bot 自己的 push(actor = infra-lab-bot[bot]),需要放行,
+          # 与 infra-lab-bot.yml 同理:只放这一个 bot,不用 "*"。
+          allowed_bots: "infra-lab-bot"
+          prompt: ${{ steps.build-prompt.outputs.value }}
+          # 返工由维护者建立的自动链触发,输出进运行日志便于排查。
+          show_full_output: true
+          # 与接单一致的全工具访问:私仓 + main 分支保护(PR + 审批 + 必需 CI)兜底,
+          # bot 无论有什么工具都不能自合或直推 main。
+          claude_args: >-
+            --dangerously-skip-permissions
+            --model claude-opus-4-8
+
+      # 员工卡住要举手:返工运行失败时把运行链接评到 PR 上,不许无声挂起。
+      - name: Report failure to PR
+        if: failure() && steps.gate.outputs.pr != ''
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR_NUMBER: ${{ steps.gate.outputs.pr }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: >-
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY"
+          --body "⚠️ 自动返工运行失败,本轮未完成。请查看运行日志:$RUN_URL"

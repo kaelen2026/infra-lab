@@ -11,6 +11,11 @@ run-name: >-
 # (`gh workflow run infra-lab-bot.yml -f prompt="..."`) to run a one-off task —
 # in that mode there is no comment thread, so output lands in the Actions run.
 #
+# Ticket intake: labeling an issue `bot` runs the same job with the ticket prompt
+# (.github/prompts/ticket.md) — the bot implements the issue on a `bot/<n>-<slug>`
+# branch and opens a PR; rework.yml then drives that PR to green (the "跟单" half
+# of the loop). Lifecycle docs: docs/infra-lab-bot.md.
+#
 # Two independent credentials:
 #   - Claude (Anthropic) auth: CLAUDE_CODE_OAUTH_TOKEN secret (from `claude setup-token`).
 #   - GitHub identity: a *custom* GitHub App named "infra-lab-bot" — the workflow mints
@@ -54,6 +59,16 @@ on:
     types: [created]
   pull_request_review_comment:
     types: [created]
+  issues:
+    types: [labeled]
+
+# Serialize runs that share an issue/PR thread (label intake, mentions), so a
+# double-labeled issue or rapid mentions never run concurrently; a superseded
+# queued run is dropped, and the surviving run re-reads the whole thread anyway.
+# Dispatch runs have no thread — fall back to run_id (i.e. unconstrained).
+concurrency:
+  group: infra-lab-bot-${{ github.event.issue.number || github.run_id }}
+  cancel-in-progress: false
 
 jobs:
   infra-lab-bot:
@@ -69,6 +84,7 @@ jobs:
     # (Feishu bridge / manual) is a separate branch and intentionally not filtered.
     if: |
       github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issues' && github.event.label.name == 'bot' && github.event.sender.login != 'infra-lab-bot[bot]' && !github.event.issue.pull_request) ||
       (github.event_name == 'issue_comment' && github.event.sender.login != 'infra-lab-bot[bot]' && contains(github.event.comment.body, '@infra-lab-bot')) ||
       (github.event_name == 'pull_request_review_comment' && github.event.sender.login != 'infra-lab-bot[bot]' && contains(github.event.comment.body, '@infra-lab-bot'))
     runs-on: ubuntu-latest
@@ -113,6 +129,24 @@ jobs:
             echo 'PROMPT_EOF'
           } >> "$GITHUB_OUTPUT"
 
+      # On `bot`-label intake, prompt = base template + ticket-mode instructions +
+      # the issue reference. Only trusted static text is inlined (the issue number
+      # comes from the event, not from user-controlled body text).
+      - name: Build ticket prompt
+        id: build-ticket-prompt
+        if: github.event_name == 'issues'
+        env:
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          {
+            echo 'value<<PROMPT_EOF'
+            cat .github/prompts/infra-lab-bot.md
+            cat .github/prompts/ticket.md
+            printf '\n本次工单:REPO=%s ISSUE NUMBER=#%s\n' "$REPO" "$ISSUE_NUMBER"
+            echo 'PROMPT_EOF'
+          } >> "$GITHUB_OUTPUT"
+
       - name: Run Claude Code
         id: claude
         uses: anthropics/claude-code-action@v1
@@ -138,13 +172,26 @@ jobs:
           claude_args: >-
             --dangerously-skip-permissions
             --model claude-opus-4-8
-          # On manual dispatch, run the composed prompt (automation mode). Empty on
-          # comment events so the action stays in mention/tag mode and reacts inline.
-          prompt: ${{ github.event_name == 'workflow_dispatch' && steps.build-prompt.outputs.value || '' }}
+          # On manual dispatch / label intake, run the composed prompt (automation
+          # mode). Empty on comment events so the action stays in mention/tag mode
+          # and reacts inline.
+          prompt: ${{ (github.event_name == 'workflow_dispatch' && steps.build-prompt.outputs.value) || (github.event_name == 'issues' && steps.build-ticket-prompt.outputs.value) || '' }}
           # Dispatch has no comment thread to reply in, so surface Claude's output in
-          # the run log. Scoped to workflow_dispatch (maintainer-triggered) only —
-          # comment runs stay hidden since less-trusted users can fire those.
-          show_full_output: ${{ github.event_name == 'workflow_dispatch' }}
+          # the run log; ticket intake is likewise collaborator-gated (only they can
+          # label). Comment runs stay hidden since less-trusted users can fire those.
+          show_full_output: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'issues' }}
+
+      # Ticket-mode failure visibility: an employee raises a hand instead of going
+      # silent — post the run link back to the issue if anything above failed.
+      - name: Report failure to issue
+        if: failure() && github.event_name == 'issues'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: >-
+          gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY"
+          --body "⚠️ 接单运行失败,本工单未完成。请查看运行日志:$RUN_URL"
 
       # Feishu closed loop: when apps/bot dispatched with a feishu_message_id, reply
       # the run's result back into that Feishu thread. `always()` so a failed Claude run

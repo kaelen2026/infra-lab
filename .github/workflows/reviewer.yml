@@ -7,6 +7,9 @@ name: reviewer
 # 与其它审查/扫描互补:@infra-lab-bot 是「被 @ 才应答」的通用助手(infra-lab-bot.yml);
 # security-patrol 是「每周深度安全巡检」;本工作流是「每次 PR 自动过一遍」。
 #
+# 顶层总结的最后一行是机器可读判定 `VERDICT: LGTM|REWORK`(契约见 prompts/reviewer.md):
+# rework.yml 据此对 bot 工单分支(bot/*)的 PR 触发自动返工,人类 PR 上它只是信息。
+#
 # 依赖的仓库 secrets:
 #   CLAUDE_CODE_OAUTH_TOKEN                            Claude 鉴权(`claude setup-token`)
 #   INFRA_LAB_BOT_PRIVATE_KEY                          infra-lab-bot GitHub App 私钥(评论归属到 bot;
