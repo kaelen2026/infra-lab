@@ -12,6 +12,7 @@ import { createAuthRoutes } from "./routes/auth.routes.js";
 import { createNotificationRoutes } from "./routes/notification.routes.js";
 import { createTimelineRoutes } from "./routes/timeline.routes.js";
 import { createTodoRoutes } from "./routes/todo.routes.js";
+import { requestBodyLimit, securityHeaders } from "./security.js";
 import { createApnsClient } from "./services/apns-client.js";
 import { createLocalImageStore } from "./services/image-store.js";
 import { createSessionService } from "./services/session-service.js";
@@ -67,8 +68,14 @@ const sms = async (phone: string, code: string): Promise<void> => {
 
 const app = new Hono<ObsEnv>();
 // First middleware: assign a request id, attach a request-scoped logger, and
-// emit one structured access-log line per request.
-app.use("*", observability(log));
+// emit one structured access-log line per request (escalating slow ones to warn).
+app.use("*", observability(log, { slowRequestMs: env.SLOW_REQUEST_MS }));
+// Baseline security response headers on every response (nosniff, frame-options,
+// referrer-policy, HSTS, …). See ./security.ts for the cross-origin-resource-policy note.
+app.use("*", securityHeaders());
+// Cap the request body before any handler buffers it, so one request can't exhaust
+// memory. Kept above the timeline image upload limit; see MAX_REQUEST_BODY_BYTES.
+app.use("*", requestBodyLimit(env.MAX_REQUEST_BODY_BYTES));
 // Browser clients (web on :3000, h5 on :3002) call this API cross-origin and must send
 // the session cookie, so credentials are allowed and the request origin is reflected when
 // it is in the trusted allowlist (a fixed list, never "*", since credentials are enabled).
