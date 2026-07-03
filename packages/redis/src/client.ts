@@ -42,3 +42,18 @@ export function createRedisOtpStore(redis: Redis): OtpStore {
     },
   };
 }
+
+/**
+ * Adapt an ioredis client to the counter port the API's rate limiter consumes
+ * (`incr` + `expire`). Structurally matches `RateLimitStore` in `apps/api` without a
+ * back-dependency on the app. Shares the same connection as the OTP store — rate-limit
+ * keys are namespaced (`rl:*`) and never collide with OTP keys (`otp:*`).
+ */
+export function createRedisRateLimitStore(redis: Redis) {
+  return {
+    incr: (key: string) => redis.incr(key),
+    async expire(key: string, ttlSeconds: number) {
+      return (await redis.expire(key, ttlSeconds)) === 1;
+    },
+  };
+}

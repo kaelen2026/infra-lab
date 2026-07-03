@@ -2,13 +2,14 @@ import { serve } from "@hono/node-server";
 import { createAuth, createOtpService } from "@infra/auth";
 import { createDb, schema } from "@infra/db";
 import { apnsConfigFromEnv, loadCoreEnv } from "@infra/env/core";
-import { createRedis, createRedisOtpStore } from "@infra/redis";
+import { createRedis, createRedisOtpStore, createRedisRateLimitStore } from "@infra/redis";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { checkReadiness } from "./observability/health.js";
 import { createLogger } from "./observability/logger.js";
 import { type ObsEnv, observability } from "./observability/middleware.js";
-import { createAuthRoutes } from "./routes/auth.routes.js";
+import { createRateLimiter } from "./rate-limit.js";
+import { clientIp, createAuthRoutes } from "./routes/auth.routes.js";
 import { createNotificationRoutes } from "./routes/notification.routes.js";
 import { createTimelineRoutes } from "./routes/timeline.routes.js";
 import { createTodoRoutes } from "./routes/todo.routes.js";
@@ -90,6 +91,29 @@ app.get("/ready", async (c) => {
   if (!report.ok) c.get("log").warn("readiness check failed", { checks: report.checks });
   return c.json(report, report.ok ? 200 : 503);
 });
+
+// Coarse per-IP request throttle (transport-level). Registered AFTER /health and
+// /ready so those probes stay exempt, and BEFORE every real route so it wraps the
+// Better-Auth handler and all business routes. The fine-grained per-phone/per-IP OTP
+// quotas still apply on top. Uses the same trusted-client-IP resolution as OTP.
+// Disabled when RATE_LIMIT_MAX is 0.
+if (env.RATE_LIMIT_MAX > 0) {
+  app.use(
+    "*",
+    createRateLimiter({
+      store: createRedisRateLimitStore(redis),
+      max: env.RATE_LIMIT_MAX,
+      windowSeconds: env.RATE_LIMIT_WINDOW_SECONDS,
+      clientId: (c) => clientIp(c.req.raw.headers, env.TRUSTED_PROXY_COUNT),
+    }),
+  );
+  log.info("rate limit enabled", {
+    max: env.RATE_LIMIT_MAX,
+    windowSeconds: env.RATE_LIMIT_WINDOW_SECONDS,
+  });
+} else {
+  log.warn("rate limit disabled (RATE_LIMIT_MAX=0)");
+}
 
 // Better Auth's own endpoints (used by its client + bearer-token resolution).
 app.on(["GET", "POST"], "/api/auth/*", (c) => auth.handler(c.req.raw));
