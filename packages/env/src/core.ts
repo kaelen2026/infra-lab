@@ -80,6 +80,14 @@ const CoreEnvSchema = z
     // instead of `info`, so latency regressions surface in the access log without a
     // metrics backend. 0 disables the escalation. Errors/4xx keep their own levels.
     SLOW_REQUEST_MS: z.coerce.number().int().min(0).default(1000),
+    // Coarse per-client request throttle (transport-level guardrail). A fixed window of
+    // RATE_LIMIT_WINDOW_SECONDS allows at most RATE_LIMIT_MAX requests per client IP,
+    // applied to every endpoint except the health probes. Complements the fine-grained
+    // per-phone / per-IP OTP quotas, which still apply on top. Uses the same trusted
+    // client-IP resolution as OTP (see TRUSTED_PROXY_COUNT) — set that correctly behind
+    // a proxy or the bucket collapses to one global counter. RATE_LIMIT_MAX=0 disables it.
+    RATE_LIMIT_MAX: z.coerce.number().int().min(0).default(120),
+    RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
   })
   .superRefine((e, ctx) => {
     // Hard production guardrail: OTP_DEBUG_RETURN_CODE echoes the code into responses
