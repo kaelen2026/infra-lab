@@ -4,40 +4,40 @@ import SwiftUI
 /// per-user list with completion toggle and delete. Loaded once on appear.
 struct TodosView: View {
     @EnvironmentObject private var todos: TodoViewModel
+    @EnvironmentObject private var auth: AuthViewModel
+    @State private var showingAccount = false
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                header
-                AddTodoForm(busy: todos.creating) { title in
-                    await todos.create(title: title)
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    AddTodoForm(busy: todos.creating) { title in
+                        await todos.create(title: title)
+                    }
+                    TodoListCard(
+                        todos: todos.todos,
+                        loading: todos.loading,
+                        pendingIds: todos.pendingIds,
+                        onToggle: { todo in Task { await todos.toggle(todo) } },
+                        onRemove: { id in Task { await todos.remove(id: id) } }
+                    )
+                    ErrorBanner(message: todos.error)
                 }
-                TodoListCard(
-                    todos: todos.todos,
-                    loading: todos.loading,
-                    pendingIds: todos.pendingIds,
-                    onToggle: { todo in Task { await todos.toggle(todo) } },
-                    onRemove: { id in Task { await todos.remove(id: id) } }
-                )
-                ErrorBanner(message: todos.error)
+                .padding(20)
+                .frame(maxWidth: 560)
+                .frame(maxWidth: .infinity)
             }
-            .padding(20)
-            .frame(maxWidth: 560)
-            .frame(maxWidth: .infinity)
+            .background(AuthBackground())
+            .navigationTitle("待办")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    AccountAvatarButton(user: auth.user) { showingAccount = true }
+                }
+            }
+            .task { await todos.load() }
         }
-        .background(AuthBackground())
-        .task { await todos.load() }
-    }
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("待办")
-                .font(AuthTheme.title)
-                .foregroundStyle(DesignTokens.textPrimary)
-            Text("登录之后的第一个业务:按用户隔离的待办清单。")
-                .font(.subheadline)
-                .foregroundStyle(DesignTokens.textSecondary)
-        }
+        .sheet(isPresented: $showingAccount) { AccountSheet() }
     }
 }
 
@@ -199,6 +199,8 @@ struct TodoRow: View {
 
 #if DEBUG
 #Preview {
-    TodosView().environmentObject(TodoViewModel(client: PreviewTodoClient()))
+    TodosView()
+        .environmentObject(TodoViewModel(client: PreviewTodoClient()))
+        .environmentObject(AuthViewModel(client: PreviewAuthClient()))
 }
 #endif
