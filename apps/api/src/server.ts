@@ -208,5 +208,32 @@ app.onError((err, c) => {
 });
 
 const port = env.PORT;
-serve({ fetch: app.fetch, port });
+const server = serve({ fetch: app.fetch, port });
 log.info("api listening", { port });
+
+// Graceful shutdown. Orchestrators (K8s, Compose, systemd) signal a rolling
+// deploy / scale-down with SIGTERM: stop accepting new connections, let in-flight
+// requests finish, then release the Postgres + Redis pools. Without this the
+// process is killed mid-request and leaks connections on every deploy.
+let shuttingDown = false;
+const shutdown = (signal: NodeJS.Signals): void => {
+  if (shuttingDown) return; // ignore a second signal while already draining
+  shuttingDown = true;
+  log.info("shutdown signal received, draining", { signal });
+  // close() stops accepting new connections and fires the callback once all
+  // in-flight requests have completed.
+  server.close(async (err) => {
+    if (err) log.error("http server close failed", { error: err.message });
+    // Release dependency pools even if the http close reported an error, so a
+    // half-open server can't pin the PG/Redis connections open.
+    const [redisClose, dbClose] = await Promise.allSettled([redis.quit(), db.$client.end()]);
+    if (redisClose.status === "rejected")
+      log.error("redis close failed", { error: String(redisClose.reason) });
+    if (dbClose.status === "rejected")
+      log.error("db close failed", { error: String(dbClose.reason) });
+    log.info("shutdown complete");
+    process.exit(err ? 1 : 0);
+  });
+};
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
