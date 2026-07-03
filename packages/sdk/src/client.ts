@@ -8,6 +8,7 @@ import {
   type CreateTodoInput,
   type DeviceDTO,
   type DevicesResponse,
+  type ListTimelineOptions,
   type LoginEventDTO,
   type LoginEventsResponse,
   type Platform,
@@ -19,6 +20,7 @@ import {
   type TimelineImageContentType,
   type TimelineImageDTO,
   type TimelineImageResponse,
+  type TimelinePage,
   type TimelinePostDTO,
   type TimelinePostResponse,
   type TimelinePostsResponse,
@@ -282,9 +284,14 @@ export function createTimelineClient(options: CreateTimelineClientOptions): Time
   }
 
   return {
-    async list(): Promise<TimelinePostDTO[]> {
-      const res = await request<TimelinePostsResponse>(TIMELINE_ROUTES.list, "GET");
-      return res.posts;
+    async list(listOptions?: ListTimelineOptions): Promise<TimelinePage> {
+      const query = new URLSearchParams();
+      if (listOptions?.cursor !== undefined) query.set("cursor", listOptions.cursor);
+      if (listOptions?.limit !== undefined) query.set("limit", String(listOptions.limit));
+      const qs = query.toString();
+      const path = qs ? `${TIMELINE_ROUTES.list}?${qs}` : TIMELINE_ROUTES.list;
+      const res = await request<TimelinePostsResponse>(path, "GET");
+      return { posts: res.posts, nextCursor: res.nextCursor };
     },
 
     async uploadImage(

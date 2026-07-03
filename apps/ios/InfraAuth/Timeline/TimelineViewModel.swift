@@ -9,6 +9,10 @@ import UIKit
 final class TimelineViewModel: ObservableObject {
     /// nil until the first load resolves; drives the loading skeleton.
     @Published private(set) var posts: [TimelinePostDTO]?
+    /// Opaque cursor for the next (older) page; nil once the feed is exhausted.
+    @Published private(set) var nextCursor: String?
+    /// True while an older page is being appended (drives the footer spinner).
+    @Published private(set) var loadingMore = false
     @Published private(set) var error: String?
     /// True while a publish is in flight (disables the composer's publish button).
     @Published private(set) var publishing = false
@@ -24,13 +28,34 @@ final class TimelineViewModel: ObservableObject {
     }
 
     var loading: Bool { error == nil && posts == nil }
+    /// True when an older page exists (drives the infinite-scroll footer).
+    var hasMore: Bool { nextCursor != nil }
 
-    /// Load the feed once.
+    /// (Re)load the first page, resetting the pagination cursor.
     func load() async {
         do {
-            posts = try await client.list()
+            let page = try await client.list()
+            posts = page.posts
+            nextCursor = page.nextCursor
         } catch {
             self.error = "无法加载动态，请稍后重试。"
+        }
+    }
+
+    /// Append the next (older) page. No-op while one is in flight or at the end;
+    /// on failure the cursor is kept, so scrolling to the footer again retries.
+    func loadMore() async {
+        guard let cursor = nextCursor, !loadingMore else { return }
+        loadingMore = true
+        defer { loadingMore = false }
+        do {
+            let page = try await client.list(cursor: cursor, limit: nil)
+            // Publishing prepends locally, so drop any id the list already shows.
+            let existing = Set((posts ?? []).map(\.id))
+            posts = (posts ?? []) + page.posts.filter { !existing.contains($0.id) }
+            nextCursor = page.nextCursor
+        } catch {
+            self.error = "无法加载更多动态，请稍后重试。"
         }
     }
 

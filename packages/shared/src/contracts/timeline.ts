@@ -16,6 +16,10 @@ import { z } from "zod";
 
 // ── Limits (shared so client and server agree before a byte is sent) ──────────
 export const TIMELINE_TEXT_MAX = 2000;
+/** Page size the list endpoint uses when the client sends no `limit`. */
+export const TIMELINE_PAGE_LIMIT_DEFAULT = 20;
+/** Largest page a client may request. */
+export const TIMELINE_PAGE_LIMIT_MAX = 50;
 export const TIMELINE_IMAGES_MAX = 9;
 /** Max accepted upload size, in bytes (8 MiB). */
 export const TIMELINE_IMAGE_MAX_BYTES = 8 * 1024 * 1024;
@@ -52,6 +56,23 @@ export type TimelineImage = z.infer<typeof timelineImageSchema>;
 
 // ── Requests ──────────────────────────────────────────────────────────────────
 export const timelineTextSchema = z.string().trim().max(TIMELINE_TEXT_MAX);
+
+/**
+ * Query for the list endpoint (infinite scroll). `cursor` is the opaque token
+ * the previous page returned in `nextCursor`; omit it for the first (newest)
+ * page. A malformed cursor is `INVALID_REQUEST`.
+ */
+export const listTimelineQuerySchema = z.object({
+  cursor: z.string().min(1).optional(),
+  limit: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(TIMELINE_PAGE_LIMIT_MAX)
+    .optional()
+    .default(TIMELINE_PAGE_LIMIT_DEFAULT),
+});
+export type ListTimelineQuery = z.infer<typeof listTimelineQuerySchema>;
 
 /** Create a post — at least one of text / images must be present. */
 export const createTimelinePostSchema = z
@@ -95,9 +116,16 @@ export interface TimelineError {
 }
 
 // ── Responses ─────────────────────────────────────────────────────────────────
+/** One page of the feed, newest first. */
 export interface TimelinePostsResponse {
   ok: true;
   posts: TimelinePostDTO[];
+  /**
+   * Opaque token for the next (older) page — pass it back as `?cursor=`.
+   * `null` means this was the last page. Clients never inspect the contents;
+   * the encoding is a server implementation detail.
+   */
+  nextCursor: string | null;
 }
 
 export interface TimelinePostResponse {
@@ -123,12 +151,25 @@ export function timelinePostPath(id: string): string {
 }
 
 // ── SDK interface draft (implemented per platform; iOS today) ───────────────────
+/** One page of posts as the SDK surfaces it (see {@link TimelinePostsResponse}). */
+export interface TimelinePage {
+  posts: TimelinePostDTO[];
+  nextCursor: string | null;
+}
+
+/** Options for {@link TimelineClient.list}; both default server-side. */
+export interface ListTimelineOptions {
+  cursor?: string;
+  limit?: number;
+}
+
 /**
  * The shape a platform SDK implements. Transport mirrors {@link TodoClient}:
  * native sends `Authorization: Bearer`; web would ride the session cookie.
  */
 export interface TimelineClient {
-  list(): Promise<TimelinePostDTO[]>;
+  /** Fetch one page; call again with the returned `nextCursor` until it is null. */
+  list(options?: ListTimelineOptions): Promise<TimelinePage>;
   uploadImage(bytes: Uint8Array, contentType: TimelineImageContentType): Promise<TimelineImageDTO>;
   create(input: CreateTimelinePostInput): Promise<TimelinePostDTO>;
   remove(id: string): Promise<void>;

@@ -12,7 +12,19 @@ import { useTimeline } from "./use-timeline";
  */
 export default function TimelinePage() {
   const { ready } = useRequireAuth();
-  const { posts, loading, error, publishing, pendingIds, publish, remove } = useTimeline(ready);
+  const {
+    posts,
+    loading,
+    error,
+    hasMore,
+    loadingMore,
+    loadMoreError,
+    loadMore,
+    publishing,
+    pendingIds,
+    publish,
+    remove,
+  } = useTimeline(ready);
 
   // Hold the layout (with nav) while resolving / redirecting, so there's no flash.
   if (!ready) {
@@ -36,7 +48,16 @@ export default function TimelinePage() {
         <div className="space-y-6">
           <ComposeTimeline onPublish={publish} busy={publishing} />
 
-          <TimelineList posts={posts} loading={loading} pendingIds={pendingIds} onRemove={remove} />
+          <TimelineList
+            posts={posts}
+            loading={loading}
+            hasMore={hasMore}
+            loadingMore={loadingMore}
+            loadMoreError={loadMoreError}
+            pendingIds={pendingIds}
+            onRemove={remove}
+            onLoadMore={loadMore}
+          />
 
           {error && (
             <p

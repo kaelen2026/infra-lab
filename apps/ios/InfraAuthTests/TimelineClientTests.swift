@@ -25,21 +25,45 @@ final class TimelineClientTests: XCTestCase {
         ]
     }
 
-    func testListParsesPosts() async throws {
-        MockURLProtocol.handler = { _ in
-            (200, self.json([
+    func testListParsesPostsAndNextCursor() async throws {
+        var seenURL: URL?
+        MockURLProtocol.handler = { request in
+            seenURL = request.url
+            return (200, self.json([
                 "ok": true,
                 "posts": [
                     self.postBody(id: "p1", text: "第一条", images: ["/uploads/a.jpg"]),
                     self.postBody(id: "p2", text: "第二条", images: [])
-                ]
+                ],
+                "nextCursor": "token-1"
             ]))
         }
-        let posts = try await makeClient().list()
-        XCTAssertEqual(posts.count, 2)
-        XCTAssertEqual(posts.first?.text, "第一条")
-        XCTAssertEqual(posts.first?.images.first?.url, "/uploads/a.jpg")
-        XCTAssertEqual(posts.last?.images.count, 0)
+        let page = try await makeClient().list()
+        XCTAssertEqual(page.posts.count, 2)
+        XCTAssertEqual(page.posts.first?.text, "第一条")
+        XCTAssertEqual(page.posts.first?.images.first?.url, "/uploads/a.jpg")
+        XCTAssertEqual(page.posts.last?.images.count, 0)
+        XCTAssertEqual(page.nextCursor, "token-1")
+        // First page carries no query string; the server applies its defaults.
+        XCTAssertNil(seenURL?.query)
+    }
+
+    func testListSendsCursorAndLimitAsQuery() async throws {
+        var seenURL: URL?
+        MockURLProtocol.handler = { request in
+            seenURL = request.url
+            return (200, self.json(["ok": true, "posts": [], "nextCursor": NSNull()]))
+        }
+        let page = try await makeClient().list(cursor: "abc123", limit: 5)
+        XCTAssertEqual(page.posts.count, 0)
+        XCTAssertNil(page.nextCursor)
+        let components = seenURL.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }
+        let query = Dictionary(
+            uniqueKeysWithValues: (components?.queryItems ?? []).map { ($0.name, $0.value) }
+        )
+        XCTAssertEqual(components?.path, "/timeline")
+        XCTAssertEqual(query["cursor"], "abc123")
+        XCTAssertEqual(query["limit"], "5")
     }
 
     func testCreateSendsBearerAndReturnsPost() async throws {

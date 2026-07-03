@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   createTimelineRoutes,
   type ImageStore,
+  type TimelineListPosition,
   type TimelinePostRecord,
   type TimelinePostRepository,
 } from "../src/routes/timeline.routes.js";
@@ -15,10 +16,19 @@ const readJson = (res: Response): Promise<any> => res.json() as Promise<any>;
 class FakeTimelineRepository implements TimelinePostRepository {
   rows = new Map<string, TimelinePostRecord & { userId: string }>();
 
-  async list(userId: string): Promise<TimelinePostRecord[]> {
+  async list(
+    userId: string,
+    { limit, before }: { limit: number; before?: TimelineListPosition },
+  ): Promise<TimelinePostRecord[]> {
+    const olderThanBefore = (r: TimelinePostRecord) =>
+      !before ||
+      r.createdAt.getTime() < before.createdAt.getTime() ||
+      (r.createdAt.getTime() === before.createdAt.getTime() && r.id < before.id);
     return [...this.rows.values()]
       .filter((r) => r.userId === userId)
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      .filter(olderThanBefore)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || b.id.localeCompare(a.id))
+      .slice(0, limit);
   }
   async create(
     userId: string,
@@ -225,6 +235,109 @@ describe("timeline lifecycle", () => {
     const { app } = setup();
     expect((await app.request("/uploads/missing.jpg", { method: "GET" })).status).toBe(404);
     expect((await jsonReq(app, "DELETE", "/timeline/nope")).status).toBe(404);
+  });
+});
+
+describe("GET /timeline — cursor pagination", () => {
+  /** Insert rows with controlled (createdAt, id) so page boundaries are deterministic. */
+  function seed(repo: FakeTimelineRepository, userId: string, stamps: [id: string, at: number][]) {
+    for (const [id, at] of stamps) {
+      repo.rows.set(id, {
+        id,
+        userId,
+        text: id,
+        images: [],
+        createdAt: new Date(at),
+        updatedAt: new Date(at),
+      });
+    }
+  }
+
+  const BASE = 1_700_000_000_000;
+
+  it("walks the whole feed via nextCursor without skips or duplicates (incl. createdAt ties)", async () => {
+    const { app, posts } = setup();
+    // b and c share a createdAt: the id tie-breaker must order them (c before b)
+    // and keep the page boundary exact.
+    seed(posts, "user_a", [
+      ["a", BASE + 4000],
+      ["b", BASE + 3000],
+      ["c", BASE + 3000],
+      ["d", BASE + 2000],
+      ["e", BASE + 1000],
+    ]);
+
+    const ids: string[] = [];
+    let cursor: string | null = null;
+    let pages = 0;
+    do {
+      const path = cursor
+        ? `/timeline?limit=2&cursor=${encodeURIComponent(cursor)}`
+        : "/timeline?limit=2";
+      const res = await jsonReq(app, "GET", path);
+      expect(res.status).toBe(200);
+      const body = await readJson(res);
+      ids.push(...body.posts.map((p: { id: string }) => p.id));
+      cursor = body.nextCursor;
+      pages += 1;
+    } while (cursor !== null && pages < 10);
+
+    expect(pages).toBe(3); // 2 + 2 + 1
+    expect(ids).toEqual(["a", "c", "b", "d", "e"]);
+  });
+
+  it("returns nextCursor null when the feed fits exactly one page", async () => {
+    const { app, posts } = setup();
+    seed(posts, "user_a", [
+      ["a", BASE + 2000],
+      ["b", BASE + 1000],
+    ]);
+    const body = await readJson(await jsonReq(app, "GET", "/timeline?limit=2"));
+    expect(body.posts).toHaveLength(2);
+    expect(body.nextCursor).toBeNull();
+  });
+
+  it("defaults the limit when the query is empty", async () => {
+    const { app, posts } = setup();
+    seed(posts, "user_a", [["a", BASE]]);
+    const body = await readJson(await jsonReq(app, "GET", "/timeline"));
+    expect(body.posts).toHaveLength(1);
+    expect(body.nextCursor).toBeNull();
+  });
+
+  it("rejects a malformed cursor with 400", async () => {
+    const { app } = setup();
+    const res = await jsonReq(app, "GET", "/timeline?cursor=not-a-cursor");
+    expect(res.status).toBe(400);
+    expect((await readJson(res)).code).toBe("INVALID_REQUEST");
+  });
+
+  it("rejects an out-of-range limit with 400", async () => {
+    const { app } = setup();
+    for (const limit of ["0", "51", "abc", "1.5"]) {
+      const res = await jsonReq(app, "GET", `/timeline?limit=${limit}`);
+      expect(res.status).toBe(400);
+      expect((await readJson(res)).code).toBe("INVALID_REQUEST");
+    }
+  });
+
+  it("scopes a page (and its cursor) to the authenticated user", async () => {
+    const { app, posts, current } = setup();
+    seed(posts, "user_a", [
+      ["a1", BASE + 3000],
+      ["a2", BASE + 2000],
+    ]);
+    seed(posts, "user_b", [["b1", BASE + 2500]]);
+
+    const first = await readJson(await jsonReq(app, "GET", "/timeline?limit=1"));
+    expect(first.posts.map((p: { id: string }) => p.id)).toEqual(["a1"]);
+
+    // Replaying user_a's cursor as user_b must only ever window user_b's feed.
+    current.id = "user_b";
+    const replay = await readJson(
+      await jsonReq(app, "GET", `/timeline?limit=1&cursor=${encodeURIComponent(first.nextCursor)}`),
+    );
+    expect(replay.posts.map((p: { id: string }) => p.id)).toEqual(["b1"]);
   });
 });
 
