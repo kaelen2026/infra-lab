@@ -57,6 +57,9 @@ enum AuthCopy {
         case .invalidCode: return "验证码错误。"
         case .unauthorized: return "登录状态已失效，请重新登录。"
         case .invalidRefreshToken: return "登录状态已失效，请重新登录。"
+        case .qrNotFound: return "二维码无效或已过期，请刷新后重试。"
+        case .qrAlreadyUsed: return "该二维码已被使用，请刷新后重试。"
+        case .qrNotApproved: return "尚未在手机上确认登录。"
             case .unknown: return generic
             }
         }

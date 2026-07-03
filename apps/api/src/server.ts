@@ -11,11 +11,13 @@ import { type ObsEnv, observability } from "./observability/middleware.js";
 import { createRateLimiter } from "./rate-limit.js";
 import { clientIp, createAuthRoutes } from "./routes/auth.routes.js";
 import { createNotificationRoutes } from "./routes/notification.routes.js";
+import { createQrRoutes } from "./routes/qr.routes.js";
 import { createTimelineRoutes } from "./routes/timeline.routes.js";
 import { createTodoRoutes } from "./routes/todo.routes.js";
 import { requestBodyLimit, securityHeaders } from "./security.js";
 import { createApnsClient } from "./services/apns-client.js";
 import { createLocalImageStore } from "./services/image-store.js";
+import { createRedisQrTicketStore } from "./services/qr-ticket-store.js";
 import { createSessionService } from "./services/session-service.js";
 import { createTimelineRepository } from "./services/timeline-repository.js";
 import { createTodoRepository } from "./services/todo-repository.js";
@@ -129,6 +131,17 @@ app.route(
       debugReturnCode: env.OTP_DEBUG_RETURN_CODE,
       trustedProxyCount: env.TRUSTED_PROXY_COUNT,
     },
+  }),
+);
+// QR cross-device login: an already-authenticated native client (Cookie or Bearer)
+// approves a browser sign-in. Ticket state lives in Redis (its own `qr:*` namespace);
+// consume mints the same HttpOnly session cookie the OTP web flow issues.
+app.route(
+  "/",
+  createQrRoutes({
+    tickets: createRedisQrTicketStore(createRedisOtpStore(redis)),
+    requireUser: (h) => sessions.requireUser(h),
+    issueWebSessionForUser: (userId) => sessions.issueWebSessionForUser(userId),
   }),
 );
 // Per-user todo routes (protected; reuse the session resolver for Cookie + Bearer).

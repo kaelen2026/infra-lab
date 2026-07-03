@@ -16,6 +16,7 @@ final class PreviewAuthClient: AuthClient {
     func listDevices() async throws -> [DeviceDTO] { [.preview] }
     func updatePushToken(deviceId: String, pushToken: String) async throws {}
     func listLoginEvents() async throws -> [LoginEventDTO] { [.previewSuccess, .previewFailure] }
+    func approveQrLogin(ticketId: String) async throws {}
     func logout() async throws {}
 }
 

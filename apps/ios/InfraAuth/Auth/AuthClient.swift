@@ -15,6 +15,9 @@ protocol AuthClient {
     func updatePushToken(deviceId: String, pushToken: String) async throws
     /// Recent OTP verification attempts for the current user (account dashboard).
     func listLoginEvents() async throws -> [LoginEventDTO]
+    /// Approve a QR login ticket scanned from the web, signing that browser in as
+    /// this (already-authenticated) user. Cross-device login — see `qr.routes.ts`.
+    func approveQrLogin(ticketId: String) async throws
     func logout() async throws
 }
 
@@ -77,6 +80,11 @@ final class HTTPAuthClient: AuthClient {
         let res: LoginEventsResponse = try await send(AuthRoutes.loginEvents, method: "GET",
                                                       body: Optional<RefreshInput>.none)
         return res.events
+    }
+
+    func approveQrLogin(ticketId: String) async throws {
+        let input = ApproveQrLoginInput(ticketId: ticketId)
+        let _: OkResponse = try await send(AuthRoutes.qrApprove, method: "POST", body: input)
     }
 
     func logout() async throws {

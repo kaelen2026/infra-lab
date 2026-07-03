@@ -48,6 +48,9 @@ enum class AuthErrorCode {
     INVALID_CODE,
     UNAUTHORIZED,
     INVALID_REFRESH_TOKEN,
+    QR_NOT_FOUND,
+    QR_ALREADY_USED,
+    QR_NOT_APPROVED,
 }
 
 // ── Endpoint paths (kept identical to AUTH_ROUTES) ─────────────────────────────

@@ -26,6 +26,16 @@ identity model (Drizzle adapter + `bearer()` plugin) and session resolution.
 (cooldown/limits → 429, LOCKED → 423, invalid/expired/unauthorized → 401). A new phone that verifies
 successfully auto-creates `user` + `profile` in one transaction.
 
+**QR cross-device login** (`apps/api/src/routes/qr.routes.ts`): a logged-in native client approves a
+browser sign-in. The browser `POST /auth/qr/create`s a ticket (Redis, `qr:*` namespace, TTL 120s),
+renders `ticketId` as a QR while keeping the secret `pollToken`; a native app scans it and
+`POST /auth/qr/approve`s (its own Cookie/Bearer binds its user); the browser polls
+`GET /auth/qr/status` (proving ownership with `pollToken`) and, once `approved`,
+`POST /auth/qr/consume`s to exchange the single-use ticket for the **same HttpOnly session cookie the
+OTP web flow issues** (via `SessionService.issueWebSessionForUser`). Errors: `QR_NOT_FOUND` → 404,
+`QR_ALREADY_USED` / `QR_NOT_APPROVED` → 409. SDK: `createWebQrLoginClient` (browser) + the `approve`
+call on the native side (iOS `HTTPAuthClient.approveQrLogin`).
+
 **Todo (the first business feature on top of auth)** copies the same shape one layer up.
 `createTodoRoutes(deps)` (`apps/api/src/routes/todo.routes.ts`) injects a `TodoRepository` port plus a
 `requireUser(headers)` — the very same guard `auth.routes.ts` uses, so `/todos*` accept Cookie **or**

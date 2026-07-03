@@ -1,9 +1,14 @@
 import {
+  type ApproveQrLoginInput,
+  type ApproveQrLoginResponse,
   AUTH_ROUTES,
   type AuthClient,
   type AuthErrorCode,
   type AuthTokens,
   type AuthUser,
+  type ConsumeQrLoginInput,
+  type ConsumeQrLoginResponse,
+  type CreateQrLoginResponse,
   type CreateTimelinePostInput,
   type CreateTodoInput,
   type DeviceDTO,
@@ -12,6 +17,10 @@ import {
   type LoginEventDTO,
   type LoginEventsResponse,
   type Platform,
+  type QrLoginClient,
+  type QrLoginStatus,
+  type QrLoginStatusQuery,
+  type QrLoginStatusResponse,
   type RefreshInput,
   type RequestOtpInput,
   type RequestOtpResponse,
@@ -167,6 +176,76 @@ export function createAuthClient(options: CreateAuthClientOptions): AuthClient {
  */
 export function createWebAuthClient(baseUrl: string, fetchImpl?: typeof fetch): AuthClient {
   return createAuthClient({ baseUrl, platform: "web", fetch: fetchImpl });
+}
+
+export interface CreateQrLoginClientOptions {
+  baseUrl: string;
+  platform: Platform;
+  /** Defaults to a no-op store (web). Native platforms supply a secure store. */
+  tokens?: TokenStore;
+  fetch?: typeof fetch;
+}
+
+/**
+ * Reference {@link QrLoginClient}. Same transport model as {@link createAuthClient}:
+ * web rides the HttpOnly cookie (`credentials: "include"`), native sends the Bearer
+ * header from the supplied {@link TokenStore}. The browser uses `create`/`status`/
+ * `consume`; a logged-in native app uses `approve`. Non-2xx responses throw
+ * {@link HttpAuthError}, whose `code` carries the `QR_*` error codes.
+ */
+export function createQrLoginClient(options: CreateQrLoginClientOptions): QrLoginClient {
+  const doFetch = options.fetch ?? globalThis.fetch;
+  const store = options.tokens ?? noopTokenStore;
+  const isWeb = options.platform === "web";
+
+  async function request<T>(path: string, method: string, body?: unknown): Promise<T> {
+    const headers: Record<string, string> = { "content-type": "application/json" };
+    if (!isWeb) {
+      const t = await store.load();
+      if (t) headers.authorization = `${t.tokenType} ${t.accessToken}`;
+    }
+    const res = await doFetch(`${options.baseUrl}${path}`, {
+      method,
+      headers,
+      credentials: isWeb ? "include" : "omit",
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+    const json: unknown = await res.json().catch(() => ({}));
+    if (!res.ok) throw new HttpAuthError(res.status, json);
+    return json as T;
+  }
+
+  return {
+    create(): Promise<CreateQrLoginResponse> {
+      return request<CreateQrLoginResponse>(AUTH_ROUTES.qrCreate, "POST", {});
+    },
+
+    async status(input: QrLoginStatusQuery): Promise<QrLoginStatus> {
+      const query = new URLSearchParams({ ticketId: input.ticketId, pollToken: input.pollToken });
+      const res = await request<QrLoginStatusResponse>(
+        `${AUTH_ROUTES.qrStatus}?${query.toString()}`,
+        "GET",
+      );
+      return res.status;
+    },
+
+    async approve(input: ApproveQrLoginInput): Promise<void> {
+      await request<ApproveQrLoginResponse>(AUTH_ROUTES.qrApprove, "POST", input);
+    },
+
+    async consume(input: ConsumeQrLoginInput): Promise<AuthUser> {
+      const res = await request<ConsumeQrLoginResponse>(AUTH_ROUTES.qrConsume, "POST", input);
+      return res.user;
+    },
+  };
+}
+
+/**
+ * Web-flavored {@link createQrLoginClient}: fixes `platform: "web"` so `consume`'s
+ * Set-Cookie lands in the browser (`credentials: "include"`) and no token is stored.
+ */
+export function createWebQrLoginClient(baseUrl: string, fetchImpl?: typeof fetch): QrLoginClient {
+  return createQrLoginClient({ baseUrl, platform: "web", fetch: fetchImpl });
 }
 
 export interface CreateTodoClientOptions {
