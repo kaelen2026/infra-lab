@@ -69,6 +69,27 @@ final class TodoClientTests: XCTestCase {
         try await makeClient().remove(id: "t1")
     }
 
+    func testListRefreshesAndRetriesOn401() async throws {
+        let seed = AuthTokens(accessToken: "stale", accessTokenExpiresIn: 900,
+                              refreshToken: "rt", refreshTokenExpiresIn: 2_592_000, tokenType: "Bearer")
+        let store = InMemoryTokenStore(seed)
+        MockURLProtocol.handler = { request in
+            if request.url?.path == AuthRoutes.refresh {
+                return (200, self.json(["ok": true, "tokens": [
+                    "accessToken": "fresh", "accessTokenExpiresIn": 900,
+                    "refreshToken": "rt2", "refreshTokenExpiresIn": 2_592_000, "tokenType": "Bearer"
+                ]]))
+            }
+            if request.value(forHTTPHeaderField: "Authorization") == "Bearer fresh" {
+                return (200, self.json(["ok": true, "todos": []]))
+            }
+            return (401, self.json(["ok": false, "code": "UNAUTHORIZED"]))
+        }
+        let todos = try await makeClient(store: store).list()
+        XCTAssertTrue(todos.isEmpty)
+        XCTAssertEqual(store.load()?.accessToken, "fresh")
+    }
+
     func testNotFoundMapsErrorCode() async {
         MockURLProtocol.handler = { _ in
             (404, self.json(["ok": false, "code": "TODO_NOT_FOUND"]))

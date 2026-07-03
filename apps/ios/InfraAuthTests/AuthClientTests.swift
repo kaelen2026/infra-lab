@@ -132,4 +132,49 @@ final class AuthClientTests: XCTestCase {
             XCTFail("unexpected error: \(error)")
         }
     }
+
+    func testProtectedRequestRefreshesAndRetriesOn401() async throws {
+        let seed = AuthTokens(accessToken: "stale", accessTokenExpiresIn: 900,
+                              refreshToken: "rt", refreshTokenExpiresIn: 2_592_000, tokenType: "Bearer")
+        let store = InMemoryTokenStore(seed)
+        MockURLProtocol.handler = { request in
+            if request.url?.path == AuthRoutes.refresh {
+                return (200, self.json(["ok": true, "tokens": [
+                    "accessToken": "fresh", "accessTokenExpiresIn": 900,
+                    "refreshToken": "rt2", "refreshTokenExpiresIn": 2_592_000, "tokenType": "Bearer"
+                ]]))
+            }
+            // /auth/me: 401 while the stale token is attached, 200 once refreshed.
+            if request.value(forHTTPHeaderField: "Authorization") == "Bearer fresh" {
+                return (200, self.json(["ok": true, "user": [
+                    "id": "u1", "phone": "+8613800138000", "displayName": NSNull(),
+                    "avatarUrl": NSNull(), "createdAt": "2026-06-30T00:00:00.000Z", "isNew": false
+                ]]))
+            }
+            return (401, self.json(["ok": false, "code": "UNAUTHORIZED"]))
+        }
+        let user = try await makeClient(store: store).me()
+        XCTAssertEqual(user.id, "u1")
+        XCTAssertEqual(store.load()?.accessToken, "fresh")
+        XCTAssertEqual(store.load()?.refreshToken, "rt2")
+    }
+
+    func testProtectedRequestSurfacesUnauthorizedWhenRefreshFails() async {
+        let seed = AuthTokens(accessToken: "stale", accessTokenExpiresIn: 900,
+                              refreshToken: "rt", refreshTokenExpiresIn: 2_592_000, tokenType: "Bearer")
+        let store = InMemoryTokenStore(seed)
+        // Both /auth/me and /auth/refresh 401: the retry must not loop and the
+        // original unauthorized error surfaces.
+        MockURLProtocol.handler = { _ in
+            (401, self.json(["ok": false, "code": "UNAUTHORIZED"]))
+        }
+        do {
+            _ = try await makeClient(store: store).me()
+            XCTFail("expected failure")
+        } catch let error as AuthClientError {
+            XCTAssertEqual(error.code, .unauthorized)
+        } catch {
+            XCTFail("unexpected error: \(error)")
+        }
+    }
 }

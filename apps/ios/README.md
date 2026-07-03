@@ -26,6 +26,8 @@ InfraAuth/
     AuthError.swift          AuthClientError + error→copy mapping (mirrors web messages.ts)
     TokenStore.swift         TokenStore protocol + Keychain / in-memory impls
     AuthClient.swift         URLSession client (otp/refresh/me/logout + devices/login-events)
+    AuthorizedTransport.swift shared Bearer transport: attaches the token, refreshes+retries once on 401
+    SessionRefresher.swift   single-flight refresh-token rotation shared by all clients
     AppConfig.swift          API base URL + device metadata
     AuthViewModel.swift      headless flow state machine (mirrors web useOtpLogin)
   Account/

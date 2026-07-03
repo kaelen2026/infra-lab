@@ -27,19 +27,29 @@ enum TodoClientError: Error {
     }
 }
 
-/// URLSession-backed todo client. Reuses the auth ``TokenStore`` so the Bearer
-/// header stays in lockstep with the session established at login.
+/// URLSession-backed todo client. Rides the shared ``AuthorizedTransport`` so the
+/// Bearer header — and the refresh-and-retry on a `401` — stays in lockstep with
+/// the session established at login.
 final class HTTPTodoClient: TodoClient {
     private let baseURL: URL
-    private let store: TokenStore
-    private let session: URLSession
+    private let transport: AuthorizedTransport
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
-    init(baseURL: URL, store: TokenStore, session: URLSession = .shared) {
+    init(baseURL: URL, transport: AuthorizedTransport) {
         self.baseURL = baseURL
-        self.store = store
-        self.session = session
+        self.transport = transport
+    }
+
+    /// Convenience wiring for tests / standalone use: build a private transport +
+    /// refresher over `session` and the auth ``TokenStore``. Production shares one
+    /// transport across every client (see `InfraAuthApp`).
+    convenience init(baseURL: URL, store: TokenStore, session: URLSession = .shared) {
+        let refresher = SessionRefresher(store: store) {
+            try await AuthSession.rotateTokens(baseURL: baseURL, store: store, session: session)
+        }
+        let transport = AuthorizedTransport(store: store, session: session, refresher: refresher)
+        self.init(baseURL: baseURL, transport: transport)
     }
 
     // MARK: TodoClient
@@ -73,28 +83,20 @@ final class HTTPTodoClient: TodoClient {
     private func send<Body: Encodable, Response: Decodable>(
         _ path: String, method: String, body: Body?
     ) async throws -> Response {
-        var request = URLRequest(url: baseURL.appendingPathComponent(path))
-        request.httpMethod = method
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        // Todos are user-scoped: attach the Bearer token when we have a session.
-        if let tokens = store.load() {
-            request.setValue("\(tokens.tokenType) \(tokens.accessToken)", forHTTPHeaderField: "Authorization")
-        }
-        if let body {
-            request.httpBody = try encoder.encode(body)
-        }
+        let payload = try body.map { try encoder.encode($0) }
 
         let data: Data
-        let response: URLResponse
+        let http: HTTPURLResponse
         do {
-            (data, response) = try await session.data(for: request)
+            (data, http) = try await transport.send {
+                var request = URLRequest(url: self.baseURL.appendingPathComponent(path))
+                request.httpMethod = method
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.httpBody = payload
+                return request
+            }
         } catch {
             throw TodoClientError.transport(error)
-        }
-
-        guard let http = response as? HTTPURLResponse else {
-            throw TodoClientError.transport(URLError(.badServerResponse))
         }
 
         guard (200..<300).contains(http.statusCode) else {
