@@ -17,10 +17,22 @@ struct InfraAuthApp: App {
 
     init() {
         let store = KeychainTokenStore()
-        let authClient = HTTPAuthClient(baseURL: AppConfig.apiBaseURL, platform: .ios, store: store)
-        let todoClient = HTTPTodoClient(baseURL: AppConfig.apiBaseURL, store: store)
-        let timelineClient = HTTPTimelineClient(baseURL: AppConfig.apiBaseURL, store: store)
-        let healthClient = HTTPHealthClient(baseURL: AppConfig.apiBaseURL)
+        let baseURL = AppConfig.apiBaseURL
+        let session = URLSession.shared
+        // One refresher + transport shared by every client: a 401 on any of them
+        // triggers a single-flight token rotation (the refresh token rotates on
+        // each use, so concurrent refreshes would revoke one another).
+        let refresher = SessionRefresher(store: store) {
+            try await AuthSession.rotateTokens(baseURL: baseURL, store: store, session: session)
+        }
+        let transport = AuthorizedTransport(store: store, session: session, refresher: refresher)
+
+        let authClient = HTTPAuthClient(
+            baseURL: baseURL, platform: .ios, store: store, transport: transport, refresher: refresher
+        )
+        let todoClient = HTTPTodoClient(baseURL: baseURL, transport: transport)
+        let timelineClient = HTTPTimelineClient(baseURL: baseURL, transport: transport)
+        let healthClient = HTTPHealthClient(baseURL: baseURL)
         _auth = StateObject(wrappedValue: AuthViewModel(client: authClient))
         _account = StateObject(wrappedValue: AccountViewModel(client: authClient))
         _todos = StateObject(wrappedValue: TodoViewModel(client: todoClient))

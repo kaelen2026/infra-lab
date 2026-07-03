@@ -22,20 +22,42 @@ protocol AuthClient {
 }
 
 /// URLSession-backed client. On `verifyOtp`/`refresh` it persists the rotated
-/// tokens to the injected ``TokenStore``; `logout` clears them.
+/// tokens to the injected ``TokenStore``; `logout` clears them. Protected requests
+/// ride ``AuthorizedTransport``, which refreshes-and-retries once on a `401`.
 final class HTTPAuthClient: AuthClient {
     private let baseURL: URL
     private let platform: Platform
     private let store: TokenStore
-    private let session: URLSession
+    private let transport: AuthorizedTransport
+    private let refresher: SessionRefresher
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
-    init(baseURL: URL, platform: Platform = .ios, store: TokenStore, session: URLSession = .shared) {
+    init(
+        baseURL: URL, platform: Platform = .ios, store: TokenStore,
+        transport: AuthorizedTransport, refresher: SessionRefresher
+    ) {
         self.baseURL = baseURL
         self.platform = platform
         self.store = store
-        self.session = session
+        self.transport = transport
+        self.refresher = refresher
+    }
+
+    /// Convenience wiring for tests / standalone use: build a private transport +
+    /// refresher over `session`. Production shares one set across every client (see
+    /// `InfraAuthApp`) so a `401` on any client triggers a single-flight refresh.
+    convenience init(
+        baseURL: URL, platform: Platform = .ios, store: TokenStore, session: URLSession = .shared
+    ) {
+        let refresher = SessionRefresher(store: store) {
+            try await AuthSession.rotateTokens(baseURL: baseURL, store: store, session: session)
+        }
+        let transport = AuthorizedTransport(store: store, session: session, refresher: refresher)
+        self.init(
+            baseURL: baseURL, platform: platform, store: store,
+            transport: transport, refresher: refresher
+        )
     }
 
     // MARK: AuthClient
@@ -53,11 +75,9 @@ final class HTTPAuthClient: AuthClient {
     }
 
     func refresh() async throws -> AuthTokens? {
-        guard let current = store.load() else { return nil }
-        let res: RefreshResponse = try await send(AuthRoutes.refresh, method: "POST",
-                                                   body: RefreshInput(refreshToken: current.refreshToken))
-        store.save(res.tokens)
-        return res.tokens
+        // Route through the shared refresher so a launch-time restore and an
+        // in-session 401 retry can never rotate the token twice concurrently.
+        try await refresher.refresh(staleAccessToken: store.load()?.accessToken)
     }
 
     func me() async throws -> AuthUser {
@@ -100,38 +120,32 @@ final class HTTPAuthClient: AuthClient {
     private func send<Body: Encodable, Response: Decodable>(
         _ path: String, method: String, body: Body?
     ) async throws -> Response {
-        var request = URLRequest(url: baseURL.appendingPathComponent(path))
-        request.httpMethod = method
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        // Native sessions ride the Bearer header; attach it when we have a token.
-        if let tokens = store.load() {
-            request.setValue("\(tokens.tokenType) \(tokens.accessToken)", forHTTPHeaderField: "Authorization")
-        }
-        if let body {
-            request.httpBody = try encoder.encode(body)
-        }
+        // Encode up front (throws raw on the rare encode failure); the builder is
+        // replayed verbatim if the transport retries after a token refresh.
+        let payload = try body.map { try encoder.encode($0) }
 
         let data: Data
-        let response: URLResponse
+        let http: HTTPURLResponse
         do {
-            (data, response) = try await session.data(for: request)
+            (data, http) = try await transport.send {
+                var request = URLRequest(url: self.baseURL.appendingPathComponent(path))
+                request.httpMethod = method
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.httpBody = payload
+                return request
+            }
         } catch {
             throw AuthClientError.transport(error)
         }
 
-        guard let http = response as? HTTPURLResponse else {
-            throw AuthClientError.transport(URLError(.badServerResponse))
-        }
-
         guard (200..<300).contains(http.statusCode) else {
-            let body = try? decoder.decode(AuthErrorBody.self, from: data)
+            let parsed = try? decoder.decode(AuthErrorBody.self, from: data)
             throw AuthClientError.http(
                 status: http.statusCode,
-                code: body?.code ?? .unknown,
-                message: body?.message,
-                retryAfter: body?.retryAfter,
-                remainingAttempts: body?.remainingAttempts
+                code: parsed?.code ?? .unknown,
+                message: parsed?.message,
+                retryAfter: parsed?.retryAfter,
+                remainingAttempts: parsed?.remainingAttempts
             )
         }
 

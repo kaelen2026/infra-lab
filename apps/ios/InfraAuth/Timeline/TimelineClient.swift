@@ -35,19 +35,29 @@ enum TimelineClientError: Error {
     }
 }
 
-/// URLSession-backed timeline client. Reuses the auth ``TokenStore`` so the
-/// Bearer header stays in lockstep with the session established at login.
+/// URLSession-backed timeline client. Rides the shared ``AuthorizedTransport`` so
+/// the Bearer header — and the refresh-and-retry on a `401` — stays in lockstep
+/// with the session established at login.
 final class HTTPTimelineClient: TimelineClient {
     private let baseURL: URL
-    private let store: TokenStore
-    private let session: URLSession
+    private let transport: AuthorizedTransport
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
-    init(baseURL: URL, store: TokenStore, session: URLSession = .shared) {
+    init(baseURL: URL, transport: AuthorizedTransport) {
         self.baseURL = baseURL
-        self.store = store
-        self.session = session
+        self.transport = transport
+    }
+
+    /// Convenience wiring for tests / standalone use: build a private transport +
+    /// refresher over `session` and the auth ``TokenStore``. Production shares one
+    /// transport across every client (see `InfraAuthApp`).
+    convenience init(baseURL: URL, store: TokenStore, session: URLSession = .shared) {
+        let refresher = SessionRefresher(store: store) {
+            try await AuthSession.rotateTokens(baseURL: baseURL, store: store, session: session)
+        }
+        let transport = AuthorizedTransport(store: store, session: session, refresher: refresher)
+        self.init(baseURL: baseURL, transport: transport)
     }
 
     // MARK: TimelineClient
@@ -80,11 +90,6 @@ final class HTTPTimelineClient: TimelineClient {
 
     func uploadImage(_ data: Data, contentType: TimelineImageContentType) async throws -> TimelineImage {
         let boundary = "Boundary-\(UUID().uuidString)"
-        var request = URLRequest(url: baseURL.appendingPathComponent(TimelineRoutes.uploadImage))
-        request.httpMethod = "POST"
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        authorize(&request)
-
         var body = Data()
         body.appendString("--\(boundary)\r\n")
         body.appendString(
@@ -93,53 +98,52 @@ final class HTTPTimelineClient: TimelineClient {
         body.appendString("Content-Type: \(contentType.rawValue)\r\n\r\n")
         body.append(data)
         body.appendString("\r\n--\(boundary)--\r\n")
-        request.httpBody = body
+        let payload = body
 
-        let res: TimelineImageResponse = try await perform(request)
+        let res: TimelineImageResponse = try await request {
+            var request = URLRequest(url: self.baseURL.appendingPathComponent(TimelineRoutes.uploadImage))
+            request.httpMethod = "POST"
+            request.setValue(
+                "multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type"
+            )
+            request.httpBody = payload
+            return request
+        }
         return TimelineImage(url: res.image.url)
     }
 
     // MARK: - Transport
 
-    /// Attach the Bearer token when a session is present (timeline is user-scoped).
-    private func authorize(_ request: inout URLRequest) {
-        if let tokens = store.load() {
-            request.setValue(
-                "\(tokens.tokenType) \(tokens.accessToken)", forHTTPHeaderField: "Authorization"
-            )
-        }
-    }
-
     private func send<Body: Encodable, Response: Decodable>(
         _ path: String, method: String, body: Body?, query: [URLQueryItem] = []
     ) async throws -> Response {
-        var url = baseURL.appendingPathComponent(path)
-        if !query.isEmpty,
-           var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
-            components.queryItems = query
-            url = components.url ?? url
+        let payload = try body.map { try encoder.encode($0) }
+        return try await request {
+            var url = self.baseURL.appendingPathComponent(path)
+            if !query.isEmpty,
+               var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+                components.queryItems = query
+                url = components.url ?? url
+            }
+            var request = URLRequest(url: url)
+            request.httpMethod = method
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = payload
+            return request
         }
-        var request = URLRequest(url: url)
-        request.httpMethod = method
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        authorize(&request)
-        if let body {
-            request.httpBody = try encoder.encode(body)
-        }
-        return try await perform(request)
     }
 
-    private func perform<Response: Decodable>(_ request: URLRequest) async throws -> Response {
+    /// Send `build`'s request over the shared transport (auth + refresh-retry) and
+    /// map the result to a decoded response or a typed ``TimelineClientError``.
+    private func request<Response: Decodable>(
+        _ build: () -> URLRequest
+    ) async throws -> Response {
         let data: Data
-        let response: URLResponse
+        let http: HTTPURLResponse
         do {
-            (data, response) = try await session.data(for: request)
+            (data, http) = try await transport.send(build)
         } catch {
             throw TimelineClientError.transport(error)
-        }
-
-        guard let http = response as? HTTPURLResponse else {
-            throw TimelineClientError.transport(URLError(.badServerResponse))
         }
 
         guard (200..<300).contains(http.statusCode) else {
