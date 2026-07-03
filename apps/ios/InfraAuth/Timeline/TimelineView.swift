@@ -151,17 +151,26 @@ struct TimelinePostCard: View {
 struct TimelineImageGrid: View {
     let images: [TimelineImage]
 
+    @State private var viewer: ImageViewerContext?
+
     private let columns = [GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6)]
 
     var body: some View {
+        content
+            .fullScreenCover(item: $viewer) { context in
+                ImageViewer(context: context) { viewer = nil }
+            }
+    }
+
+    @ViewBuilder private var content: some View {
         if images.count == 1 {
-            tile(images[0])
+            tile(images[0], index: 0)
                 .frame(height: 220)
                 .clipShape(RoundedRectangle(cornerRadius: DesignTokens.radius, style: .continuous))
         } else {
             LazyVGrid(columns: columns, spacing: 6) {
-                ForEach(images, id: \.url) { image in
-                    tile(image)
+                ForEach(Array(images.enumerated()), id: \.element.url) { offset, image in
+                    tile(image, index: offset)
                         .frame(height: 120)
                         .clipShape(
                             RoundedRectangle(cornerRadius: DesignTokens.radius * 0.7, style: .continuous)
@@ -171,7 +180,7 @@ struct TimelineImageGrid: View {
         }
     }
 
-    private func tile(_ image: TimelineImage) -> some View {
+    private func tile(_ image: TimelineImage, index: Int) -> some View {
         CachedAsyncImage(url: image.absoluteURL(base: AppConfig.apiBaseURL)) {
             ZStack {
                 DesignTokens.textSecondary.opacity(0.08)
@@ -179,6 +188,8 @@ struct TimelineImageGrid: View {
             }
         }
         .frame(maxWidth: .infinity)
+        .contentShape(Rectangle())
+        .onTapGesture { viewer = ImageViewerContext(images: images, startIndex: index) }
     }
 }
 

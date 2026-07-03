@@ -59,12 +59,18 @@ actor TimelineImageCache {
 /// SwiftUI's `AsyncImage`. Shows `placeholder` until the image resolves.
 struct CachedAsyncImage<Placeholder: View>: View {
     let url: URL?
+    private let contentMode: ContentMode
     private let placeholder: () -> Placeholder
 
     @State private var image: UIImage?
 
-    init(url: URL?, @ViewBuilder placeholder: @escaping () -> Placeholder) {
+    init(
+        url: URL?,
+        contentMode: ContentMode = .fill,
+        @ViewBuilder placeholder: @escaping () -> Placeholder
+    ) {
         self.url = url
+        self.contentMode = contentMode
         self.placeholder = placeholder
     }
 
@@ -73,7 +79,7 @@ struct CachedAsyncImage<Placeholder: View>: View {
             if let image {
                 Image(uiImage: image)
                     .resizable()
-                    .scaledToFill()
+                    .aspectRatio(contentMode: contentMode)
             } else {
                 placeholder()
             }
