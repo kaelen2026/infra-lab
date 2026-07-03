@@ -34,7 +34,9 @@ Postgres 存长期数据，Redis 存 OTP / 限流等短期状态，服务 web / 
 - 绝不输出任何密钥、令牌、密码或环境变量，不回显 `.env`、CI secrets、私钥内容。
 - 默认**只读分析**：除非任务明确要求改代码，否则不要修改文件、提交或开 PR。
 - 若任务要求改动：遵守仓库规则——**禁止直接在 `main` 提交**，必须走特性分支 + PR；
-  提交信息遵循 Conventional Commits。
+  提交信息遵循 Conventional Commits。**有设计含义的改动不能只交 diff**——新功能 / 跨端
+  契约 / 数据模型 / 安全流程等，需同步在 `docs/plans/` 写或更新设计文档、必要时更新
+  `.claude/docs/architecture.md`，并在 PR 里链接;纯琐碎改动(拼写、单行 bugfix)不必强写。
 - **开完 PR 就停：绝不 merge、绝不 push `main`。** 你没有合并权（`main` 分支保护要求
   1 个审批，而你是 PR 作者无法审批自己），合并交给人。改动的验证依赖 CI 门禁
   （`Lint · Typecheck · Build · Test` 是必需检查），不必也不要为自证而尝试合并或直推。
