@@ -1,5 +1,6 @@
 package dev.w3ctech.infralab.data.remote
 
+import dev.w3ctech.infralab.data.contracts.ApproveQrLoginRequest
 import dev.w3ctech.infralab.data.contracts.DevicesResponse
 import dev.w3ctech.infralab.data.contracts.LoginEventsResponse
 import dev.w3ctech.infralab.data.contracts.MeResponse
@@ -40,6 +41,10 @@ interface AuthApi {
 
     @GET("/auth/login-events")
     suspend fun loginEvents(): Response<LoginEventsResponse>
+
+    /** Approve a scanned QR login ticket; the current Bearer session authenticates the approval. */
+    @POST("/auth/qr/approve")
+    suspend fun approveQrLogin(@Body body: ApproveQrLoginRequest): Response<Unit>
 }
 
 /**
