@@ -42,6 +42,9 @@ object AuthCopyGenerated {
         AuthErrorCode.INVALID_CODE to "验证码错误。",
         AuthErrorCode.UNAUTHORIZED to "登录状态已失效，请重新登录。",
         AuthErrorCode.INVALID_REFRESH_TOKEN to "登录状态已失效，请重新登录。",
+        AuthErrorCode.QR_NOT_FOUND to "二维码无效或已过期，请刷新后重试。",
+        AuthErrorCode.QR_ALREADY_USED to "该二维码已被使用，请刷新后重试。",
+        AuthErrorCode.QR_NOT_APPROVED to "尚未在手机上确认登录。",
     )
 
     fun codeDescription(phone: String, minutes: Int): String =

@@ -37,6 +37,27 @@ enum Format {
         return "\(year)-\(pad(month))-\(pad(day)) \(pad(hour)):\(pad(minute))"
     }
 
+    /// Feed-style relative time: recency in plain words while it matters
+    /// (刚刚 / N 分钟前 / N 小时前), calendar date once it doesn't. Mirrors
+    /// web's `formatRelativeTime` so both feeds read the same.
+    static func relative(_ iso: String, now: Date = Date()) -> String {
+        guard let date = parse(iso) else { return iso }
+        let calendar = Calendar.current
+        let minutes = Int(now.timeIntervalSince(date) / 60)
+        if minutes < 1 { return "刚刚" }
+        if minutes < 60 { return "\(minutes) 分钟前" }
+        if calendar.isDate(date, inSameDayAs: now) { return "\(minutes / 60) 小时前" }
+        let comps = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+        guard let year = comps.year, let month = comps.month, let day = comps.day,
+              let hour = comps.hour, let minute = comps.minute else { return iso }
+        if let yesterday = calendar.date(byAdding: .day, value: -1, to: now),
+           calendar.isDate(date, inSameDayAs: yesterday) {
+            return "昨天 \(pad(hour)):\(pad(minute))"
+        }
+        if year == calendar.component(.year, from: now) { return "\(month)月\(day)日" }
+        return "\(year)年\(month)月\(day)日"
+    }
+
     static func platformLabel(_ platform: Platform) -> String {
         switch platform {
         case .web: return "Web"

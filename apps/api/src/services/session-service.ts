@@ -103,18 +103,28 @@ export function createSessionService(config: SessionServiceConfig): SessionServi
     };
   }
 
+  function webSessionCookies(userId: string): string[] {
+    const token = signAccessToken(userId, secret, ttl.webSeconds);
+    return [
+      serializeCookie(cookie.name, token, {
+        maxAge: ttl.webSeconds,
+        secure: cookie.secure,
+        domain: cookie.domain,
+      }),
+    ];
+  }
+
   return {
     async issueWebSession(user) {
-      const token = signAccessToken(user.id, secret, ttl.webSeconds);
-      return {
-        cookies: [
-          serializeCookie(cookie.name, token, {
-            maxAge: ttl.webSeconds,
-            secure: cookie.secure,
-            domain: cookie.domain,
-          }),
-        ],
-      };
+      return { cookies: webSessionCookies(user.id) };
+    },
+
+    async issueWebSessionForUser(userId) {
+      // Re-load the user so a deleted/stale id can't mint a session, and so callers
+      // (QR consume) get the fresh UserRecord to build the response DTO.
+      const owner = await loadUser(userId);
+      if (!owner) return null;
+      return { user: owner, cookies: webSessionCookies(owner.id) };
     },
 
     issueTokens,

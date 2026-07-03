@@ -59,6 +59,9 @@ enum AuthErrorCode: String, Codable, Sendable {
     case invalidCode = "INVALID_CODE"
     case unauthorized = "UNAUTHORIZED"
     case invalidRefreshToken = "INVALID_REFRESH_TOKEN"
+    case qrNotFound = "QR_NOT_FOUND"
+    case qrAlreadyUsed = "QR_ALREADY_USED"
+    case qrNotApproved = "QR_NOT_APPROVED"
     /// Fallback for any code the server adds before this client is updated.
     case unknown = "UNKNOWN"
 
@@ -128,6 +131,12 @@ struct RefreshInput: Encodable {
     let refreshToken: String
 }
 
+/// Approve a scanned QR login ticket. Mirrors `approveQrLoginSchema` — the browser
+/// keeps the secret pollToken, so the native app sends only the public ticket id.
+struct ApproveQrLoginInput: Encodable {
+    let ticketId: String
+}
+
 struct RefreshResponse: Decodable {
     let ok: Bool
     let tokens: AuthTokens
@@ -188,4 +197,5 @@ enum AuthRoutes {
     static let devices = "/auth/devices"
     static let pushToken = "/auth/devices/push-token"
     static let loginEvents = "/auth/login-events"
+    static let qrApprove = "/auth/qr/approve"
 }

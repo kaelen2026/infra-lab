@@ -46,6 +46,12 @@ export interface TimelinePostRepository {
   ): Promise<TimelinePostRecord>;
   /** Returns whether a row was actually deleted (false ⇒ missing / not owner). */
   remove(userId: string, id: string): Promise<boolean>;
+  /**
+   * Read a single post by id WITHOUT a user scope — backs the public share link,
+   * where the caller may not be authenticated and the unguessable id is the
+   * capability. `null` when no such post exists.
+   */
+  getById(id: string): Promise<TimelinePostRecord | null>;
 }
 
 /** Persists image bytes and serves them back. Local-disk adapter in services. */
@@ -155,6 +161,17 @@ export function createTimelineRoutes(deps: TimelineRouteDeps): Hono {
     const last = page[page.length - 1];
     const nextCursor = records.length > limit && last ? encodeCursor(last) : null;
     return c.json({ ok: true, posts: page.map(toPostDTO), nextCursor });
+  });
+
+  // ── Read one post by id (PUBLIC — backs the share link) ───────────────────────
+  // Deliberately unguarded: the random UUID in the path is the capability, just
+  // like GET /uploads/:name. Only this one post is exposed; the feed list and all
+  // writes stay per-user behind requireUser. Registered before nothing else on
+  // this concrete path, so it never shadows the guarded routes.
+  app.get("/timeline/share/:id", async (c) => {
+    const record = await posts.getById(c.req.param("id"));
+    if (!record) return fail(c, "TIMELINE_POST_NOT_FOUND");
+    return c.json({ ok: true, post: toPostDTO(record) });
   });
 
   // ── Upload one image (multipart/form-data, field `file`) ──────────────────────

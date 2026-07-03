@@ -49,6 +49,12 @@ export function errorMessageFor(code: AuthErrorCode): string {
       return "登录状态已失效，请重新登录。";
     case "INVALID_REFRESH_TOKEN":
       return "登录状态已失效，请重新登录。";
+    case "QR_NOT_FOUND":
+      return "二维码无效或已过期，请刷新后重试。";
+    case "QR_ALREADY_USED":
+      return "该二维码已被使用，请刷新后重试。";
+    case "QR_NOT_APPROVED":
+      return "尚未在手机上确认登录。";
     default:
       return ERROR_GENERIC;
   }
