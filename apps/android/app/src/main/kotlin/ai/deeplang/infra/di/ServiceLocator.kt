@@ -4,6 +4,8 @@ import ai.deeplang.infra.BuildConfig
 import ai.deeplang.infra.data.AuthClient
 import ai.deeplang.infra.data.AuthClientImpl
 import ai.deeplang.infra.data.DeviceInfoProvider
+import ai.deeplang.infra.data.TimelineClient
+import ai.deeplang.infra.data.TimelineClientImpl
 import ai.deeplang.infra.data.TodoClient
 import ai.deeplang.infra.data.TodoClientImpl
 import ai.deeplang.infra.data.net.NetworkModule
@@ -23,6 +25,9 @@ object ServiceLocator {
     private var todoClient: TodoClient? = null
 
     @Volatile
+    private var timelineClient: TimelineClient? = null
+
+    @Volatile
     private var tokenStore: TokenStore? = null
 
     fun init(context: Context) {
@@ -40,6 +45,7 @@ object ServiceLocator {
             device = DeviceInfoProvider(appContext),
         )
         todoClient = TodoClientImpl(api = network.todoApi)
+        timelineClient = TimelineClientImpl(api = network.timelineApi)
     }
 
     fun authClient(): AuthClient =
@@ -47,6 +53,9 @@ object ServiceLocator {
 
     fun todoClient(): TodoClient =
         todoClient ?: error("ServiceLocator.init() must be called before todoClient()")
+
+    fun timelineClient(): TimelineClient =
+        timelineClient ?: error("ServiceLocator.init() must be called before timelineClient()")
 
     fun tokenStore(): TokenStore =
         tokenStore ?: error("ServiceLocator.init() must be called before tokenStore()")

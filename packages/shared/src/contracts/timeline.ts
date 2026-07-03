@@ -3,8 +3,8 @@ import { z } from "zod";
 /**
  * Timeline contracts — a per-user feed of posts, each carrying text and/or
  * uploaded images. Mirrors the todo contracts (the single source of truth for
- * request/response shapes, error codes and limits) but is currently only wired
- * up on the iOS client. Every post is scoped to the authenticated user.
+ * request/response shapes, error codes and limits) and is wired up on the iOS
+ * and Android clients. Every post is scoped to the authenticated user.
  *
  * Image flow (two steps, so a large binary never rides inside a JSON body):
  *   1. `POST /timeline/images` (multipart) → returns a `{ url }` we issued.
@@ -173,7 +173,7 @@ export function timelineAppLink(id: string): string {
   return `${TIMELINE_APP_SCHEME}://timeline/${id}`;
 }
 
-// ── SDK interface draft (implemented per platform; iOS today) ───────────────────
+// ── SDK interface draft (implemented per platform; iOS + Android today) ─────────
 /** One page of posts as the SDK surfaces it (see {@link TimelinePostsResponse}). */
 export interface TimelinePage {
   posts: TimelinePostDTO[];

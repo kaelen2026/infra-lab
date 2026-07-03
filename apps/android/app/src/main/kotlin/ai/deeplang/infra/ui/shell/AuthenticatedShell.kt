@@ -3,6 +3,7 @@ package ai.deeplang.infra.ui.shell
 import ai.deeplang.infra.data.contracts.AuthUser
 import ai.deeplang.infra.ui.account.AccountScreen
 import ai.deeplang.infra.ui.auth.AuthCopyGenerated
+import ai.deeplang.infra.ui.timeline.TimelineScreen
 import ai.deeplang.infra.ui.todos.TodosScreen
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -27,12 +28,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
-/** The two signed-in business screens, mirroring web's `/` (account) and `/todos`. */
-private enum class Tab(val label: String) { ACCOUNT("账户"), TODOS("待办") }
+/** The signed-in business screens, mirroring web's `/` (account), `/todos` and `/timeline`. */
+private enum class Tab(val label: String) { ACCOUNT("账户"), TODOS("待办"), TIMELINE("动态") }
 
 /**
  * The signed-in surface — the Android counterpart of web's `AppShell`: a top bar (brand + theme
- * toggle + logout) over the current tab, with a bottom tab bar switching account / todos.
+ * toggle + logout) over the current tab, with a bottom tab bar switching account / todos / timeline.
  */
 @Composable
 fun AuthenticatedShell(
@@ -51,6 +52,7 @@ fun AuthenticatedShell(
             when (tab) {
                 Tab.ACCOUNT -> AccountScreen(user = user)
                 Tab.TODOS -> TodosScreen()
+                Tab.TIMELINE -> TimelineScreen()
             }
         }
 
