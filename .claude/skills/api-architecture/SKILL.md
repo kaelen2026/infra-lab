@@ -97,6 +97,43 @@ Endpoints (all under `/`):
 **Rule:** add a new error to the feature's `ErrorCode` union + `ERROR_STATUS` map + the contract,
 then use `fail(c, code, extra)`. Don't invent ad-hoc status codes or response shapes.
 
+## RESTful design (best practices + the deliberate deviations)
+
+Business-resource endpoints follow REST; auth is intentionally RPC. **Follow REST for any new
+resource; deviate only with a reason as explicit as the ones below.**
+
+**What to follow (already the convention — see `todo.routes.ts`, `timeline.routes.ts`):**
+- **Resources are plural nouns; the HTTP verb is the action** — never a verb in the path for a
+  resource. Collection `/<things>`, item `/<things>/:id`:
+  - `GET /todos` list · `POST /todos` create · `PATCH /todos/:id` update · `DELETE /todos/:id`.
+- **Verb semantics:** `GET` safe + read-only (no side effects), `POST` create on a collection,
+  `PATCH` partial update, `DELETE` remove. Keep them idempotent where HTTP requires it.
+- **Status codes carry meaning:** `200` ok, `201` on create (todo/timeline/image creation already
+  return 201), `400` bad input, `401` unauthenticated, `404` missing/foreign, `409`-class only if a
+  real conflict exists, `413/415` for payload/enctype, `429` rate limit, `423` locked.
+- **Nest a sub-resource under its owner** (`POST /timeline/images`, `POST /auth/devices/push-token`)
+  rather than inventing a top-level verb endpoint.
+- **Validate at the edge** (`schema.safeParse`) and return the uniform error; **never** leak a stack.
+
+**Deliberate deviations — keep them, don't "fix" them (each breaks clients or an invariant if changed):**
+1. **Envelope over bare bodies.** Every response is `{ ok, ... }` / `{ ok:false, code }`, not a
+   bare resource or an empty `204`. Even `DELETE` returns `200 { ok:true }`. This is a
+   cross-client contract (`@infra/sdk` + native mirrors) — a purist switch to `204 No Content`
+   would break them.
+2. **Auth endpoints are RPC verbs, on purpose.** `/auth/otp/request`, `/auth/otp/verify`,
+   `/auth/refresh`, `/auth/logout` are *actions*, not resources — the standard, pragmatic REST
+   exception for auth flows. Don't try to CRUD-ify them.
+3. **`PUT` is aliased to `PATCH` (partial-update) semantics** for `/todos/:id`, because HarmonyOS
+   `NetworkKit` has no `PATCH` method (`todo.routes.ts:98`). Same handler, partial update for
+   both — a knowing break from PUT-means-full-replace. Preserve the alias.
+4. **`404`, never `403`, for a foreign/missing id** — see *Per-user isolation*; returning 403
+   would confirm the row exists.
+
+**Rule:** a new business resource = plural-noun collection + item routes, correct verbs, correct
+status codes, the `{ ok, code }` envelope, and `(userId, id)` scoping. If you must deviate, write a
+one-line justification comment like the four above, and make sure it doesn't break the contract or
+an isolation/security invariant.
+
 ## Contracts are the source of truth
 
 Request schemas (Zod), DTOs, error codes, limit constants, route paths, the `Platform` enum, and
