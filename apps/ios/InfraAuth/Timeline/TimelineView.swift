@@ -102,14 +102,20 @@ struct TimelineListCard: View {
     }
 }
 
-/// One post: optional text, an image grid, a timestamp, and a delete action.
+/// One feed card. Content leads: an identity row (avatar + name, quiet relative
+/// time, overflow menu), then the text, then the image grid. Delete lives behind
+/// the ⋯ menu so the card face carries no destructive affordance.
 struct TimelinePostCard: View {
     let post: TimelinePostDTO
     let pending: Bool
     let onRemove: () -> Void
 
+    @EnvironmentObject private var auth: AuthViewModel
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
+            header
+
             if !post.text.isEmpty {
                 Text(post.text)
                     .font(.body)
@@ -120,23 +126,8 @@ struct TimelinePostCard: View {
             if !post.images.isEmpty {
                 TimelineImageGrid(images: post.images)
             }
-
-            HStack {
-                Text(Format.dateTime(post.createdAt))
-                    .font(.caption)
-                    .foregroundStyle(DesignTokens.textSecondary)
-                Spacer()
-                Button(action: onRemove) {
-                    Image(systemName: "trash")
-                        .font(.subheadline)
-                        .foregroundStyle(DesignTokens.textSecondary)
-                }
-                .buttonStyle(.plain)
-                .disabled(pending)
-                .accessibilityLabel("删除")
-            }
         }
-        .padding(16)
+        .padding(14)
         .opacity(pending ? 0.5 : 1)
         .background(DesignTokens.surface,
                     in: RoundedRectangle(cornerRadius: DesignTokens.radius, style: .continuous))
@@ -144,6 +135,51 @@ struct TimelinePostCard: View {
             RoundedRectangle(cornerRadius: DesignTokens.radius, style: .continuous)
                 .strokeBorder(DesignTokens.border, lineWidth: 1)
         )
+    }
+
+    private var header: some View {
+        HStack(spacing: 10) {
+            Text(monogram)
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(DesignTokens.primaryForeground)
+                .frame(width: 36, height: 36)
+                .background(DesignTokens.primary, in: Circle())
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(auth.user?.displayName ?? "未命名用户")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(DesignTokens.textPrimary)
+                    .lineLimit(1)
+                Text(Format.relative(post.createdAt))
+                    .font(.caption)
+                    .foregroundStyle(DesignTokens.textSecondary)
+            }
+
+            Spacer(minLength: 8)
+
+            Menu {
+                Button(role: .destructive, action: onRemove) {
+                    Label("删除", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.subheadline)
+                    .foregroundStyle(DesignTokens.textSecondary)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .disabled(pending)
+            .accessibilityLabel("更多操作")
+        }
+    }
+
+    /// Avatar monogram: first glyph of a name, else the last two phone digits.
+    private var monogram: String {
+        if let name = auth.user?.displayName?.trimmingCharacters(in: .whitespaces), !name.isEmpty {
+            return String(name.prefix(1)).uppercased()
+        }
+        let digits = (auth.user?.phone ?? "").filter(\.isNumber)
+        return digits.isEmpty ? "··" : String(digits.suffix(2))
     }
 }
 
@@ -153,7 +189,9 @@ struct TimelineImageGrid: View {
 
     @State private var viewer: ImageViewerContext?
 
-    private let columns = [GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6)]
+    /// 2-up only where it tiles evenly (2 or 4 images); 3-up otherwise — same
+    /// column logic as web's `gridCols`, so both feeds read the same.
+    private var columnCount: Int { images.count == 2 || images.count == 4 ? 2 : 3 }
 
     var body: some View {
         content
@@ -168,10 +206,13 @@ struct TimelineImageGrid: View {
                 .frame(height: 220)
                 .clipShape(RoundedRectangle(cornerRadius: DesignTokens.radius, style: .continuous))
         } else {
-            LazyVGrid(columns: columns, spacing: 6) {
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: columnCount),
+                spacing: 4
+            ) {
                 ForEach(Array(images.enumerated()), id: \.element.url) { offset, image in
                     tile(image, index: offset)
-                        .frame(height: 120)
+                        .frame(height: columnCount == 2 ? 140 : 104)
                         .clipShape(
                             RoundedRectangle(cornerRadius: DesignTokens.radius * 0.7, style: .continuous)
                         )
@@ -195,6 +236,8 @@ struct TimelineImageGrid: View {
 
 #if DEBUG
 #Preview {
-    TimelineView().environmentObject(TimelineViewModel(client: PreviewTimelineClient()))
+    TimelineView()
+        .environmentObject(TimelineViewModel(client: PreviewTimelineClient()))
+        .environmentObject(AuthViewModel(client: PreviewAuthClient()))
 }
 #endif
