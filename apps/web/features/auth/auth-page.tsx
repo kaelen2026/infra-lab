@@ -1,6 +1,8 @@
 "use client";
 
 import { OTP_LIMITS } from "@infra/shared";
+import { QrCode } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { ModeToggle } from "@/components/mode-toggle";
@@ -79,6 +81,16 @@ export default function AuthPage() {
             >
               {login.error}
             </p>
+          )}
+
+          {login.step === "phone" && (
+            <Link
+              href="/auth/qr"
+              className="flex items-center justify-center gap-1.5 border-t pt-4 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+            >
+              <QrCode className="size-4" />
+              用已登录的 App 扫码登录
+            </Link>
           )}
 
           <p className="border-t pt-4 text-center text-xs leading-relaxed text-muted-foreground">

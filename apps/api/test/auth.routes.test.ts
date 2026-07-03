@@ -124,6 +124,13 @@ class FakeSessionService implements SessionService {
       cookies: [`infra.session=${token}; Path=/; HttpOnly; SameSite=Lax`],
     };
   }
+  async issueWebSessionForUser(
+    userId: string,
+  ): Promise<{ user: UserRecord; cookies: string[] } | null> {
+    if (this.currentUser?.id !== userId) return null;
+    const { cookies } = await this.issueWebSession(this.currentUser, {} as SessionContext);
+    return { user: this.currentUser, cookies };
+  }
   async issueTokens(user: UserRecord, _ctx: SessionContext): Promise<AuthTokens> {
     const refreshToken = `refresh_${user.id}_${++this.seq}`;
     this.refreshStore.set(refreshToken, user.id);

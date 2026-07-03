@@ -85,6 +85,9 @@ const SWIFT_CASE: Record<string, string> = {
   INVALID_CODE: "invalidCode",
   UNAUTHORIZED: "unauthorized",
   INVALID_REFRESH_TOKEN: "invalidRefreshToken",
+  QR_NOT_FOUND: "qrNotFound",
+  QR_ALREADY_USED: "qrAlreadyUsed",
+  QR_NOT_APPROVED: "qrNotApproved",
 };
 
 function emitIos(): void {

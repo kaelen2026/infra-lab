@@ -49,6 +49,9 @@ export const AUTH_ERROR_CODES = [
   "INVALID_CODE", // wrong code
   "UNAUTHORIZED", // no/invalid session for a protected route
   "INVALID_REFRESH_TOKEN",
+  "QR_NOT_FOUND", // scan/approve/consume against an unknown or expired login ticket
+  "QR_ALREADY_USED", // the ticket was already approved (or consumed) — can't reuse it
+  "QR_NOT_APPROVED", // consume attempted before a native client approved the ticket
 ] as const;
 export type AuthErrorCode = (typeof AUTH_ERROR_CODES)[number];
 
@@ -193,6 +196,74 @@ export interface LoginEventsResponse {
   events: LoginEventDTO[];
 }
 
+// ── QR cross-device login (an authenticated native client approves a web sign-in) ─
+// Flow: the browser calls `create` and renders `ticketId` as a QR code, while keeping
+// the secret `pollToken` to itself. A logged-in native app scans the QR and calls
+// `approve` (with its own Bearer/cookie) to bind its user to the ticket. The browser
+// polls `status` (proving ownership with `pollToken`); once `approved`, it calls
+// `consume` to exchange the ticket for its own HttpOnly session cookie. The ticket is
+// single-use and short-lived — see {@link QR_LOGIN_LIMITS}.
+export const QR_LOGIN_LIMITS = {
+  /** Lifetime of a freshly created ticket, before any scan. */
+  ttlSeconds: 120,
+  /** Lifetime granted after approval, giving the browser time to consume it. */
+  approvalWindowSeconds: 120,
+} as const;
+
+/**
+ * Ticket lifecycle as seen by the polling browser:
+ *  - `pending`  — created, not yet approved by a native client.
+ *  - `approved` — a native client bound its user; ready for the browser to consume.
+ *  - `expired`  — TTL elapsed or the ticket was consumed (single-use); browser restarts.
+ */
+export const QR_LOGIN_STATUSES = ["pending", "approved", "expired"] as const;
+export type QrLoginStatus = (typeof QR_LOGIN_STATUSES)[number];
+
+/** Response to `create`: the public `ticketId` (goes in the QR) + secret `pollToken`. */
+export interface CreateQrLoginResponse {
+  ok: true;
+  /** Public ticket id — encode this in the QR code for the native app to scan. */
+  ticketId: string;
+  /** Secret held only by the creating browser; required to poll status and consume. */
+  pollToken: string;
+  /** Seconds until the (un-approved) ticket expires. */
+  expiresIn: number;
+}
+
+/** Browser status poll — carries the secret `pollToken` so only the creator can read it. */
+export const qrLoginStatusQuerySchema = z.object({
+  ticketId: z.string().trim().min(1).max(128),
+  pollToken: z.string().trim().min(1).max(256),
+});
+export type QrLoginStatusQuery = z.infer<typeof qrLoginStatusQuerySchema>;
+
+export interface QrLoginStatusResponse {
+  ok: true;
+  status: QrLoginStatus;
+}
+
+/** Native approve — the scanning app sends only the public ticket id; its own session authenticates it. */
+export const approveQrLoginSchema = z.object({
+  ticketId: z.string().trim().min(1).max(128),
+});
+export type ApproveQrLoginInput = z.infer<typeof approveQrLoginSchema>;
+
+export interface ApproveQrLoginResponse {
+  ok: true;
+}
+
+/** Browser consume — exchanges an approved ticket for a web session cookie. */
+export const consumeQrLoginSchema = z.object({
+  ticketId: z.string().trim().min(1).max(128),
+  pollToken: z.string().trim().min(1).max(256),
+});
+export type ConsumeQrLoginInput = z.infer<typeof consumeQrLoginSchema>;
+
+export interface ConsumeQrLoginResponse {
+  ok: true;
+  user: AuthUser;
+}
+
 // ── Endpoint paths (shared so SDKs never hard-code strings) ─────────────────────
 export const AUTH_ROUTES = {
   requestOtp: "/auth/otp/request",
@@ -203,6 +274,10 @@ export const AUTH_ROUTES = {
   devices: "/auth/devices",
   pushToken: "/auth/devices/push-token",
   loginEvents: "/auth/login-events",
+  qrCreate: "/auth/qr/create",
+  qrStatus: "/auth/qr/status",
+  qrApprove: "/auth/qr/approve",
+  qrConsume: "/auth/qr/consume",
 } as const;
 
 // ── SDK interface draft (implemented per platform) ─────────────────────────────
@@ -224,4 +299,21 @@ export interface AuthClient {
   /** Recent OTP verification attempts for the current user (account dashboard). */
   listLoginEvents(): Promise<LoginEventDTO[]>;
   logout(): Promise<void>;
+}
+
+/**
+ * QR cross-device login. Transport is the same fetch/URLSession model as
+ * {@link AuthClient}; the calls split by who makes them:
+ *  - browser (unauthenticated → authenticated): `create` → poll `status` → `consume`.
+ *  - native (already authenticated): `approve` — carries the caller's Cookie/Bearer.
+ */
+export interface QrLoginClient {
+  /** Browser: start a login ticket to render as a QR code. */
+  create(): Promise<CreateQrLoginResponse>;
+  /** Browser: poll a ticket's status (needs the secret pollToken from `create`). */
+  status(input: QrLoginStatusQuery): Promise<QrLoginStatus>;
+  /** Native: approve a scanned ticket, binding the caller's user to it. */
+  approve(input: ApproveQrLoginInput): Promise<void>;
+  /** Browser: exchange an approved ticket for this browser's session cookie. */
+  consume(input: ConsumeQrLoginInput): Promise<AuthUser>;
 }

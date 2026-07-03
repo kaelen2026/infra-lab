@@ -40,7 +40,10 @@ export type AuthErrorCode =
   | "CODE_EXPIRED"
   | "INVALID_CODE"
   | "UNAUTHORIZED"
-  | "INVALID_REFRESH_TOKEN";
+  | "INVALID_REFRESH_TOKEN"
+  | "QR_NOT_FOUND"
+  | "QR_ALREADY_USED"
+  | "QR_NOT_APPROVED";
 
 export interface AuthRoutes {
   requestOtp: string;

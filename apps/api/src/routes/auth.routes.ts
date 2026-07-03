@@ -73,6 +73,12 @@ export interface SessionContext {
 export interface SessionService {
   /** Web: returns Set-Cookie values to attach (HttpOnly session cookie). */
   issueWebSession(user: UserRecord, ctx: SessionContext): Promise<{ cookies: string[] }>;
+  /**
+   * Issue a web session cookie for an already-resolved user id — the QR
+   * cross-device login path, where a native client approved the sign-in on the
+   * browser's behalf. Returns null if the user no longer exists.
+   */
+  issueWebSessionForUser(userId: string): Promise<{ user: UserRecord; cookies: string[] } | null>;
   /** Native: returns Bearer accessToken + opaque refreshToken. */
   issueTokens(user: UserRecord, ctx: SessionContext): Promise<AuthTokens>;
   /** Rotate a refresh token, or null if it is unknown/expired/revoked. */
@@ -113,6 +119,10 @@ const ERROR_STATUS: Record<AuthErrorCode, ContentfulStatusCode> = {
   INVALID_CODE: 401,
   UNAUTHORIZED: 401,
   INVALID_REFRESH_TOKEN: 401,
+  // QR cross-device login (emitted by qr.routes.ts, mapped here for a complete table).
+  QR_NOT_FOUND: 404,
+  QR_ALREADY_USED: 409,
+  QR_NOT_APPROVED: 409,
 };
 
 /**
@@ -145,7 +155,7 @@ export function clientIp(headers: Headers, trustedProxyCount = 0): string {
   return headers.get("x-real-ip") ?? "0.0.0.0";
 }
 
-function toAuthUser(user: UserRecord, isNew: boolean): AuthUser {
+export function toAuthUser(user: UserRecord, isNew: boolean): AuthUser {
   return {
     id: user.id,
     phone: user.phone,

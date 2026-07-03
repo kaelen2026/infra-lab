@@ -24,6 +24,9 @@ export const ERROR_MESSAGES: Record<AuthErrorCode, string> = {
   INVALID_CODE: "验证码错误。",
   UNAUTHORIZED: "登录状态已失效，请重新登录。",
   INVALID_REFRESH_TOKEN: "登录状态已失效，请重新登录。",
+  QR_NOT_FOUND: "二维码无效或已过期，请刷新后重试。",
+  QR_ALREADY_USED: "该二维码已被使用，请刷新后重试。",
+  QR_NOT_APPROVED: "尚未在手机上确认登录。",
 };
 
 export const COPY = {
