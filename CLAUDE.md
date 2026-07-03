@@ -69,11 +69,18 @@ cookie transport, `credentials: "include"`) — no contract change, no client-si
 source via Vite + tsconfig aliases (like web). Run `pnpm --filter @infra/h5 dev` (:3002); deployment in
 [`apps/h5/docs/deployment.md`](apps/h5/docs/deployment.md).
 
-## Native client rules (read before touching that client)
+## Language best-practice rules (read before touching that language)
 
-Per-platform coding conventions + the local lint/format gate for each native client.
-Read the relevant one before editing that app (they are not always-on — the TS
-monorepo doesn't need them). None of these gates run in CI; they are local by design.
+Per-language coding conventions **and** project layering. Each is a deep reference,
+not always-on — read the relevant one before editing that code.
+
+**TypeScript** (`packages/*` + `apps/{api,web,h5,bot}`):
+[`.claude/rules/typescript.md`](.claude/rules/typescript.md) — strict-TS + ports &
+adapters + contracts-as-source-of-truth. Gate is **CI** (`lint · typecheck · build ·
+test`).
+
+**Native clients** — per-platform conventions + a **local** lint/format gate (none
+run in CI; they are local by design):
 
 - iOS (Swift/SwiftUI, `apps/ios`): [`.claude/rules/ios.md`](.claude/rules/ios.md) — SwiftLint, `make lint`.
 - Android (Kotlin/Compose, `apps/android`): [`.claude/rules/android.md`](.claude/rules/android.md) — detekt, `./gradlew detekt`.
