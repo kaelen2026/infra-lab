@@ -1,0 +1,155 @@
+name: pr-daily-digest
+
+# 每日「PR 合并日报」：确定性地用 `gh pr list` 收集过去 24 小时合并进 main 的 PR，交给
+# claude-code-action（Opus 4.8）汇总成一份中文日报，推送到飞书。与其它定时 AI 工作流
+# （security-patrol.yml）同源——复用 infra-lab-bot 的凭证、飞书推送脚本与 prompt 模板约定。
+#
+# 与安全巡检 / 扫描的区别：这是**信息聚合**，不是问题上报——不开 issue（每天开会变噪声），
+# 只推飞书 + 留 run log。过去 24 小时无合并时推一条心跳，确认工作流仍在跑。
+#
+# 依赖的仓库 secrets / vars：
+#   CLAUDE_CODE_OAUTH_TOKEN         Claude 鉴权（`claude setup-token`）
+#   INFRA_LAB_BOT_PRIVATE_KEY       infra-lab-bot GitHub App 私钥（读 PR + 归属；Client ID 公开内联）
+#   LARK_APP_ID / LARK_APP_SECRET   飞书应用凭证（可选，用于推送）
+#   vars.LARK_DOMAIN                Feishu（默认）/ Lark
+#   vars.PR_DIGEST_CHAT_ID          飞书目标 chat_id（可选；不配置则跳过飞书推送）
+on:
+  schedule:
+    # 每日 01:00 UTC（北京时间 09:00），汇报过去 24 小时的合并。cron 用 UTC。
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+    inputs:
+      since:
+        description: "统计起点（ISO8601，如 2026-07-01T00:00:00+00:00；留空=过去 24 小时）"
+        required: false
+        default: ""
+      note:
+        description: "追加给日报的补充说明（可留空）"
+        required: false
+        default: ""
+
+# 只读聚合：读内容与 PR 列表即可；不写 GitHub，飞书推送由脚本走应用凭证。
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr-daily-digest-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  digest:
+    name: Daily merged-PR digest
+    runs-on: ubuntu-latest
+    steps:
+      # 用 infra-lab-bot App 铸一个短期 installation token，让 gh / claude-code-action 以
+      # infra-lab-bot[bot] 身份读 PR（与 security-patrol 一致）。
+      - name: Generate infra-lab-bot app token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0 (Node 24)
+        with:
+          # Client ID（公开值，非 secret）——v3 弃用了数字 `app-id`。
+          client-id: Iv23liQcsfKzRONudnfm
+          private-key: ${{ secrets.INFRA_LAB_BOT_PRIVATE_KEY }}
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      # 确定性收集：过去 24 小时（或手动指定起点）合并进任意分支的 PR。窗口起点用带时区偏移的
+      # ISO8601，GitHub 搜索的 `merged:>=` 才认。since 经 env 传入，不内联进脚本，避免表达式注入。
+      - name: Collect merged PRs
+        id: collect
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          SINCE_INPUT: ${{ inputs.since }}
+        run: |
+          set -euo pipefail
+          if [ -n "${SINCE_INPUT:-}" ]; then
+            since="$SINCE_INPUT"
+          else
+            since="$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%S+00:00)"
+          fi
+          echo "since=$since" >> "$GITHUB_OUTPUT"
+          gh pr list --repo "$GITHUB_REPOSITORY" --state merged \
+            --search "merged:>=$since" --limit 100 \
+            --json number,title,author,mergedAt,url,labels,additions,deletions,baseRefName \
+            > prs.json
+          count="$(jq 'length' prs.json)"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "收集到 $count 个已合并 PR（since=$since）"
+
+      # prompt = 日报模板 + 统计窗口 + 收集到的 PR JSON + 补充说明。JSON / note 经 env / 文件注入，
+      # 不内联表达式。仅在有 PR 时构建（无合并时跳过 AI，直接发心跳）。
+      - name: Build digest prompt
+        id: build-prompt
+        if: steps.collect.outputs.count != '0'
+        env:
+          SINCE: ${{ steps.collect.outputs.since }}
+          USER_NOTE: ${{ inputs.note }}
+        run: |
+          {
+            echo 'value<<PROMPT_EOF'
+            cat .github/prompts/pr-daily-digest.md
+            printf '\n## 统计窗口\n自 %s 起（UTC）合并的 PR。\n' "$SINCE"
+            printf '\n## 已合并 PR 数据（JSON）\n```json\n'
+            cat prs.json
+            printf '\n```\n'
+            printf '\n## 补充说明\n%s\n' "$USER_NOTE"
+            echo 'PROMPT_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run Claude Code (digest)
+        id: claude
+        if: steps.collect.outputs.count != '0'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ steps.app-token.outputs.token }}
+          claude_args: "--model claude-opus-4-8"
+          prompt: ${{ steps.build-prompt.outputs.value }}
+          # 定时 / 手动触发的日报把结论也留在 run log 里，便于回溯。
+          show_full_output: true
+
+      # 从 execution_file 抽出日报纯文本（复用安全巡检的提取脚本）。
+      - name: Extract report
+        id: report
+        if: always() && steps.claude.outcome == 'success'
+        env:
+          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          node .github/scripts/extract-result.mjs > report.md || true
+          if [ ! -s report.md ]; then
+            echo "日报已运行，但未取到可解析的摘要文本，请查看运行日志。" > report.md
+          fi
+
+      # 组装飞书正文：无合并 → 心跳；有合并且拿到摘要 → 摘要；异常兜底 → 提示看日志。
+      - name: Compose Feishu body
+        if: always()
+        env:
+          COUNT: ${{ steps.collect.outputs.count }}
+          SINCE: ${{ steps.collect.outputs.since }}
+        run: |
+          if [ -z "${COUNT:-}" ]; then
+            echo "**PR 日报运行异常**：未能收集合并数据，请查看运行日志。" > feishu-body.md
+          elif [ "$COUNT" = "0" ]; then
+            printf '**过去 24 小时无 PR 合并** ✅（统计起点 %s UTC）\n' "$SINCE" > feishu-body.md
+          elif [ -f report.md ]; then
+            cp report.md feishu-body.md
+          else
+            printf '共合并 %s 个 PR，但未取到摘要正文，请查看运行日志。\n' "$COUNT" > feishu-body.md
+          fi
+
+      # 推送到飞书（可选）。未配置 PR_DIGEST_CHAT_ID 时脚本自行跳过（零依赖 Node）。
+      - name: Notify Feishu
+        if: always()
+        env:
+          LARK_APP_ID: ${{ secrets.LARK_APP_ID }}
+          LARK_APP_SECRET: ${{ secrets.LARK_APP_SECRET }}
+          LARK_DOMAIN: ${{ vars.LARK_DOMAIN }}
+          FEISHU_CHAT_ID: ${{ vars.PR_DIGEST_CHAT_ID }}
+          NOTIFY_TITLE: "📊 每日 PR 合并日报"
+          NOTIFY_FILE: feishu-body.md
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node .github/scripts/feishu-notify.mjs
