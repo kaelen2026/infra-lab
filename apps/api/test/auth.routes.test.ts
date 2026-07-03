@@ -45,6 +45,7 @@ class FakeUserRepository implements UserRepository {
       phone,
       displayName: null,
       avatarUrl: null,
+      role: "user",
       createdAt: new Date("2026-06-30T00:00:00Z"),
     };
     this.users.set(id, rec);
@@ -496,6 +497,7 @@ describe("POST /auth/devices/push-token", () => {
       phone: PHONE,
       displayName: null,
       avatarUrl: null,
+      role: "user",
       createdAt: new Date(),
     };
     const res = await post(app, "/auth/devices/push-token", { deviceId: "iphone-1" });
@@ -510,6 +512,7 @@ describe("POST /auth/devices/push-token", () => {
       phone: PHONE,
       displayName: null,
       avatarUrl: null,
+      role: "user",
       createdAt: new Date(),
     };
     // Seed a device row for this user (as verify would have).
@@ -533,6 +536,7 @@ describe("POST /auth/devices/push-token", () => {
       phone: PHONE,
       displayName: null,
       avatarUrl: null,
+      role: "user",
       createdAt: new Date(),
     };
     const res = await post(app, "/auth/devices/push-token", {

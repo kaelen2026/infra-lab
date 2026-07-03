@@ -4,6 +4,14 @@ import { boolean, index, pgEnum, pgTable, text, timestamp, uniqueIndex } from "d
 /** device.platform — the supported clients (`cli` is the terminal client, apps/cli). */
 export const platformEnum = pgEnum("platform", ["web", "ios", "android", "harmony", "cli"]);
 
+/**
+ * user.role — persisted identity. `user` is every logged-in account (the default);
+ * `admin` may reach the web management console (/admin). A third identity, "guest",
+ * is simply an unauthenticated visitor and is NOT stored here. Keep these values in
+ * sync with `USER_ROLES` in `@infra/shared`'s admin contract.
+ */
+export const userRoleEnum = pgEnum("user_role", ["user", "admin"]);
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Better Auth core tables (user / session / account / verification).
 // Column names match Better Auth's defaults so the drizzle adapter resolves them.
@@ -20,6 +28,9 @@ export const user = pgTable(
     // Phone is the primary identifier for this product.
     phone: text("phone"),
     phoneVerified: boolean("phone_verified").notNull().default(false),
+    // Identity role — see userRoleEnum. Defaults to `user`; promote to `admin` to
+    // grant the management console (scripts/grant-admin.mjs).
+    role: userRoleEnum("role").notNull().default("user"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

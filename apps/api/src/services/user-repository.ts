@@ -20,6 +20,7 @@ export function createUserRepository(db: Db): UserRepository {
       phone: row.user.phone ?? phone,
       displayName: row.profile?.displayName ?? null,
       avatarUrl: row.profile?.avatarUrl ?? null,
+      role: row.user.role,
       createdAt: row.user.createdAt,
     };
   }
@@ -38,6 +39,7 @@ export function createUserRepository(db: Db): UserRepository {
       phone: row.user.phone ?? "",
       displayName: row.profile?.displayName ?? null,
       avatarUrl: row.profile?.avatarUrl ?? null,
+      role: row.user.role,
       createdAt: row.user.createdAt,
     };
   }
@@ -55,7 +57,9 @@ export function createUserRepository(db: Db): UserRepository {
           .values({ id, phone, phoneVerified: true, createdAt: now, updatedAt: now });
         await tx.insert(profile).values({ id: randomUUID(), userId: id });
       });
-      return { id, phone, displayName: null, avatarUrl: null, createdAt: now };
+      // New accounts default to the `user` role (the DB default); promote to admin
+      // out-of-band via scripts/grant-admin.mjs.
+      return { id, phone, displayName: null, avatarUrl: null, role: "user", createdAt: now };
     },
 
     async recordDevice(userId, info: DeviceInfo) {

@@ -9,12 +9,14 @@ import { checkReadiness } from "./observability/health.js";
 import { createLogger } from "./observability/logger.js";
 import { type ObsEnv, observability } from "./observability/middleware.js";
 import { createRateLimiter } from "./rate-limit.js";
+import { createAdminRoutes } from "./routes/admin.routes.js";
 import { clientIp, createAuthRoutes } from "./routes/auth.routes.js";
 import { createNotificationRoutes } from "./routes/notification.routes.js";
 import { createQrRoutes } from "./routes/qr.routes.js";
 import { createTimelineRoutes } from "./routes/timeline.routes.js";
 import { createTodoRoutes } from "./routes/todo.routes.js";
 import { requestBodyLimit, securityHeaders } from "./security.js";
+import { createAdminRepository } from "./services/admin-repository.js";
 import { createApnsClient } from "./services/apns-client.js";
 import { createLocalImageStore } from "./services/image-store.js";
 import { createRedisQrTicketStore } from "./services/qr-ticket-store.js";
@@ -155,6 +157,16 @@ app.route(
 );
 // Per-user todo routes (protected; reuse the session resolver for Cookie + Bearer).
 app.route("/", createTodoRoutes({ todos, requireUser: (h) => sessions.requireUser(h) }));
+// Admin console (web-only): read-only cross-user aggregates gated on the persisted
+// `user.role` (admin). Same session resolver as everything else, so the gate rides
+// Cookie or Bearer; promote a user to admin via scripts/grant-admin.mjs.
+app.route(
+  "/",
+  createAdminRoutes({
+    admin: createAdminRepository(db),
+    requireUser: (h) => sessions.requireUser(h),
+  }),
+);
 // Per-user timeline routes (protected) plus the public GET /uploads/:name image
 // server. Same session resolver for Cookie + Bearer.
 app.route(

@@ -1,12 +1,13 @@
 "use client";
 
 import type { AuthUser } from "@infra/sdk";
-import { ListTodo, LogOut, Newspaper } from "lucide-react";
+import { ListTodo, LogOut, Newspaper, Shield } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { ModeToggle } from "@/components/mode-toggle";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -17,6 +18,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
+// Import the hook directly (not via the feature barrel) so app-nav doesn't pull in
+// AdminPage, which itself renders <AppNav /> — that path would be a cycle.
+import { useAdminAccess } from "@/features/admin/use-admin";
 import { useSession } from "@/features/session";
 
 /** Avatar monogram: first glyph of a name, else the last two phone digits. */
@@ -30,6 +34,7 @@ function monogram(user: AuthUser): string {
 /** Top navigation for authenticated pages: brand, theme toggle, user menu with logout. */
 export function AppNav() {
   const { user, status, logout } = useSession();
+  const { isAdmin, role } = useAdminAccess(status === "authenticated");
   const router = useRouter();
 
   async function handleLogout() {
@@ -60,9 +65,16 @@ export function AppNav() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuLabel className="flex flex-col gap-0.5">
-                  <span lang={user.displayName ? "zh" : "en"}>
-                    {user.displayName ?? "未命名用户"}
+                <DropdownMenuLabel className="flex flex-col gap-1">
+                  <span className="flex items-center gap-2">
+                    <span lang={user.displayName ? "zh" : "en"}>
+                      {user.displayName ?? "未命名用户"}
+                    </span>
+                    {role ? (
+                      <Badge variant={isAdmin ? "default" : "outline"} className="font-normal">
+                        {isAdmin ? "管理员" : "用户"}
+                      </Badge>
+                    ) : null}
                   </span>
                   <span className="font-mono text-xs font-normal text-muted-foreground">
                     {user.phone}
@@ -81,6 +93,14 @@ export function AppNav() {
                     动态
                   </Link>
                 </DropdownMenuItem>
+                {isAdmin ? (
+                  <DropdownMenuItem asChild>
+                    <Link href="/admin">
+                      <Shield />
+                      管理后台
+                    </Link>
+                  </DropdownMenuItem>
+                ) : null}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem variant="destructive" onSelect={handleLogout}>
                   <LogOut />

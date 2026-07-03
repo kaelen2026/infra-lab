@@ -17,6 +17,7 @@ import {
   type Platform,
   refreshSchema,
   requestOtpSchema,
+  type UserRole,
   updatePushTokenSchema,
   verifyOtpSchema,
 } from "@infra/shared";
@@ -30,6 +31,8 @@ export interface UserRecord {
   phone: string;
   displayName: string | null;
   avatarUrl: string | null;
+  /** Persisted identity role; gates the admin console. */
+  role: UserRole;
   createdAt: Date;
 }
 

@@ -30,6 +30,7 @@ const fakeUser: UserRecord = {
   phone: "+8613800138000",
   displayName: "Scanner",
   avatarUrl: null,
+  role: "user",
   createdAt: new Date("2026-01-01T00:00:00.000Z"),
 };
 
