@@ -9,4 +9,16 @@
     <style name="Theme.Infra" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/window_background</item>
     </style>
+
+    <!--
+      Android 12+ system SplashScreen (androidx.core:core-splashscreen). Shown by the
+      OS before Compose is ready, then handed off to Theme.Infra via postSplashScreenTheme.
+      Background + the clay OTP-bubble icon come from @infra/design generated resources;
+      @color/window_background switches day/night via values-night.
+    -->
+    <style name="Theme.Infra.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/window_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.Infra</item>
+    </style>
 </resources>

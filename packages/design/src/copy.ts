@@ -28,6 +28,8 @@ export const ERROR_MESSAGES: Record<AuthErrorCode, string> = {
 
 export const COPY = {
   brand: "infra-lab",
+  /** One-line product tagline shown on the launch / splash screen. */
+  tagline: "手机号，一步登录",
 
   phone: {
     title: "手机号登录",

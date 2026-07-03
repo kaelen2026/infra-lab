@@ -5,25 +5,45 @@ import SwiftUI
 /// signed-in tabs (account + todos).
 struct RootView: View {
     @EnvironmentObject private var auth: AuthViewModel
+    /// Once true the brand splash (segment B) fades away, revealing the flow.
+    @State private var splashDone = false
 
     var body: some View {
-        Group {
-            if auth.restoring {
-                ZStack {
-                    AuthBackground()
-                    ProgressView()
-                        .controlSize(.large)
-                        .tint(DesignTokens.primary)
-                }
-            } else if auth.step == .done {
-                AuthenticatedView()
-            } else {
-                authFlow
+        ZStack {
+            content
+
+            if !splashDone {
+                BrandSplashView()
+                    .transition(.opacity)
+                    .zIndex(1)
             }
         }
-        .task { await auth.bootstrap() }
+        .task { await launch() }
         .animation(.snappy, value: auth.step)
-        .animation(.snappy, value: auth.restoring)
+    }
+
+    /// Routed content behind the splash: the signed-in tabs or the auth flow.
+    @ViewBuilder private var content: some View {
+        if auth.step == .done {
+            AuthenticatedView()
+        } else {
+            authFlow
+        }
+    }
+
+    /// Restore the session while holding the splash for a minimum dwell, so it
+    /// never flashes by on a fast or offline cold start. Both run concurrently;
+    /// the splash cross-fades out once the later of the two finishes.
+    private func launch() async {
+        async let restore: Void = auth.bootstrap()
+        async let dwell: Void = minimumDwell()
+        await restore
+        await dwell
+        withAnimation(.easeOut(duration: 0.35)) { splashDone = true }
+    }
+
+    private func minimumDwell() async {
+        try? await Task.sleep(nanoseconds: 800_000_000)
     }
 
     /// The unauthenticated card flow (phone / code), centered over the paper
