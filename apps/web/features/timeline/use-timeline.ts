@@ -33,6 +33,8 @@ export interface UseTimeline {
   hasMore: boolean;
   /** True while an older page is being appended. */
   loadingMore: boolean;
+  /** True when the last `loadMore` failed; the sentinel offers a manual retry. */
+  loadMoreError: boolean;
   /** Fetch the next (older) page; no-op while one is in flight or at the end. */
   loadMore: () => void;
   /** True while a publish (image upload + create) is in flight. */
@@ -153,9 +155,14 @@ export function useTimeline(enabled: boolean): UseTimeline {
   return {
     posts: query.data ? query.data.pages.flatMap((page) => page.posts) : null,
     loading: query.isLoading,
+    // Initial-load and action (publish/delete) failures surface in the page-level
+    // banner. A failed page *append* (`isFetchNextPageError`) is surfaced in-context
+    // by the sentinel instead (visible + click-to-retry), so it's no longer silently
+    // swallowed — matching iOS `TimelineViewModel.loadMore`, which sets `error` on catch.
     error: actionError ?? (query.isError ? "无法加载动态，请稍后重试。" : null),
     hasMore: hasNextPage,
     loadingMore: isFetchingNextPage,
+    loadMoreError: query.isFetchNextPageError,
     loadMore,
     publishing: publishMutation.isPending,
     pendingIds,

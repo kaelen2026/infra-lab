@@ -18,6 +18,7 @@ export default function TimelinePage() {
     error,
     hasMore,
     loadingMore,
+    loadMoreError,
     loadMore,
     publishing,
     pendingIds,
@@ -52,6 +53,7 @@ export default function TimelinePage() {
             loading={loading}
             hasMore={hasMore}
             loadingMore={loadingMore}
+            loadMoreError={loadMoreError}
             pendingIds={pendingIds}
             onRemove={remove}
             onLoadMore={loadMore}

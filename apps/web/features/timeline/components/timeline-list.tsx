@@ -13,6 +13,8 @@ interface TimelineListProps {
   hasMore: boolean;
   /** True while an older page is being appended. */
   loadingMore: boolean;
+  /** True when the last page append failed; the sentinel offers a manual retry. */
+  loadMoreError: boolean;
   pendingIds: Set<string>;
   onRemove: (id: string) => void;
   onLoadMore: () => void;
@@ -28,6 +30,7 @@ export function TimelineList({
   loading,
   hasMore,
   loadingMore,
+  loadMoreError,
   pendingIds,
   onRemove,
   onLoadMore,
@@ -36,7 +39,9 @@ export function TimelineList({
 
   useEffect(() => {
     const sentinel = sentinelRef.current;
-    if (!hasMore || !sentinel) return;
+    // After a failed append we stop auto-firing: the observer only re-fires on an
+    // intersection *change*, so it would sit stuck. The manual retry below drives it.
+    if (!hasMore || loadMoreError || !sentinel) return;
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((entry) => entry.isIntersecting)) onLoadMore();
@@ -45,7 +50,7 @@ export function TimelineList({
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [hasMore, onLoadMore]);
+  }, [hasMore, loadMoreError, onLoadMore]);
 
   if (loading) {
     return (
@@ -81,8 +86,20 @@ export function TimelineList({
       ))}
       {hasMore && (
         <div ref={sentinelRef} className="flex items-center justify-center gap-2 py-4">
-          {loadingMore && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
-          <p className="text-sm text-muted-foreground">正在加载更多动态…</p>
+          {loadMoreError ? (
+            <button
+              type="button"
+              onClick={onLoadMore}
+              className="text-sm font-medium text-destructive underline underline-offset-4"
+            >
+              加载更多动态失败，点击重试
+            </button>
+          ) : (
+            <>
+              {loadingMore && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
+              <p className="text-sm text-muted-foreground">正在加载更多动态…</p>
+            </>
+          )}
         </div>
       )}
     </div>
