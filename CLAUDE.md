@@ -3,9 +3,11 @@
 Guidance for Claude Code (claude.ai/code) in this repo.
 
 pnpm-workspace monorepo implementing **phone-number + OTP** auth (login == register) with
-**Better Auth** as the identity core, serving four clients: `web / ios / android / harmony`
-(plus `h5`, a mobile browser client that reuses web's cookie transport).
-Postgres holds long-term data; Redis holds all short-term OTP/rate-limit state.
+**Better Auth** as the identity core, serving five clients: `web / ios / android / harmony / cli`
+(plus `h5`, a mobile browser client that reuses web's cookie transport). On top of auth it also
+ships **todo**, a **timeline** (posts + image upload + public share link), **QR cross-device login**,
+**CLI browser-assisted login** (device flow), and **iOS APNS push**.
+Postgres holds long-term data; Redis holds all short-term OTP/rate-limit/QR-ticket/device-code state.
 
 ## Commands
 
@@ -20,9 +22,11 @@ pnpm typecheck    # per-package `tsc --noEmit` (pnpm -r typecheck)
 pnpm test         # vitest run (hermetic — no live Redis/PG needed)
 pnpm lint         # biome check .   (pnpm lint:fix to autofix+format)
 
-pnpm dev                             # API (:3001) + Web (:3000) together (turbo, builds deps first)
+pnpm dev                             # API (:3001) + Web (:3000) together (turbo; excludes bot & cli)
 pnpm dev:api                         # just the API on :3001 (tsx watch)
 pnpm dev:web                         # just the Web on :3000
+pnpm dev:h5                          # just the H5 SPA on :3002
+pnpm --filter @infra/cli dev auth login   # run the terminal client (see apps/cli/README.md)
 
 node scripts/verify-redis.mjs        # live OTP assertions against running Redis (needs build first)
 ```
@@ -68,6 +72,20 @@ cookie transport, `credentials: "include"`) — no contract change, no client-si
 `@infra/design`'s `COPY`/`ERROR_MESSAGES` — same source as every other client. It resolves `@infra/*` to
 source via Vite + tsconfig aliases (like web). Run `pnpm --filter @infra/h5 dev` (:3002); deployment in
 [`apps/h5/docs/deployment.md`](apps/h5/docs/deployment.md).
+
+## CLI (`apps/cli`, terminal client)
+
+`@infra/cli` (bin `infra-lab`) is a **terminal client**, not a new platform: as a cookie-less client it
+reuses `@infra/sdk`'s Bearer transport (`platform: "cli"`, the same native channel as iOS/Android/Harmony),
+swapping Keychain/Keystore/HUKS for a `0600` JSON credential file. `auth login` does interactive OTP;
+`auth login --web` uses a **browser-assisted device flow** (gh-style, RFC 8628): the API mints a secret
+`deviceCode` + human `userCode` (`POST /auth/cli/device`), the browser approves it from an existing web
+session (`POST /auth/cli/device/approve`, cookie auth, SameSite=Lax), and the CLI polls
+(`POST /auth/cli/device/token`) to receive its **own** tokens once — no token ever passes through the
+browser; `deviceCode` is stored HMAC-hashed like OTP codes. Ports & adapters throughout (config /
+token-store / client / commands injected), so tests are hermetic. Run
+`pnpm --filter @infra/cli dev auth login`; design in [`docs/plans/cli-plan.md`](docs/plans/cli-plan.md),
+usage in [`apps/cli/README.md`](apps/cli/README.md).
 
 ## Language best-practice rules (read before touching that language)
 
