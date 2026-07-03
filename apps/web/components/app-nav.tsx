@@ -1,7 +1,7 @@
 "use client";
 
 import type { AuthUser } from "@infra/sdk";
-import { ListTodo, LogOut, Newspaper } from "lucide-react";
+import { ListTodo, LogOut, Newspaper, Shield } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -17,6 +17,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
+// Import the hook directly (not via the feature barrel) so app-nav doesn't pull in
+// AdminPage, which itself renders <AppNav /> — that path would be a cycle.
+import { useAdminAccess } from "@/features/admin/use-admin";
 import { useSession } from "@/features/session";
 
 /** Avatar monogram: first glyph of a name, else the last two phone digits. */
@@ -30,6 +33,7 @@ function monogram(user: AuthUser): string {
 /** Top navigation for authenticated pages: brand, theme toggle, user menu with logout. */
 export function AppNav() {
   const { user, status, logout } = useSession();
+  const { isAdmin } = useAdminAccess(status === "authenticated");
   const router = useRouter();
 
   async function handleLogout() {
@@ -81,6 +85,14 @@ export function AppNav() {
                     动态
                   </Link>
                 </DropdownMenuItem>
+                {isAdmin ? (
+                  <DropdownMenuItem asChild>
+                    <Link href="/admin">
+                      <Shield />
+                      管理后台
+                    </Link>
+                  </DropdownMenuItem>
+                ) : null}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem variant="destructive" onSelect={handleLogout}>
                   <LogOut />

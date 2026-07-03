@@ -1,4 +1,10 @@
 import {
+  ADMIN_ROUTES,
+  type AdminAccessResponse,
+  type AdminClient,
+  type AdminStatsDTO,
+  type AdminStatsResponse,
+  type AdminUsersResponse,
   type ApproveQrLoginInput,
   type ApproveQrLoginResponse,
   AUTH_ROUTES,
@@ -13,6 +19,7 @@ import {
   type CreateTodoInput,
   type DeviceDTO,
   type DevicesResponse,
+  type ListAdminUsersInput,
   type ListTimelineOptions,
   type LoginEventDTO,
   type LoginEventsResponse,
@@ -420,4 +427,69 @@ export function createTimelineClient(options: CreateTimelineClientOptions): Time
  */
 export function createWebTimelineClient(baseUrl: string, fetchImpl?: typeof fetch): TimelineClient {
   return createTimelineClient({ baseUrl, platform: "web", fetch: fetchImpl });
+}
+
+export interface CreateAdminClientOptions {
+  baseUrl: string;
+  platform: Platform;
+  /** Defaults to a no-op store (web). Native platforms supply a secure store. */
+  tokens?: TokenStore;
+  fetch?: typeof fetch;
+}
+
+/**
+ * Reference {@link AdminClient} — the web management console. Shares the auth
+ * transport model (web rides the HttpOnly cookie; native would send Bearer, but
+ * the console is web-only). Non-2xx responses throw {@link HttpAuthError}, whose
+ * `code` carries the admin error codes (`FORBIDDEN` → 403 for a non-admin).
+ */
+export function createAdminClient(options: CreateAdminClientOptions): AdminClient {
+  const doFetch = options.fetch ?? globalThis.fetch;
+  const store = options.tokens ?? noopTokenStore;
+  const isWeb = options.platform === "web";
+
+  async function request<T>(path: string): Promise<T> {
+    const headers: Record<string, string> = { "content-type": "application/json" };
+    if (!isWeb) {
+      const t = await store.load();
+      if (t) headers.authorization = `${t.tokenType} ${t.accessToken}`;
+    }
+    const res = await doFetch(`${options.baseUrl}${path}`, {
+      method: "GET",
+      headers,
+      credentials: isWeb ? "include" : "omit",
+    });
+    const json: unknown = await res.json().catch(() => ({}));
+    if (!res.ok) throw new HttpAuthError(res.status, json);
+    return json as T;
+  }
+
+  return {
+    async access(): Promise<boolean> {
+      const res = await request<AdminAccessResponse>(ADMIN_ROUTES.access);
+      return res.isAdmin;
+    },
+
+    async stats(): Promise<AdminStatsDTO> {
+      const res = await request<AdminStatsResponse>(ADMIN_ROUTES.stats);
+      return res.stats;
+    },
+
+    async listUsers(input?: Partial<ListAdminUsersInput>): Promise<AdminUsersResponse> {
+      const query = new URLSearchParams();
+      if (input?.limit !== undefined) query.set("limit", String(input.limit));
+      if (input?.offset !== undefined) query.set("offset", String(input.offset));
+      const qs = query.toString();
+      const path = qs ? `${ADMIN_ROUTES.users}?${qs}` : ADMIN_ROUTES.users;
+      return request<AdminUsersResponse>(path);
+    },
+  };
+}
+
+/**
+ * Web-flavored {@link createAdminClient}: fixes `platform: "web"` so requests carry
+ * the HttpOnly `infra.session` cookie and no token is stored in the browser.
+ */
+export function createWebAdminClient(baseUrl: string, fetchImpl?: typeof fetch): AdminClient {
+  return createAdminClient({ baseUrl, platform: "web", fetch: fetchImpl });
 }
