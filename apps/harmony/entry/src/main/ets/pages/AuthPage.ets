@@ -1,5 +1,5 @@
 import { common } from "@kit.AbilityKit";
-import { HarmonyAuthClient } from "../sdk/AuthClient";
+import { createSession, HarmonyAuthClient, HarmonySession } from "../sdk/AuthClient";
 import { HuksTokenStore } from "../sdk/HuksTokenStore";
 import { describeAuthError } from "../sdk/messages";
 import { API_BASE_URL, getDeviceInfo } from "../common/config";
@@ -61,7 +61,8 @@ struct AuthPage {
   private getClient(): HarmonyAuthClient {
     if (this.client === null) {
       const ctx: common.Context = getContext(this) as common.Context;
-      this.client = new HarmonyAuthClient(API_BASE_URL, new HuksTokenStore(ctx));
+      const session: HarmonySession = createSession(API_BASE_URL, new HuksTokenStore(ctx));
+      this.client = new HarmonyAuthClient(session);
     }
     return this.client;
   }

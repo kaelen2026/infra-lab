@@ -2,7 +2,6 @@ import { http } from "@kit.NetworkKit";
 import {
   AUTH_ROUTES,
   AuthErrorBody,
-  AuthErrorCode,
   AuthTokens,
   AuthUser,
   DeviceDTO,
@@ -11,53 +10,44 @@ import {
   LoginEventsResponse,
   MeResponse,
   Platform,
-  RefreshResponse,
   RequestOtpInput,
   RequestOtpResponse,
   VerifyOtpInput,
   VerifyOtpResponse,
 } from "../common/contracts";
-
-/**
- * Pluggable secure token storage. HarmonyOS backs this with HUKS-encrypted
- * Preferences ({@link HuksTokenStore}); tests can inject an in-memory fake.
- */
-export interface TokenStore {
-  load(): Promise<AuthTokens | null>;
-  save(tokens: AuthTokens): Promise<void>;
-  clear(): Promise<void>;
-}
-
-/**
- * Thrown when the API responds non-2xx. Mirrors the shared `HttpAuthError`: callers
- * branch on a stable {@link AuthErrorCode} and surface retry/lockout hints.
- */
-export class HttpAuthError extends Error {
-  readonly code: AuthErrorCode;
-  readonly status: number;
-  readonly retryAfter?: number;
-  readonly remainingAttempts?: number;
-
-  constructor(status: number, body: AuthErrorBody) {
-    const code: AuthErrorCode = body.code ?? "INVALID_REQUEST";
-    super(`auth request failed: ${code} (${status})`);
-    this.name = "HttpAuthError";
-    this.code = code;
-    this.status = status;
-    this.retryAfter = body.retryAfter;
-    this.remainingAttempts = body.remainingAttempts;
-  }
-}
-
-/** Request body for POST /auth/refresh. */
-interface RefreshRequestBody {
-  refreshToken: string;
-}
+import { HttpAuthError } from "./AuthError";
+import { AuthorizedTransport, RawResponse, TransportRequest } from "./AuthorizedTransport";
+import { rotateTokens, SessionRefresher } from "./SessionRefresher";
+import { TokenStore } from "./TokenStore";
 
 /** A body-less POST (e.g. logout). ArkTS requires every object literal to have a named type. */
 interface EmptyBody {}
 
-type RequestBody = RequestOtpInput | VerifyOtpInput | RefreshRequestBody | EmptyBody;
+type RequestBody = RequestOtpInput | VerifyOtpInput | EmptyBody;
+
+/**
+ * The token store + shared transport + shared refresher that every authorized client
+ * rides. Building it once (see {@link createSession}) and injecting it into both the
+ * auth and todo clients is what keeps a `401` on either from rotating the refresh
+ * token twice — the single-flight {@link SessionRefresher} is shared.
+ */
+export interface HarmonySession {
+  store: TokenStore;
+  transport: AuthorizedTransport;
+  refresher: SessionRefresher;
+}
+
+/**
+ * Wire one {@link TokenStore} to a shared refresher + transport. Mirrors the
+ * production wiring in iOS `InfraAuthApp`: one refresher/transport pair shared by
+ * every client so concurrent `401`s collapse into a single token rotation.
+ */
+export function createSession(baseUrl: string, store: TokenStore): HarmonySession {
+  const refresher: SessionRefresher = new SessionRefresher(store, () => rotateTokens(baseUrl, store));
+  const transport: AuthorizedTransport = new AuthorizedTransport(baseUrl, store, refresher);
+  const session: HarmonySession = { store: store, transport: transport, refresher: refresher };
+  return session;
+}
 
 /** The shape every platform SDK implements (mirrors the shared AuthClient). */
 export interface AuthClient {
@@ -73,59 +63,50 @@ export interface AuthClient {
 }
 
 /**
- * HarmonyOS {@link AuthClient}: `@ohos.net.http` transport + Bearer auth from a
- * {@link TokenStore}. Tokens land in the store on verify/refresh and are cleared on
- * logout. Non-2xx responses throw {@link HttpAuthError}; transport failures bubble
- * up as the underlying `BusinessError` from `@kit.BasicServicesKit`.
+ * HarmonyOS {@link AuthClient}. Authorized requests ride the shared
+ * {@link AuthorizedTransport}, which attaches the Bearer token and, on a `401`,
+ * rotates the refresh token (single-flight, via {@link SessionRefresher}) and retries
+ * once — so a stale 15-minute access token is refreshed transparently. Tokens land in
+ * the store on verify/refresh and are cleared on logout. Non-2xx responses throw
+ * {@link HttpAuthError}; transport failures bubble up as the underlying `BusinessError`.
  */
 export class HarmonyAuthClient implements AuthClient {
-  private readonly baseUrl: string;
   private readonly store: TokenStore;
+  private readonly transport: AuthorizedTransport;
+  private readonly refresher: SessionRefresher;
   private readonly platform: Platform;
 
-  constructor(baseUrl: string, store: TokenStore, platform: Platform = "harmony") {
-    this.baseUrl = baseUrl;
-    this.store = store;
+  constructor(session: HarmonySession, platform: Platform = "harmony") {
+    this.store = session.store;
+    this.transport = session.transport;
+    this.refresher = session.refresher;
     this.platform = platform;
   }
 
-  private async request<T>(path: string, body?: RequestBody, auth: boolean = false): Promise<T> {
-    const header: Record<string, string> = { "Content-Type": "application/json" };
-    if (auth) {
-      const tokens: AuthTokens | null = await this.store.load();
-      if (tokens !== null) {
-        header["Authorization"] = `${tokens.tokenType} ${tokens.accessToken}`;
-      }
+  private async request<T>(
+    path: string,
+    method: http.RequestMethod,
+    body?: RequestBody,
+  ): Promise<T> {
+    const serialized: string | undefined = body === undefined ? undefined : JSON.stringify(body);
+    const req: TransportRequest = { path: path, method: method, body: serialized };
+    const res: RawResponse = await this.transport.send(req);
+    const text: string = res.text;
+    const json: object = text.length > 0 ? (JSON.parse(text) as object) : (JSON.parse("{}") as object);
+    if (res.status < 200 || res.status >= 300) {
+      throw new HttpAuthError(res.status, json as AuthErrorBody);
     }
-
-    const request: http.HttpRequest = http.createHttp();
-    try {
-      const options: http.HttpRequestOptions = {
-        method: body === undefined ? http.RequestMethod.GET : http.RequestMethod.POST,
-        header: header,
-        expectDataType: http.HttpDataType.STRING,
-        extraData: body === undefined ? undefined : JSON.stringify(body),
-      };
-      const response: http.HttpResponse = await request.request(`${this.baseUrl}${path}`, options);
-      const status: number = response.responseCode;
-      const text: string = (response.result as string) ?? "";
-      const json: object = text.length > 0 ? (JSON.parse(text) as object) : (JSON.parse("{}") as object);
-      if (status < 200 || status >= 300) {
-        throw new HttpAuthError(status, json as AuthErrorBody);
-      }
-      return json as T;
-    } finally {
-      request.destroy();
-    }
+    return json as T;
   }
 
   requestOtp(input: RequestOtpInput): Promise<RequestOtpResponse> {
-    return this.request<RequestOtpResponse>(AUTH_ROUTES.requestOtp, input);
+    return this.request<RequestOtpResponse>(AUTH_ROUTES.requestOtp, http.RequestMethod.POST, input);
   }
 
   async verifyOtp(input: VerifyOtpInput): Promise<VerifyOtpResponse> {
     const res: VerifyOtpResponse = await this.request<VerifyOtpResponse>(
       AUTH_ROUTES.verifyOtp,
+      http.RequestMethod.POST,
       input,
     );
     if (res.tokens !== undefined) {
@@ -134,27 +115,30 @@ export class HarmonyAuthClient implements AuthClient {
     return res;
   }
 
-  async refresh(): Promise<AuthTokens | null> {
+  /**
+   * Rotate the session through the shared refresher so a launch-time restore and an
+   * in-session `401` retry can never rotate the token twice concurrently. Returns
+   * null when there is no session to refresh.
+   */
+  refresh(): Promise<AuthTokens | null> {
+    return this.rotateThroughRefresher();
+  }
+
+  private async rotateThroughRefresher(): Promise<AuthTokens | null> {
     const current: AuthTokens | null = await this.store.load();
-    if (current === null) {
-      return null;
-    }
-    const body: RefreshRequestBody = { refreshToken: current.refreshToken };
-    const res: RefreshResponse = await this.request<RefreshResponse>(AUTH_ROUTES.refresh, body);
-    await this.store.save(res.tokens);
-    return res.tokens;
+    const stale: string | null = current === null ? null : current.accessToken;
+    return this.refresher.refresh(stale);
   }
 
   async me(): Promise<AuthUser> {
-    const res: MeResponse = await this.request<MeResponse>(AUTH_ROUTES.me, undefined, true);
+    const res: MeResponse = await this.request<MeResponse>(AUTH_ROUTES.me, http.RequestMethod.GET);
     return res.user;
   }
 
   async listDevices(): Promise<DeviceDTO[]> {
     const res: DevicesResponse = await this.request<DevicesResponse>(
       AUTH_ROUTES.devices,
-      undefined,
-      true,
+      http.RequestMethod.GET,
     );
     return res.devices;
   }
@@ -162,8 +146,7 @@ export class HarmonyAuthClient implements AuthClient {
   async listLoginEvents(): Promise<LoginEventDTO[]> {
     const res: LoginEventsResponse = await this.request<LoginEventsResponse>(
       AUTH_ROUTES.loginEvents,
-      undefined,
-      true,
+      http.RequestMethod.GET,
     );
     return res.events;
   }
@@ -171,7 +154,7 @@ export class HarmonyAuthClient implements AuthClient {
   async logout(): Promise<void> {
     const body: EmptyBody = {};
     try {
-      await this.request<object>(AUTH_ROUTES.logout, body, true);
+      await this.request<object>(AUTH_ROUTES.logout, http.RequestMethod.POST, body);
     } finally {
       await this.store.clear();
     }

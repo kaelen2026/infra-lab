@@ -9,8 +9,8 @@ import {
   todoPath,
   UpdateTodoInput,
 } from "../common/todo";
-import { AuthTokens } from "../common/contracts";
-import { TokenStore } from "./AuthClient";
+import { HarmonySession } from "./AuthClient";
+import { AuthorizedTransport, RawResponse, TransportRequest } from "./AuthorizedTransport";
 
 /**
  * Thrown when the todos API responds non-2xx. Mirrors {@link HttpAuthError}: callers
@@ -46,21 +46,19 @@ export interface TodoClient {
 }
 
 /**
- * HarmonyOS {@link TodoClient}: shares the auth transport model — `@ohos.net.http`
- * with a Bearer header sourced from the same {@link TokenStore} the auth client uses,
- * so todos ride the very session established at login. Non-2xx responses throw
- * {@link HttpTodoError}.
+ * HarmonyOS {@link TodoClient}: rides the shared {@link AuthorizedTransport} — the
+ * same Bearer header, and the same refresh-and-retry on a `401`, as the auth client —
+ * so todos stay in lockstep with the session established at login. Non-2xx responses
+ * throw {@link HttpTodoError}.
  *
  * Update uses **PUT**, not PATCH: NetworkKit's `http.RequestMethod` has no PATCH
  * member, so the API accepts PUT as an alias for the same partial-update semantics.
  */
 export class HarmonyTodoClient implements TodoClient {
-  private readonly baseUrl: string;
-  private readonly store: TokenStore;
+  private readonly transport: AuthorizedTransport;
 
-  constructor(baseUrl: string, store: TokenStore) {
-    this.baseUrl = baseUrl;
-    this.store = store;
+  constructor(session: HarmonySession) {
+    this.transport = session.transport;
   }
 
   private async request<T>(
@@ -68,32 +66,16 @@ export class HarmonyTodoClient implements TodoClient {
     method: http.RequestMethod,
     body?: TodoRequestBody,
   ): Promise<T> {
-    const header: Record<string, string> = { "Content-Type": "application/json" };
-    const tokens: AuthTokens | null = await this.store.load();
-    if (tokens !== null) {
-      header["Authorization"] = `${tokens.tokenType} ${tokens.accessToken}`;
+    const serialized: string | undefined = body === undefined ? undefined : JSON.stringify(body);
+    const req: TransportRequest = { path: path, method: method, body: serialized };
+    const res: RawResponse = await this.transport.send(req);
+    const text: string = res.text;
+    const json: object = text.length > 0 ? (JSON.parse(text) as object) : (JSON.parse("{}") as object);
+    if (res.status < 200 || res.status >= 300) {
+      const errorBody: TodoErrorBody = json as TodoErrorBody;
+      throw new HttpTodoError(res.status, errorBody.code ?? "INVALID_REQUEST");
     }
-
-    const request: http.HttpRequest = http.createHttp();
-    try {
-      const options: http.HttpRequestOptions = {
-        method: method,
-        header: header,
-        expectDataType: http.HttpDataType.STRING,
-        extraData: body === undefined ? undefined : JSON.stringify(body),
-      };
-      const response: http.HttpResponse = await request.request(`${this.baseUrl}${path}`, options);
-      const status: number = response.responseCode;
-      const text: string = (response.result as string) ?? "";
-      const json: object = text.length > 0 ? (JSON.parse(text) as object) : (JSON.parse("{}") as object);
-      if (status < 200 || status >= 300) {
-        const errorBody: TodoErrorBody = json as TodoErrorBody;
-        throw new HttpTodoError(status, errorBody.code ?? "INVALID_REQUEST");
-      }
-      return json as T;
-    } finally {
-      request.destroy();
-    }
+    return json as T;
   }
 
   async list(): Promise<TodoDTO[]> {

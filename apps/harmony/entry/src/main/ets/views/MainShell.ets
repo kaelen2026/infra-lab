@@ -1,5 +1,5 @@
 import { common } from "@kit.AbilityKit";
-import { HarmonyAuthClient } from "../sdk/AuthClient";
+import { createSession, HarmonyAuthClient, HarmonySession } from "../sdk/AuthClient";
 import { HarmonyTodoClient } from "../sdk/TodoClient";
 import { HuksTokenStore } from "../sdk/HuksTokenStore";
 import { formatDate, formatDateTime, platformLabel } from "../sdk/format";
@@ -44,6 +44,8 @@ export struct MainShell {
   /** Id of the todo whose toggle/delete is in flight ("" when idle). */
   @State private pendingId: string = "";
 
+  /** One shared session (store + transport + single-flight refresher) for both tabs. */
+  private session: HarmonySession | null = null;
   private authClient: HarmonyAuthClient | null = null;
   private todoClient: HarmonyTodoClient | null = null;
 
@@ -66,18 +68,24 @@ export struct MainShell {
     await persistTheme(ctx, next);
   }
 
+  private getSession(): HarmonySession {
+    if (this.session === null) {
+      const ctx: common.Context = getContext(this) as common.Context;
+      this.session = createSession(API_BASE_URL, new HuksTokenStore(ctx));
+    }
+    return this.session;
+  }
+
   private auth(): HarmonyAuthClient {
     if (this.authClient === null) {
-      const ctx: common.Context = getContext(this) as common.Context;
-      this.authClient = new HarmonyAuthClient(API_BASE_URL, new HuksTokenStore(ctx));
+      this.authClient = new HarmonyAuthClient(this.getSession());
     }
     return this.authClient;
   }
 
   private todoApi(): HarmonyTodoClient {
     if (this.todoClient === null) {
-      const ctx: common.Context = getContext(this) as common.Context;
-      this.todoClient = new HarmonyTodoClient(API_BASE_URL, new HuksTokenStore(ctx));
+      this.todoClient = new HarmonyTodoClient(this.getSession());
     }
     return this.todoClient;
   }
