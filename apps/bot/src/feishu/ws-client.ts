@@ -55,6 +55,13 @@ export function startFeishuWsClient(): void {
     appSecret: LARK_APP_SECRET,
     domain: LARK_DOMAIN === "Lark" ? Lark.Domain.Lark : Lark.Domain.Feishu,
     loggerLevel: Lark.LoggerLevel.info,
+    // pong watchdog（SDK 默认关闭）。不开的话,半开 TCP（NAT/中间设备静默回收,
+    // 无 FIN/RST）永远检测不到:autoReconnect 只挂在 close/error 事件上,bot 会
+    // 一直守着死连接,表现为「跑一段时间后不响应,重启容器恢复」。2026-07-03 事故:
+    // 09:40 静默断开后零日志直到 10:23 人工重启,而同日 9 次可见断连均自动重连。
+    // SDK 每 120s ping 一次;每次 ping 后 30s 内无任何入站帧即 terminate,走标准
+    // 重连流程,最坏约 2.5 分钟自愈。
+    wsConfig: { pingTimeout: 30 },
   });
 
   wsClient.start({
