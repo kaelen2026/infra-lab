@@ -5,6 +5,8 @@ import SwiftUI
 /// signed-in tabs (account + todos).
 struct RootView: View {
     @EnvironmentObject private var auth: AuthViewModel
+    @EnvironmentObject private var serverStatus: ServerStatusMonitor
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Group {
@@ -21,7 +23,18 @@ struct RootView: View {
                 authFlow
             }
         }
-        .task { await auth.bootstrap() }
+        // Global service-status bar above every screen (auth flow + signed-in tabs).
+        .safeAreaInset(edge: .top, spacing: 0) { ServerStatusBanner() }
+        .task {
+            // scenePhase's onChange doesn't fire for the initial `.active`, so kick
+            // off polling here; the loop launches on its own Task and doesn't block.
+            serverStatus.start()
+            await auth.bootstrap()
+        }
+        // Poll while foregrounded; re-probe immediately on return, pause when hidden.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { serverStatus.start() } else { serverStatus.stop() }
+        }
         .animation(.snappy, value: auth.step)
         .animation(.snappy, value: auth.restoring)
     }
@@ -50,6 +63,14 @@ struct RootView: View {
 
 #if DEBUG
 #Preview("Phone") {
-    RootView().environmentObject(AuthViewModel(client: PreviewAuthClient()))
+    RootView()
+        .environmentObject(AuthViewModel(client: PreviewAuthClient()))
+        .environmentObject(ServerStatusMonitor.preview(.online))
+}
+
+#Preview("Offline") {
+    RootView()
+        .environmentObject(AuthViewModel(client: PreviewAuthClient()))
+        .environmentObject(ServerStatusMonitor.preview(.offline))
 }
 #endif

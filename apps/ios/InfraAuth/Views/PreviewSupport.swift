@@ -44,6 +44,13 @@ final class PreviewTimelineClient: TimelineClient {
     func remove(id: String) async throws {}
 }
 
+/// Canned ``HealthClient`` for SwiftUI previews — returns a fixed status, no network.
+final class PreviewHealthClient: HealthClient {
+    private let status: ServerStatus
+    init(_ status: ServerStatus) { self.status = status }
+    func probe() async -> ServerStatus { status }
+}
+
 extension AuthUser {
     static let preview = AuthUser(
         id: "preview",

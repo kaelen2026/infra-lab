@@ -12,6 +12,7 @@ struct InfraAuthApp: App {
     @StateObject private var account: AccountViewModel
     @StateObject private var todos: TodoViewModel
     @StateObject private var timeline: TimelineViewModel
+    @StateObject private var serverStatus: ServerStatusMonitor
     @StateObject private var appearance = AppearanceStore()
 
     init() {
@@ -19,10 +20,12 @@ struct InfraAuthApp: App {
         let authClient = HTTPAuthClient(baseURL: AppConfig.apiBaseURL, platform: .ios, store: store)
         let todoClient = HTTPTodoClient(baseURL: AppConfig.apiBaseURL, store: store)
         let timelineClient = HTTPTimelineClient(baseURL: AppConfig.apiBaseURL, store: store)
+        let healthClient = HTTPHealthClient(baseURL: AppConfig.apiBaseURL)
         _auth = StateObject(wrappedValue: AuthViewModel(client: authClient))
         _account = StateObject(wrappedValue: AccountViewModel(client: authClient))
         _todos = StateObject(wrappedValue: TodoViewModel(client: todoClient))
         _timeline = StateObject(wrappedValue: TimelineViewModel(client: timelineClient))
+        _serverStatus = StateObject(wrappedValue: ServerStatusMonitor(client: healthClient))
 
         // Ship any fresh APNS token to the API. Pre-login the request is unauthorized
         // and the update is a server-side no-op; post-login it updates this device row.
@@ -39,6 +42,7 @@ struct InfraAuthApp: App {
                 .environmentObject(account)
                 .environmentObject(todos)
                 .environmentObject(timeline)
+                .environmentObject(serverStatus)
                 .environmentObject(appearance)
                 .preferredColorScheme(appearance.preference.colorScheme)
         }
