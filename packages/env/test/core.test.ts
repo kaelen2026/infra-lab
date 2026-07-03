@@ -227,7 +227,7 @@ describe("APNS config", () => {
   const apnsBase = {
     APNS_KEY_ID: "KEY123",
     APNS_TEAM_ID: "TEAM456",
-    APNS_BUNDLE_ID: "ai.deeplang.infra.ios",
+    APNS_BUNDLE_ID: "dev.w3ctech.infralab",
     APNS_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\\nMIG...\\n-----END PRIVATE KEY-----",
   };
 
@@ -240,7 +240,7 @@ describe("APNS config", () => {
     expect(cfg).not.toBeNull();
     expect(cfg?.keyId).toBe("KEY123");
     expect(cfg?.teamId).toBe("TEAM456");
-    expect(cfg?.bundleId).toBe("ai.deeplang.infra.ios");
+    expect(cfg?.bundleId).toBe("dev.w3ctech.infralab");
     expect(cfg?.production).toBe(false);
     // The escaped \n sequences become real newlines for the PEM parser.
     expect(cfg?.privateKey).toContain("\n");

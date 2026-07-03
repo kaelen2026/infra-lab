@@ -29,11 +29,11 @@ val keystoreProperties =
     }
 
 android {
-    namespace = "ai.deeplang.infra"
+    namespace = "dev.w3ctech.infralab"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "ai.deeplang.infra"
+        applicationId = "dev.w3ctech.infralab"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
@@ -78,7 +78,7 @@ android {
         }
         create("prod") {
             dimension = "env"
-            // No suffix: prod keeps the canonical applicationId ai.deeplang.infra.
+            // No suffix: prod keeps the canonical applicationId dev.w3ctech.infralab.
             // Replace with the real production API before shipping.
             buildConfigField("String", "API_BASE_URL", "\"https://api.example.com\"")
         }

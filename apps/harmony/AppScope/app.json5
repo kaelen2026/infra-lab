@@ -1,6 +1,6 @@
 {
   "app": {
-    "bundleName": "ai.deeplang.infra.harmony",
+    "bundleName": "dev.w3ctech.infralab.hm",
     "vendor": "deeplang",
     "versionCode": 1000000,
     "versionName": "1.0.0",
