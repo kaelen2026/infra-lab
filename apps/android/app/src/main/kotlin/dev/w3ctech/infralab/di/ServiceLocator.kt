@@ -4,6 +4,8 @@ import dev.w3ctech.infralab.BuildConfig
 import dev.w3ctech.infralab.data.AuthClient
 import dev.w3ctech.infralab.data.AuthClientImpl
 import dev.w3ctech.infralab.data.DeviceInfoProvider
+import dev.w3ctech.infralab.data.TimelineClient
+import dev.w3ctech.infralab.data.TimelineClientImpl
 import dev.w3ctech.infralab.data.TodoClient
 import dev.w3ctech.infralab.data.TodoClientImpl
 import dev.w3ctech.infralab.data.net.NetworkModule
@@ -23,6 +25,9 @@ object ServiceLocator {
     private var todoClient: TodoClient? = null
 
     @Volatile
+    private var timelineClient: TimelineClient? = null
+
+    @Volatile
     private var tokenStore: TokenStore? = null
 
     fun init(context: Context) {
@@ -40,6 +45,7 @@ object ServiceLocator {
             device = DeviceInfoProvider(appContext),
         )
         todoClient = TodoClientImpl(api = network.todoApi)
+        timelineClient = TimelineClientImpl(api = network.timelineApi)
     }
 
     fun authClient(): AuthClient =
@@ -47,6 +53,9 @@ object ServiceLocator {
 
     fun todoClient(): TodoClient =
         todoClient ?: error("ServiceLocator.init() must be called before todoClient()")
+
+    fun timelineClient(): TimelineClient =
+        timelineClient ?: error("ServiceLocator.init() must be called before timelineClient()")
 
     fun tokenStore(): TokenStore =
         tokenStore ?: error("ServiceLocator.init() must be called before tokenStore()")

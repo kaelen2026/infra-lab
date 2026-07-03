@@ -2,6 +2,7 @@ package dev.w3ctech.infralab.data.net
 
 import dev.w3ctech.infralab.data.remote.AuthApi
 import dev.w3ctech.infralab.data.remote.RefreshApi
+import dev.w3ctech.infralab.data.remote.TimelineApi
 import dev.w3ctech.infralab.data.remote.TodoApi
 import dev.w3ctech.infralab.data.token.TokenStore
 import kotlinx.serialization.json.Json
@@ -51,7 +52,7 @@ class NetworkModule(
     /**
      * The main authenticated client, shared by every protected API: attaches the Bearer header
      * ([AuthInterceptor]) and refreshes once on 401 ([TokenAuthenticator], via the bare
-     * [refreshApi]). Building one client keeps the auth and todo transports in lock-step.
+     * [refreshApi]). Building one client keeps the auth, todo and timeline transports in lock-step.
      */
     private val authedClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
@@ -66,6 +67,8 @@ class NetworkModule(
     val authApi: AuthApi by lazy { retrofit(authedClient).create(AuthApi::class.java) }
 
     val todoApi: TodoApi by lazy { retrofit(authedClient).create(TodoApi::class.java) }
+
+    val timelineApi: TimelineApi by lazy { retrofit(authedClient).create(TimelineApi::class.java) }
 
     private fun retrofit(client: OkHttpClient): Retrofit = Retrofit.Builder()
         .baseUrl(normalizedBaseUrl)
