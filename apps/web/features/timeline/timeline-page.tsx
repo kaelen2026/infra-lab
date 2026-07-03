@@ -1,31 +1,21 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
-
 import { AppNav } from "@/components/app-nav";
-import { useSession } from "@/features/session";
+import { useRequireAuth } from "@/features/session";
 import { ComposeTimeline } from "./components/compose-timeline";
 import { TimelineList } from "./components/timeline-list";
 import { useTimeline } from "./use-timeline";
 
 /**
  * Protected timeline feed. Like the todo list, the session lives behind the API
- * (cookie), so the guard is client-side: unauthenticated visitors go to /auth.
+ * (cookie), so the guard is client-side (see {@link useRequireAuth}).
  */
 export default function TimelinePage() {
-  const router = useRouter();
-  const { status } = useSession();
-  const { posts, loading, error, publishing, pendingIds, publish, remove } = useTimeline(
-    status === "authenticated",
-  );
-
-  useEffect(() => {
-    if (status === "unauthenticated") router.replace("/auth");
-  }, [status, router]);
+  const { ready } = useRequireAuth();
+  const { posts, loading, error, publishing, pendingIds, publish, remove } = useTimeline(ready);
 
   // Hold the layout (with nav) while resolving / redirecting, so there's no flash.
-  if (status !== "authenticated") {
+  if (!ready) {
     return (
       <>
         <AppNav />

@@ -2,11 +2,10 @@
 
 import { OTP_LIMITS } from "@infra/shared";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
 
 import { ModeToggle } from "@/components/mode-toggle";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useSession } from "@/features/session";
+import { useRedirectIfAuthenticated, useSession } from "@/features/session";
 import { CodeStep } from "./components/code-step";
 import { PhoneStep } from "./components/phone-step";
 import { useOtpLogin } from "./use-otp-login";
@@ -14,12 +13,10 @@ import { useOtpLogin } from "./use-otp-login";
 /** Orchestrates the OTP login flow: wires the headless hook to step views, then redirects home. */
 export default function AuthPage() {
   const router = useRouter();
-  const { status, refresh } = useSession();
+  const { refresh } = useSession();
 
   // Already signed in? Skip the login screen.
-  useEffect(() => {
-    if (status === "authenticated") router.replace("/");
-  }, [status, router]);
+  useRedirectIfAuthenticated();
 
   const login = useOtpLogin({
     onAuthenticated: async () => {

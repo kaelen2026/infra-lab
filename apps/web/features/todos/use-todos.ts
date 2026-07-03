@@ -4,6 +4,7 @@ import type { TodoDTO } from "@infra/sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 
+import { describeError } from "@/lib/errors";
 import { todoClient } from "@/lib/todo-client";
 
 export interface UseTodos {
@@ -57,7 +58,7 @@ export function useTodos(enabled: boolean): UseTodos {
       // List is newest-first; the new item leads.
       queryClient.setQueryData<TodoDTO[]>(TODOS_KEY, (prev) => [created, ...(prev ?? [])]);
     },
-    onError: () => setActionError("创建失败，请重试。"),
+    onError: (err) => setActionError(describeError(err, "创建失败，请重试。")),
   });
 
   const toggleMutation = useMutation({
@@ -72,7 +73,7 @@ export function useTodos(enabled: boolean): UseTodos {
         (prev) => prev?.map((t) => (t.id === updated.id ? updated : t)) ?? prev,
       );
     },
-    onError: () => setActionError("更新失败,请重试。"),
+    onError: (err) => setActionError(describeError(err, "更新失败，请重试。")),
     onSettled: (_data, _err, todo) => removePending(todo.id),
   });
 
@@ -88,7 +89,7 @@ export function useTodos(enabled: boolean): UseTodos {
         (prev) => prev?.filter((t) => t.id !== id) ?? prev,
       );
     },
-    onError: () => setActionError("删除失败,请重试。"),
+    onError: (err) => setActionError(describeError(err, "删除失败，请重试。")),
     onSettled: (_data, _err, id) => removePending(id),
   });
 

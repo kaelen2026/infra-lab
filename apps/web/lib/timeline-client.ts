@@ -1,9 +1,9 @@
 import { createWebTimelineClient } from "@infra/sdk";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+import { env } from "./env";
 
 /** Single shared web timeline client (cookie transport). */
-export const timelineClient = createWebTimelineClient(API_BASE);
+export const timelineClient = createWebTimelineClient(env.apiBaseUrl);
 
 /**
  * Resolve a relative image url the API issued (e.g. `/uploads/<name>.jpg`) into an
@@ -11,5 +11,5 @@ export const timelineClient = createWebTimelineClient(API_BASE);
  * (or anything unexpected) are returned unchanged.
  */
 export function resolveImageUrl(url: string): string {
-  return url.startsWith("/") ? `${API_BASE}${url}` : url;
+  return url.startsWith("/") ? `${env.apiBaseUrl}${url}` : url;
 }

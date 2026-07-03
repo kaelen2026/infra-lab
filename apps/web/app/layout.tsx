@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { ThemeProvider } from "@/components/theme-provider";
 import { QueryProvider } from "@/features/query";
 import { SessionProvider } from "@/features/session";
+import { Toaster, ToastProvider } from "@/features/toast";
 import { mono, sans, serif } from "@/lib/fonts";
 import "./globals.css";
 
@@ -27,7 +28,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           disableTransitionOnChange
         >
           <QueryProvider>
-            <SessionProvider>{children}</SessionProvider>
+            <ToastProvider>
+              <SessionProvider>{children}</SessionProvider>
+              <Toaster />
+            </ToastProvider>
           </QueryProvider>
         </ThemeProvider>
       </body>
