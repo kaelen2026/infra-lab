@@ -19,12 +19,8 @@
 特性分支在 **独立的 git worktree** 中开发。worktree 目录与主仓库目录 **平级**——放在
 同一父目录下的兄弟目录,命名为 `<仓库名>-<端/简述>`,**不要**嵌套在主仓库内部。
 
-本仓库现有:
-
-| worktree 目录            | 分支              |
-| ------------------------ | ----------------- |
-| `../infra-lab-android`   | `feat/android-app`|
-| `../infra-lab-harmony`   | `feat/harmony-app`|
+当前有哪些 worktree 以 `git worktree list` 的实时输出为准——本文档不维护清单
+(此处曾有一张硬编码的表,worktree 合并清理后即过时,故移除)。
 
 约定:
 
