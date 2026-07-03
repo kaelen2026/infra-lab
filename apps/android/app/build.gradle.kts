@@ -145,6 +145,8 @@ dependencies {
 
     implementation(libs.androidx.security.crypto)
 
+    implementation(libs.play.services.code.scanner)
+
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
 

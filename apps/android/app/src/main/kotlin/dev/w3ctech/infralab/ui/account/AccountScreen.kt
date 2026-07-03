@@ -11,6 +11,7 @@ import dev.w3ctech.infralab.ui.components.KeyValueRow
 import dev.w3ctech.infralab.ui.components.MonoText
 import dev.w3ctech.infralab.ui.components.SectionCard
 import dev.w3ctech.infralab.ui.components.SkeletonBar
+import dev.w3ctech.infralab.ui.qr.QrLoginCard
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -66,6 +67,7 @@ fun AccountScreen(
 
         user?.let { ProfileCard(it) }
         SessionCard()
+        QrLoginCard()
         DevicesCard(devices = state.devices, loading = state.loading)
         LoginEventsCard(events = state.events, loading = state.loading)
         ErrorBanner(state.error)

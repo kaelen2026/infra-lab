@@ -31,5 +31,11 @@ interface AuthClient {
     /** Recent OTP verification attempts for the current user (account dashboard). */
     suspend fun listLoginEvents(): List<LoginEventDTO>
 
+    /**
+     * Approve a QR login ticket scanned from the web, signing that browser in as this
+     * (already-authenticated) user. [ticketId] is the value decoded from the scanned QR.
+     */
+    suspend fun approveQrLogin(ticketId: String)
+
     suspend fun logout()
 }
