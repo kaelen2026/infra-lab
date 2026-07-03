@@ -102,6 +102,23 @@ then use `fail(c, code, extra)`. Don't invent ad-hoc status codes or response sh
 Business-resource endpoints follow REST; auth is intentionally RPC. **Follow REST for any new
 resource; deviate only with a reason as explicit as the ones below.**
 
+**REST vs RPC — pick by the nature of the operation, not for blanket "consistency".** The real
+consistency rule is *same kind of operation → same style*, not *one style everywhere*:
+- Maps to CRUD on an **owned, addressable resource** (a persistent noun the client can point a URL
+  at) → **REST** (plural-noun collection + item, verb = action). This is why `todos`/`timeline`
+  are REST: per-user resource collections with a full create/read/update/delete lifecycle, and REST
+  gives idempotent `DELETE`/`PUT` + safe/cacheable `GET` for free — which matters for flaky-network
+  retries on the native clients.
+- Is a **side-effecting action / multi-step stateful flow** with no client-addressable resource →
+  **RPC verb endpoint**. This is why the OTP/session *steps* (`/auth/otp/request`, `/auth/otp/verify`,
+  `/auth/refresh`, `/auth/logout`) are RPC: "verify a code" or "rotate a token" isn't CRUD on a noun,
+  and forcing it into REST (e.g. `POST /sessions` to log in) is awkward for a request→verify→refresh
+  flow. RPC is the standard, pragmatic exception for auth.
+- The split is **per-operation, not per-feature**: even inside auth, the *reads* are REST GETs
+  (`GET /auth/me`, `GET /auth/devices`, `GET /auth/login-events`) while only the flow steps are RPC.
+  Don't RPC-ify a resource for symmetry with auth, and don't CRUD-ify an auth action for symmetry
+  with todos.
+
 **What to follow (already the convention — see `todo.routes.ts`, `timeline.routes.ts`):**
 - **Resources are plural nouns; the HTTP verb is the action** — never a verb in the path for a
   resource. Collection `/<things>`, item `/<things>/:id`:
