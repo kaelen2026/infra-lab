@@ -5,7 +5,9 @@ import SwiftUI
 /// Loaded once on appear.
 struct TimelineView: View {
     @EnvironmentObject private var timeline: TimelineViewModel
+    @EnvironmentObject private var auth: AuthViewModel
     @State private var composing = false
+    @State private var showingAccount = false
 
     var body: some View {
         NavigationStack {
@@ -37,6 +39,11 @@ struct TimelineView: View {
                     }
                     .tint(DesignTokens.primary)
                 }
+                // Declared last so it pins to the trailing edge — the account
+                // entry sits in the same top-right corner on every tab.
+                ToolbarItem(placement: .topBarTrailing) {
+                    AccountAvatarButton(user: auth.user) { showingAccount = true }
+                }
             }
             .sheet(isPresented: $composing) {
                 ComposeTimelineView(busy: timeline.publishing) { text, images in
@@ -45,6 +52,7 @@ struct TimelineView: View {
             }
             .task { await timeline.load() }
         }
+        .sheet(isPresented: $showingAccount) { AccountSheet() }
     }
 }
 

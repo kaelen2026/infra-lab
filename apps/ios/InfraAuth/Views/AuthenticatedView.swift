@@ -1,13 +1,12 @@
 import SwiftUI
 
-/// The signed-in surface: a tab bar over the account dashboard, the todo list and
-/// the timeline feed. Account + todos mirror the two web business screens; the
-/// timeline is an iOS-only feature.
+/// The signed-in surface: a tab bar over the business screens (todos + timeline).
+/// The account is no longer a tab — it lives behind the App Store-style avatar
+/// entry (``AccountAvatarButton``) pinned to the top-right of every tab, opened
+/// as a modal (``AccountSheet``). Todos mirrors web; the timeline is iOS-only.
 struct AuthenticatedView: View {
     var body: some View {
         TabView {
-            AccountView()
-                .tabItem { Label("账户", systemImage: "person.crop.circle") }
             TodosView()
                 .tabItem { Label("待办", systemImage: "checklist") }
             TimelineView()

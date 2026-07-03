@@ -1,48 +1,68 @@
 import SwiftUI
 
-/// The account dashboard — the iOS counterpart of web's dashboard page: profile,
-/// current session, registered devices and recent login history, plus logout.
-struct AccountView: View {
+/// The account modal — presented as a sheet from the global avatar entry
+/// (``AccountAvatarButton``), App Store-style. Profile, current session,
+/// appearance, registered devices and recent login history, plus logout.
+/// Replaces the former account tab so the signed-in surface keeps its tab bar
+/// for business screens only.
+struct AccountSheet: View {
     @EnvironmentObject private var auth: AuthViewModel
     @EnvironmentObject private var account: AccountViewModel
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                header
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    if let user = auth.user {
+                        ProfileCard(user: user)
+                    }
+                    SessionCard()
+                    AppearanceCard()
+                    DevicesCard(devices: account.devices, loading: account.loading)
+                    LoginEventsCard(events: account.events, loading: account.loading)
 
-                if let user = auth.user {
-                    ProfileCard(user: user)
+                    ErrorBanner(message: account.error)
+
+                    PrimaryButton(title: AuthCopy.Done.logout) {
+                        Task { await auth.logout() }
+                    }
+                    .padding(.top, 4)
                 }
-                SessionCard()
-                AppearanceCard()
-                DevicesCard(devices: account.devices, loading: account.loading)
-                LoginEventsCard(events: account.events, loading: account.loading)
-
-                ErrorBanner(message: account.error)
-
-                PrimaryButton(title: AuthCopy.Done.logout) {
-                    Task { await auth.logout() }
-                }
-                .padding(.top, 4)
+                .padding(20)
+                .frame(maxWidth: 560)
+                .frame(maxWidth: .infinity)
             }
-            .padding(20)
-            .frame(maxWidth: 560)
-            .frame(maxWidth: .infinity)
+            .background(AuthBackground())
+            .navigationTitle("账户")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完成") { dismiss() }
+                        .tint(DesignTokens.primary)
+                }
+            }
+            .task { await account.load() }
         }
-        .background(AuthBackground())
-        .task { await account.load() }
     }
+}
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("账户")
-                .font(AuthTheme.title)
-                .foregroundStyle(DesignTokens.textPrimary)
-            Text("你的资料、当前会话与登录记录。")
-                .font(.subheadline)
-                .foregroundStyle(DesignTokens.textSecondary)
+/// The global account entry: an App Store-style circular monogram avatar pinned
+/// to a screen's nav bar (top-right) that opens ``AccountSheet``. Shown on every
+/// signed-in tab so the account is one reachable tap from anywhere.
+struct AccountAvatarButton: View {
+    let user: AuthUser?
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(user.map(monogram) ?? "··")
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(DesignTokens.primaryForeground)
+                .frame(width: 30, height: 30)
+                .background(DesignTokens.primary, in: Circle())
         }
+        .accessibilityLabel("账户")
     }
 }
 
@@ -55,7 +75,7 @@ private func monogram(_ user: AuthUser) -> String {
     return digits.isEmpty ? "··" : String(digits.suffix(2))
 }
 
-/// The hero of the dashboard: who you are.
+/// The hero of the account modal: who you are.
 struct ProfileCard: View {
     let user: AuthUser
 
@@ -209,7 +229,7 @@ struct LoginEventsCard: View {
 
 #if DEBUG
 #Preview {
-    AccountView()
+    AccountSheet()
         .environmentObject(AuthViewModel(client: PreviewAuthClient()))
         .environmentObject(AccountViewModel(client: PreviewAuthClient()))
         .environmentObject(AppearanceStore())
