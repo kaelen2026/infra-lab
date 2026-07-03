@@ -13,6 +13,7 @@ pnpm --filter @infra/cli build            # 产出 dist/index.js(带 shebang)
 node apps/cli/dist/index.js auth login    # 或 pnpm --filter @infra/cli dev auth login
 
 infra-lab auth login       # 交互式登录(输入手机号 → 收到验证码 → 输入验证码)
+infra-lab auth login --web # 浏览器登录(device flow:浏览器确认,复用现有登录态)
 infra-lab auth whoami      # 查看当前登录用户(access token 过期会自动 refresh 一次)
 infra-lab auth logout      # 退出登录并清除本地凭据
 infra-lab todo list        # 列出待办
@@ -46,12 +47,18 @@ infra-lab todo rm <id>     # 删除待办
   测试完全 hermetic(`test/` 下用假 client + 假 IO 驱动,不触网络、不碰真实 home)。
 - `index.ts` — argv 解析(`node:util` parseArgs)与派发;`run()` 可被测试直接调用。
 
-## 浏览器辅助登录("打开浏览器复用状态")
+## 浏览器辅助登录("打开浏览器复用状态",`auth login --web`)
 
-原始需求还提到「打开浏览器复用状态」。参考 **GitHub CLI(`gh auth login`)** 的做法:
-不是读浏览器 cookie,而是 **OAuth device flow**——CLI 取一个一次性码,打开浏览器让用户
-在**已登录的 web 会话**里点批准,CLI 轮询自己的 token 端点拿到**自己的** Bearer/refresh。
-"复用状态"= 复用浏览器现有登录态来授权,用户无需重登、CLI 从不接触 cookie。这需要新增
-device flow 端点(一处需安全评审的认证面),设计已写在
-[`docs/plans/cli-plan.md`](../../docs/plans/cli-plan.md),作为待定的 `auth login --web`,
-未在本次落地——当前 `auth login` 走终端 OTP,不依赖任何新增 API。
+参考 **GitHub CLI(`gh auth login`)** 的做法:不是读浏览器 cookie,而是 **OAuth
+device flow**。`auth login --web` 会:
+
+1. 向 `POST /auth/cli/device` 取一个保密的 `deviceCode` 与人类可读的 `userCode`;
+2. 打印 `userCode` 并打开浏览器到 `${WEB}/auth/cli?user_code=<userCode>`;
+3. 浏览器里用户在**已登录的 web 会话**中确认 `userCode` 并授权(未登录则先走 web
+   登录)——这就是"复用状态":复用浏览器现有登录态授权,CLI 从不接触 cookie;
+4. CLI 按 `interval` 轮询 `POST /auth/cli/device/token`,批准后**单次**拿到**自己的**
+   Bearer + refresh token,写入凭据文件。
+
+token 永不经浏览器传递;`deviceCode` 在服务端仅以 HMAC 哈希存储(与 OTP 同款),
+授权端点 cookie 鉴权 + SameSite=Lax(与 `/auth/logout` 同一 CSRF 姿态)。设计与安全
+要点见 [`docs/plans/cli-plan.md`](../../docs/plans/cli-plan.md)。

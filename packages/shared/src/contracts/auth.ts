@@ -197,6 +197,78 @@ export interface LoginEventsResponse {
   events: LoginEventDTO[];
 }
 
+// ── CLI browser-assisted login (OAuth Device Authorization Grant, gh-style) ──────
+// The terminal client (`apps/cli`) can't read the browser's cookie jar, so — like
+// GitHub CLI — it uses the device flow: it requests a `deviceCode` (secret, kept by
+// the CLI) + a short `userCode` (shown to the user), opens the browser to
+// `verificationUri` where the already-logged-in user approves, and meanwhile polls
+// the token endpoint until it receives its own Bearer + refresh tokens. The token
+// never passes through the browser. See `docs/plans/cli-plan.md`.
+export const cliDeviceCodeRequestSchema = z.object({
+  /** Stable per-install id (becomes the `device` row's deviceId). */
+  deviceId: z.string().trim().min(1).max(128),
+  model: z.string().trim().max(128).optional(),
+  osVersion: z.string().trim().max(64).optional(),
+  appVersion: z.string().trim().max(64).optional(),
+});
+export type CliDeviceCodeRequest = z.infer<typeof cliDeviceCodeRequestSchema>;
+
+export interface CliDeviceCodeResponse {
+  ok: true;
+  /** Secret the CLI keeps and polls with; never shown to the user. */
+  deviceCode: string;
+  /** Short human code the user confirms in the browser (e.g. `WDJB-MJHT`). */
+  userCode: string;
+  /** Page the CLI opens for approval; append `?user_code=<userCode>` to prefill. */
+  verificationUri: string;
+  /** Seconds until the codes expire. */
+  expiresIn: number;
+  /** Minimum seconds the CLI must wait between token polls. */
+  interval: number;
+}
+
+export const cliDeviceTokenRequestSchema = z.object({
+  deviceCode: z.string().trim().min(1),
+});
+export type CliDeviceTokenRequest = z.infer<typeof cliDeviceTokenRequestSchema>;
+
+/**
+ * Non-success poll states: keep polling (`authorization_pending`), back off
+ * (`slow_down`), or stop (`expired_token` / `access_denied`). Mirrors RFC 8628.
+ */
+export const CLI_DEVICE_PENDING_STATUSES = [
+  "authorization_pending",
+  "slow_down",
+  "expired_token",
+  "access_denied",
+] as const;
+export type CliDevicePendingStatus = (typeof CLI_DEVICE_PENDING_STATUSES)[number];
+
+/**
+ * Token-poll result. Returned with HTTP 200 in every case — a pending state is a
+ * normal step of the flow, not an error — so the CLI branches on the discriminant
+ * rather than catching per-poll. `ok: true` yields the tokens exactly once.
+ */
+export type CliDeviceTokenResponse =
+  | { ok: true; user: AuthUser; tokens: AuthTokens }
+  | { ok: false; status: CliDevicePendingStatus };
+
+export const cliDeviceApproveSchema = z.object({
+  userCode: z.string().trim().min(1).max(32),
+  /** Set true to deny the request instead of approving it. */
+  deny: z.boolean().optional(),
+});
+export type CliDeviceApproveInput = z.infer<typeof cliDeviceApproveSchema>;
+
+export interface CliDeviceApproveResponse {
+  ok: true;
+  /** Outcome for the browser UI: matched-and-approved / -denied, or no live code. */
+  result: "approved" | "denied" | "not_found";
+}
+
+/** Web page path where the browser approves a CLI device-flow request. */
+export const CLI_VERIFICATION_PATH = "/auth/cli";
+
 // ── Endpoint paths (shared so SDKs never hard-code strings) ─────────────────────
 export const AUTH_ROUTES = {
   requestOtp: "/auth/otp/request",
@@ -207,6 +279,9 @@ export const AUTH_ROUTES = {
   devices: "/auth/devices",
   pushToken: "/auth/devices/push-token",
   loginEvents: "/auth/login-events",
+  cliDevice: "/auth/cli/device",
+  cliDeviceToken: "/auth/cli/device/token",
+  cliDeviceApprove: "/auth/cli/device/approve",
 } as const;
 
 // ── SDK interface draft (implemented per platform) ─────────────────────────────

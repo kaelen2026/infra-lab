@@ -1,7 +1,9 @@
 import { parseArgs } from "node:util";
+import type { TokenStore } from "@infra/sdk";
 import { createCliClients } from "./client.js";
 import { runLogin, runLogout, runWhoami } from "./commands/auth.js";
 import { runTodoAdd, runTodoDone, runTodoList, runTodoRemove } from "./commands/todo.js";
+import { runLoginWeb } from "./commands/web-login.js";
 import {
   credentialsPath,
   DEFAULT_API_URL,
@@ -12,12 +14,14 @@ import {
 import { loadOrCreateDeviceId } from "./device.js";
 import { formatError } from "./errors.js";
 import { type CliIO, createStdioIO } from "./io.js";
+import { openBrowser } from "./open-url.js";
 import { createFileTokenStore } from "./token-store.js";
 
 const VERSION = "0.1.0";
 
 const OPTION_SPEC = {
   api: { type: "string" },
+  web: { type: "boolean" },
   help: { type: "boolean", short: "h" },
   version: { type: "boolean", short: "v" },
 } as const;
@@ -25,7 +29,8 @@ const OPTION_SPEC = {
 const HELP = `infra-lab — 终端客户端 (手机号 + OTP 登录,复用本地会话)
 
 用法:
-  infra-lab auth login            交互式登录 (login == register)
+  infra-lab auth login            交互式 OTP 登录 (login == register)
+  infra-lab auth login --web      浏览器登录 (device flow:浏览器确认,复用登录态)
   infra-lab auth whoami           查看当前登录用户
   infra-lab auth logout           退出登录并清除本地凭据
   infra-lab todo list             列出待办
@@ -35,6 +40,7 @@ const HELP = `infra-lab — 终端客户端 (手机号 + OTP 登录,复用本地
 
 选项:
   --api <url>   覆盖 API 地址 (默认取 INFRA_LAB_API_URL,再退到 ${DEFAULT_API_URL})
+  --web         auth login 走浏览器 device flow
   -h, --help    显示帮助
   -v, --version 显示版本
 
@@ -44,6 +50,7 @@ const HELP = `infra-lab — 终端客户端 (手机号 + OTP 登录,复用本地
 
 interface ParsedFlags {
   api?: string;
+  web?: boolean;
   help?: boolean;
   version?: boolean;
 }
@@ -87,7 +94,18 @@ export async function run(
   const { auth, todo } = createCliClients({ apiUrl, tokens, fetch: fetchImpl });
 
   try {
-    return await dispatch({ group, command, rest, auth, todo, io, env });
+    return await dispatch({
+      group,
+      command,
+      rest,
+      auth,
+      todo,
+      io,
+      env,
+      apiUrl,
+      tokens,
+      web: values.web === true,
+    });
   } catch (err) {
     io.error(formatError(err));
     return 1;
@@ -102,16 +120,22 @@ interface DispatchCtx {
   todo: ReturnType<typeof createCliClients>["todo"];
   io: CliIO;
   env: Env;
+  apiUrl: string;
+  tokens: TokenStore;
+  web: boolean;
 }
 
 async function dispatch(ctx: DispatchCtx): Promise<number> {
-  const { group, command, rest, auth, todo, io, env } = ctx;
+  const { group, command, rest, auth, todo, io, env, apiUrl, tokens, web } = ctx;
 
   if (group === "auth") {
-    const deps = { auth, io, deviceId: await loadOrCreateDeviceId(deviceIdPath(env)) };
+    const deviceId = await loadOrCreateDeviceId(deviceIdPath(env));
+    const deps = { auth, io, deviceId };
     switch (command) {
       case "login":
-        return runLogin(deps);
+        return web
+          ? runLoginWeb({ apiUrl, tokens, io, deviceId, openUrl: openBrowser })
+          : runLogin(deps);
       case "whoami":
         return runWhoami(deps);
       case "logout":

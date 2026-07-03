@@ -1,5 +1,5 @@
 import { serve } from "@hono/node-server";
-import { createAuth, createOtpService } from "@infra/auth";
+import { createAuth, createCliDeviceFlowService, createOtpService } from "@infra/auth";
 import { createDb, schema } from "@infra/db";
 import { apnsConfigFromEnv, loadCoreEnv } from "@infra/env/core";
 import { createRedis, createRedisOtpStore, createRedisRateLimitStore } from "@infra/redis";
@@ -42,6 +42,12 @@ const auth = createAuth({
 });
 
 const otp = createOtpService({ store: createRedisOtpStore(redis), secret: env.OTP_SECRET });
+// Browser-assisted CLI login (OAuth device flow). Reuses the same Redis KV port +
+// OTP_SECRET (the deviceCode is stored only as an HMAC hash, like OTP codes).
+const cliDeviceFlow = createCliDeviceFlowService({
+  store: createRedisOtpStore(redis),
+  secret: env.OTP_SECRET,
+});
 const users = createUserRepository(db);
 const todos = createTodoRepository(db);
 const timeline = createTimelineRepository(db);
@@ -124,10 +130,13 @@ app.route(
     otp,
     users,
     sessions,
+    cliDeviceFlow,
     sms,
     config: {
       debugReturnCode: env.OTP_DEBUG_RETURN_CODE,
       trustedProxyCount: env.TRUSTED_PROXY_COUNT,
+      // The CLI opens `${webBaseUrl}/auth/cli` to approve; BETTER_AUTH_URL is the web origin.
+      webBaseUrl: baseURL,
     },
   }),
 );

@@ -8,10 +8,17 @@ Bearer + refresh 传输,把会话持久化到 `~/.config/infra-lab/credentials.j
 (`packages/db`)——加值是向后兼容的:原生端只发送自身平台值、从不解码该枚举,不受
 影响;dev 环境用 `pnpm --filter @infra/db push` 让 Postgres 枚举加上 `cli`。
 
-命令:`auth login | whoami | logout`、`todo list | add | done | rm`。`login` 走终端
-OTP,不依赖任何新增 API。
+命令:`auth login | whoami | logout`、`todo list | add | done | rm`。`auth login` 走
+终端 OTP,`auth login --web` 走下面的浏览器 device flow。
 
-## 待定:浏览器辅助登录("打开浏览器复用状态",gh cli 同款 device flow)
+## 已落地:浏览器辅助登录("打开浏览器复用状态",gh cli 同款 device flow)
+
+> 状态:**已实现**。领域状态机在 `packages/auth/src/cli-device-flow.ts`
+> (`createCliDeviceFlowService`,依赖 `OtpStore` KV 端口,`deviceCode` 仅存 HMAC 哈希);
+> API 路由 `POST /auth/cli/device{,/token,/approve}` 在 `apps/api/src/routes/auth.routes.ts`;
+> SDK 传输 `requestCliDeviceCode`/`pollCliDeviceToken`/`approveCliDevice` 在
+> `packages/sdk/src/device-flow.ts`;CLI `runLoginWeb` 在
+> `apps/cli/src/commands/web-login.ts`;web 批准页在 `apps/web/app/auth/cli`。
 
 需求原文希望 `auth login` 能"打开浏览器复用状态"。这里参考 **GitHub CLI(`gh auth
 login`)** 的真实做法——**不是**去读浏览器 cookie,而是 **OAuth Device Authorization
@@ -58,7 +65,10 @@ Grant(RFC 8628,设备流)**:CLI 拿到一个一次性码,打开浏览器让用�
 - 轮询限速:强制 `interval`,`slow_down` 退避;`device_code` 短 TTL + 单次消费。
 - 审计:该登录同样写 `login_event`,device 行 `platform = "cli"`。
 
-在获得产品/安全确认后,再按上述设备流实现 `--web`;当前终端 OTP 登录已可独立使用。
+> 实现说明:`approve` 未新造 CSRF token,而是沿用与 `/auth/logout` 相同的姿态——
+> HttpOnly + SameSite=Lax 的会话 cookie(跨站 POST 不携带),CORS 限定 `TRUSTED_ORIGINS`;
+> token 在 `poll` 命中 `approved` 时由 `session-service.issueTokens` 现签,批准阶段不签发、
+> 不回传浏览器。DB 枚举的 `cli` 值仍需 `pnpm --filter @infra/db push` 生效(CI 不需要)。
 
 ### Sources
 
