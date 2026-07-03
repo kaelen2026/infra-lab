@@ -62,6 +62,20 @@ export const COPY = {
 
   footer: "原生客户端（iOS / Android / HarmonyOS）将改用 Bearer accessToken + refreshToken。",
 
+  /**
+   * h5 timeline share landing (`/t/:id`). h5-only surface, so these strings are
+   * NOT emitted to the native clients by `generate.ts` — they consume it straight
+   * from this source like `apps/web` does.
+   */
+  timelineShare: {
+    /** Browser tab / document title for a shared post. */
+    documentTitle: "来自 infra-lab 的分享",
+    openInApp: "在 app 中查看",
+    loading: "加载中…",
+    notFound: "该内容不存在或已被删除。",
+    loadError: "加载失败，请稍后再试。",
+  },
+
   errors: {
     messages: ERROR_MESSAGES,
     network: "网络异常，请稍后再试。",

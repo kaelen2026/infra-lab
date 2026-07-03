@@ -45,5 +45,12 @@ export function createTimelineRepository(db: Db): TimelinePostRepository {
         .returning({ id: timelinePost.id });
       return rows.length > 0;
     },
+
+    async getById(id) {
+      // Public share read: scoped by id only (the UUID is the capability), so no
+      // userId filter here — the route stays unauthenticated on purpose.
+      const [row] = await db.select().from(timelinePost).where(eq(timelinePost.id, id)).limit(1);
+      return row ?? null;
+    },
   };
 }

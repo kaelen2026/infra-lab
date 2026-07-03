@@ -52,6 +52,10 @@ class FakeTimelineRepository implements TimelinePostRepository {
     this.rows.delete(id);
     return true;
   }
+  async getById(id: string): Promise<TimelinePostRecord | null> {
+    // Public share read — no user scope (the id is the capability).
+    return this.rows.get(id) ?? null;
+  }
 }
 
 // ── In-memory image store ───────────────────────────────────────────────────────
@@ -235,6 +239,30 @@ describe("timeline lifecycle", () => {
     const { app } = setup();
     expect((await app.request("/uploads/missing.jpg", { method: "GET" })).status).toBe(404);
     expect((await jsonReq(app, "DELETE", "/timeline/nope")).status).toBe(404);
+  });
+});
+
+describe("GET /timeline/share/:id — public share read", () => {
+  it("returns a post by id without any auth (id is the capability)", async () => {
+    const { app, current } = setup();
+    const created = await readJson(await jsonReq(app, "POST", "/timeline", { text: "分享一下" }));
+    const id: string = created.post.id;
+
+    // Sign out: the share route must still resolve it.
+    current.id = null;
+    const res = await app.request(`/timeline/share/${id}`, { method: "GET" });
+    expect(res.status).toBe(200);
+    const body = await readJson(res);
+    expect(body.ok).toBe(true);
+    expect(body.post.id).toBe(id);
+    expect(body.post.text).toBe("分享一下");
+  });
+
+  it("404s an unknown id with TIMELINE_POST_NOT_FOUND", async () => {
+    const { app } = setup();
+    const res = await app.request("/timeline/share/does-not-exist", { method: "GET" });
+    expect(res.status).toBe(404);
+    expect((await readJson(res)).code).toBe("TIMELINE_POST_NOT_FOUND");
   });
 });
 
