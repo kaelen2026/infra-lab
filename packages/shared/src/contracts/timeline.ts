@@ -150,6 +150,29 @@ export function timelinePostPath(id: string): string {
   return `/timeline/${id}`;
 }
 
+/**
+ * Path for the PUBLIC single-post read that backs a share link. Unlike every
+ * other timeline route this one is unauthenticated: the post `id` (a random
+ * UUID) is itself the capability, exactly like the `/uploads/:name` image url.
+ * Anyone with the link can read that one post; nothing else is reachable.
+ */
+export function timelineSharePath(id: string): string {
+  return `/timeline/share/${id}`;
+}
+
+// ── App deep link (shared so every surface builds the same url) ─────────────────
+/** Custom URL scheme the native clients register to receive a shared post. */
+export const TIMELINE_APP_SCHEME = "infralab";
+
+/**
+ * Deep link that opens a shared post in the native app, e.g.
+ * `infralab://timeline/<id>`. The h5 share landing offers this as "在 app 中查看";
+ * a native client that has registered {@link TIMELINE_APP_SCHEME} handles it.
+ */
+export function timelineAppLink(id: string): string {
+  return `${TIMELINE_APP_SCHEME}://timeline/${id}`;
+}
+
 // ── SDK interface draft (implemented per platform; iOS today) ───────────────────
 /** One page of posts as the SDK surfaces it (see {@link TimelinePostsResponse}). */
 export interface TimelinePage {
@@ -173,4 +196,10 @@ export interface TimelineClient {
   uploadImage(bytes: Uint8Array, contentType: TimelineImageContentType): Promise<TimelineImageDTO>;
   create(input: CreateTimelinePostInput): Promise<TimelinePostDTO>;
   remove(id: string): Promise<void>;
+  /**
+   * Read a single post by id through the PUBLIC share endpoint (no auth). Backs
+   * the h5 share landing; throws {@link HttpAuthError} `TIMELINE_POST_NOT_FOUND`
+   * when the id is unknown.
+   */
+  getShared(id: string): Promise<TimelinePostDTO>;
 }

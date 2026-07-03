@@ -39,6 +39,7 @@ import {
   type TodoResponse,
   type TodosResponse,
   timelinePostPath,
+  timelineSharePath,
   todoPath,
   type UpdateTodoInput,
   type VerifyOtpInput,
@@ -402,6 +403,13 @@ export function createTimelineClient(options: CreateTimelineClientOptions): Time
 
     async remove(id: string): Promise<void> {
       await request<{ ok: true }>(timelinePostPath(id), "DELETE");
+    },
+
+    async getShared(id: string): Promise<TimelinePostDTO> {
+      // Public endpoint: no auth needed, but riding the shared transport is
+      // harmless (the cookie/bearer is simply ignored server-side).
+      const res = await request<TimelinePostResponse>(timelineSharePath(id), "GET");
+      return res.post;
     },
   };
 }
