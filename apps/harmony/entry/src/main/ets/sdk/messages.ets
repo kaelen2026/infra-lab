@@ -1,5 +1,5 @@
 import { AuthErrorCode } from "../common/contracts";
-import { HttpAuthError } from "./AuthClient";
+import { HttpAuthError } from "./AuthError";
 
 /**
  * Stable error code → user-facing copy. Mirrors `apps/web`'s `messages.ts` so the

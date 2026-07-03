@@ -4,7 +4,7 @@ import { preferences } from "@kit.ArkData";
 import { util } from "@kit.ArkTS";
 import { common } from "@kit.AbilityKit";
 import { AuthTokens } from "../common/contracts";
-import { TokenStore } from "./AuthClient";
+import { TokenStore } from "./TokenStore";
 
 /**
  * {@link TokenStore} that encrypts the token blob with a non-exportable AES-256-GCM
