@@ -61,6 +61,7 @@ export function createSessionService(config: SessionServiceConfig): SessionServi
       phone: row.user.phone ?? "",
       displayName: row.profile?.displayName ?? null,
       avatarUrl: row.profile?.avatarUrl ?? null,
+      role: row.user.role,
       createdAt: row.user.createdAt,
     };
   }

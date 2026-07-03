@@ -40,13 +40,6 @@ const CoreEnvSchema = z
     TRUSTED_ORIGINS: optionalNonEmpty.pipe(z.string().default("http://localhost:3002")),
     COOKIE_SECURE: envFlag.default(false),
     COOKIE_DOMAIN: optionalNonEmpty,
-    // Admin allowlist for the web management console: comma-separated phone numbers
-    // (E.164, e.g. "+8613800138000,+8613900139000"). A user whose phone is in this
-    // set can reach the /admin/* routes; everyone else gets 403. Empty (the default)
-    // means no admins — the console is effectively closed. This is deployment config,
-    // not a secret, and is never logged; the list is trimmed + deduped in the
-    // transform below into a string[].
-    ADMIN_PHONES: optionalNonEmpty.pipe(z.string().default("")),
     OTP_DEBUG_RETURN_CODE: envFlag.default(false),
     PORT: z.coerce.number().int().positive().default(3001),
     NODE_ENV: optionalNonEmpty,
@@ -193,14 +186,10 @@ const CoreEnvSchema = z
     const extras = e.TRUSTED_ORIGINS.split(",")
       .map((o) => o.trim())
       .filter(Boolean);
-    const adminPhones = e.ADMIN_PHONES.split(",")
-      .map((p) => p.trim())
-      .filter(Boolean);
     return {
       ...e,
       BETTER_AUTH_SECRET: e.BETTER_AUTH_SECRET ?? e.OTP_SECRET,
       TRUSTED_ORIGINS: [...new Set([e.BETTER_AUTH_URL, ...extras])],
-      ADMIN_PHONES: [...new Set(adminPhones)],
     };
   });
 

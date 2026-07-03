@@ -4,6 +4,7 @@ import {
   type AdminUserDTO,
   listAdminUsersSchema,
   maskPhone,
+  type UserRole,
 } from "@infra/shared";
 import { type Context, Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
@@ -19,7 +20,7 @@ export interface AdminUserRecord {
 
 /**
  * Read-only aggregate access for the admin console. No method takes a `userId`:
- * these are cross-user aggregates, only ever reached after the `isAdmin` gate.
+ * these are cross-user aggregates, only ever reached after the admin-role gate.
  */
 export interface AdminRepository {
   countUsers(): Promise<number>;
@@ -31,18 +32,16 @@ export interface AdminRepository {
   countLoginEventsSince(since: Date, success: boolean): Promise<number>;
 }
 
-/** The subset of the resolved user the admin gate needs (id for logs, phone to match). */
+/** The subset of the resolved user the admin gate needs (id for logs, role to gate). */
 export interface AdminSessionUser {
   id: string;
-  phone: string;
+  role: UserRole;
 }
 
 export interface AdminRouteDeps {
   admin: AdminRepository;
   /** Resolve the current user from Cookie or Bearer (null when unauthenticated). */
   requireUser: (headers: Headers) => Promise<AdminSessionUser | null>;
-  /** Whether a resolved user is an admin (built from the ADMIN_PHONES allowlist). */
-  isAdmin: (user: AdminSessionUser) => boolean;
 }
 
 const ERROR_STATUS: Record<AdminErrorCode, ContentfulStatusCode> = {
@@ -64,31 +63,32 @@ function toAdminUserDTO(record: AdminUserRecord): AdminUserDTO {
 }
 
 export function createAdminRoutes(deps: AdminRouteDeps): Hono {
-  const { admin, requireUser, isAdmin } = deps;
+  const { admin, requireUser } = deps;
   const app = new Hono();
 
   const fail = (c: Context, code: AdminErrorCode, extra: Record<string, unknown> = {}) =>
     c.json({ ok: false, code, ...extra }, ERROR_STATUS[code]);
 
   /**
-   * Resolve the current user and require admin membership. Returns the user on
+   * Resolve the current user and require the `admin` role. Returns the user on
    * success, or a ready-to-return failure Response (401 unauthenticated, 403
    * non-admin) the handler forwards. Callers branch with `instanceof Response`.
    */
   async function requireAdmin(c: Context): Promise<AdminSessionUser | Response> {
     const user = await requireUser(c.req.raw.headers);
     if (!user) return fail(c, "UNAUTHORIZED");
-    if (!isAdmin(user)) return fail(c, "FORBIDDEN");
+    if (user.role !== "admin") return fail(c, "FORBIDDEN");
     return user;
   }
 
-  // ── Whether the current user is an admin (any authenticated user may ask) ───────
+  // ── The current user's role (any authenticated user may ask) ────────────────────
   // Drives the web nav entry + client-side page guard; a plain user gets
-  // `{ isAdmin: false }` (200), not a 403, so the check is a normal branch.
+  // `{ role: "user", isAdmin: false }` (200), not a 403, so the check is a normal
+  // branch. A guest (no session) gets 401 and is treated as unauthenticated by web.
   app.get("/admin/access", async (c) => {
     const user = await requireUser(c.req.raw.headers);
     if (!user) return fail(c, "UNAUTHORIZED");
-    return c.json({ ok: true, isAdmin: isAdmin(user) });
+    return c.json({ ok: true, role: user.role, isAdmin: user.role === "admin" });
   });
 
   // ── Aggregate stats (admin only) ────────────────────────────────────────────────

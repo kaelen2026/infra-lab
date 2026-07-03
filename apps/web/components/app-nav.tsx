@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 
 import { ModeToggle } from "@/components/mode-toggle";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -33,7 +34,7 @@ function monogram(user: AuthUser): string {
 /** Top navigation for authenticated pages: brand, theme toggle, user menu with logout. */
 export function AppNav() {
   const { user, status, logout } = useSession();
-  const { isAdmin } = useAdminAccess(status === "authenticated");
+  const { isAdmin, role } = useAdminAccess(status === "authenticated");
   const router = useRouter();
 
   async function handleLogout() {
@@ -64,9 +65,16 @@ export function AppNav() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuLabel className="flex flex-col gap-0.5">
-                  <span lang={user.displayName ? "zh" : "en"}>
-                    {user.displayName ?? "未命名用户"}
+                <DropdownMenuLabel className="flex flex-col gap-1">
+                  <span className="flex items-center gap-2">
+                    <span lang={user.displayName ? "zh" : "en"}>
+                      {user.displayName ?? "未命名用户"}
+                    </span>
+                    {role ? (
+                      <Badge variant={isAdmin ? "default" : "outline"} className="font-normal">
+                        {isAdmin ? "管理员" : "用户"}
+                      </Badge>
+                    ) : null}
                   </span>
                   <span className="font-mono text-xs font-normal text-muted-foreground">
                     {user.phone}

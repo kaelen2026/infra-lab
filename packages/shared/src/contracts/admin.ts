@@ -2,9 +2,9 @@ import { z } from "zod";
 
 /**
  * Admin console contracts — the source of truth for the web-only management
- * backend. Access is gated on an admin allowlist (see `ADMIN_PHONES` in
- * `@infra/env/core`); the API resolves the current user through the same
- * `requireUser` guard every other route uses, then checks admin membership.
+ * backend. Access is gated on the persisted user role (`user.role` column): the
+ * API resolves the current user through the same `requireUser` guard every other
+ * route uses, then checks `role === "admin"`.
  *
  * This is a **web-only** surface: the native clients (ios/android/harmony) do
  * not implement it, so — unlike auth/todo/timeline — adding it is not a
@@ -12,6 +12,19 @@ import { z } from "zod";
  * (never the full number), keeping the "never expose raw PII" posture even to an
  * admin viewing the user list.
  */
+
+// ── Identity / roles ──────────────────────────────────────────────────────────────
+/**
+ * Persisted user roles (the `user.role` column). Keep in sync with `userRoleEnum`
+ * in `@infra/db`'s auth schema. The product has three identities in total; the
+ * third — "guest" — is an unauthenticated visitor and is NOT a stored role (it is
+ * derived from the absence of a session), hence it is not in this tuple.
+ */
+export const USER_ROLES = ["user", "admin"] as const;
+export type UserRole = (typeof USER_ROLES)[number];
+
+/** The three identities the app distinguishes; "guest" = no session. */
+export type Identity = "guest" | UserRole;
 
 // ── Phone masking (shared so the API and any client render it identically) ──────
 /**
@@ -69,9 +82,14 @@ export interface AdminError {
 }
 
 // ── Responses ─────────────────────────────────────────────────────────────────────
-/** Whether the *current* user is an admin — drives the web nav entry + page guard. */
+/**
+ * The *current* user's role — drives the web nav entry + page guard. Only reachable
+ * by an authenticated user (a guest gets 401), so `role` is always a stored role;
+ * `isAdmin` is the convenience derivation `role === "admin"`.
+ */
 export interface AdminAccessResponse {
   ok: true;
+  role: UserRole;
   isAdmin: boolean;
 }
 
@@ -101,8 +119,8 @@ export const ADMIN_ROUTES = {
  * `code` carries the {@link AdminErrorCode} (`FORBIDDEN` → 403 for a non-admin).
  */
 export interface AdminClient {
-  /** Whether the current session belongs to an admin (never throws for a plain user). */
-  access(): Promise<boolean>;
+  /** The current session's role + admin flag (never throws for a plain logged-in user). */
+  access(): Promise<{ role: UserRole; isAdmin: boolean }>;
   stats(): Promise<AdminStatsDTO>;
   listUsers(input?: Partial<ListAdminUsersInput>): Promise<AdminUsersResponse>;
 }

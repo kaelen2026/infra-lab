@@ -34,18 +34,13 @@ class FakeAdminRepository implements AdminRepository {
   }
 }
 
-// requireUser + isAdmin stubs, switchable per test.
-function setup(opts?: { user?: { id: string; phone: string } | null; adminPhones?: string[] }) {
+// requireUser stub, switchable per test. The admin gate reads the persisted role.
+function setup(opts?: { user?: { id: string; role: "user" | "admin" } | null }) {
   const current = {
-    user: opts?.user === undefined ? { id: "u1", phone: "+8613800138000" } : opts.user,
+    user: opts?.user === undefined ? { id: "u1", role: "admin" as const } : opts.user,
   };
-  const adminPhones = new Set(opts?.adminPhones ?? ["+8613800138000"]);
   const admin = new FakeAdminRepository();
-  const app = createAdminRoutes({
-    admin,
-    requireUser: async () => current.user,
-    isAdmin: (u) => adminPhones.has(u.phone),
-  });
+  const app = createAdminRoutes({ admin, requireUser: async () => current.user });
   return { app, admin, current };
 }
 
@@ -54,18 +49,18 @@ function get(app: ReturnType<typeof createAdminRoutes>, path: string) {
 }
 
 describe("admin routes", () => {
-  it("GET /admin/access returns isAdmin=true for an allowlisted user", async () => {
+  it("GET /admin/access returns role=admin/isAdmin=true for an admin", async () => {
     const { app } = setup();
     const res = await get(app, "/admin/access");
     expect(res.status).toBe(200);
-    expect(await readJson(res)).toEqual({ ok: true, isAdmin: true });
+    expect(await readJson(res)).toEqual({ ok: true, role: "admin", isAdmin: true });
   });
 
-  it("GET /admin/access returns isAdmin=false for a plain user (not 403)", async () => {
-    const { app } = setup({ user: { id: "u2", phone: "+8613900139000" } });
+  it("GET /admin/access returns role=user/isAdmin=false for a plain user (not 403)", async () => {
+    const { app } = setup({ user: { id: "u2", role: "user" } });
     const res = await get(app, "/admin/access");
     expect(res.status).toBe(200);
-    expect(await readJson(res)).toEqual({ ok: true, isAdmin: false });
+    expect(await readJson(res)).toEqual({ ok: true, role: "user", isAdmin: false });
   });
 
   it("GET /admin/access is 401 when unauthenticated", async () => {
@@ -79,7 +74,7 @@ describe("admin routes", () => {
     const anon = setup({ user: null });
     expect((await get(anon.app, "/admin/stats")).status).toBe(401);
 
-    const plain = setup({ user: { id: "u2", phone: "+8613900139000" } });
+    const plain = setup({ user: { id: "u2", role: "user" } });
     const res = await get(plain.app, "/admin/stats");
     expect(res.status).toBe(403);
     expect((await readJson(res)).code).toBe("FORBIDDEN");

@@ -18,16 +18,6 @@ describe("parseCoreEnv", () => {
     expect(env.PORT).toBe(3001);
   });
 
-  it("parses ADMIN_PHONES into a trimmed, deduped list (empty by default)", () => {
-    expect(parseCoreEnv(base).ADMIN_PHONES).toEqual([]);
-    expect(
-      parseCoreEnv({ ...base, ADMIN_PHONES: " +8613800138000 , +8613900139000 " }).ADMIN_PHONES,
-    ).toEqual(["+8613800138000", "+8613900139000"]);
-    expect(
-      parseCoreEnv({ ...base, ADMIN_PHONES: "+8613800138000,+8613800138000" }).ADMIN_PHONES,
-    ).toEqual(["+8613800138000"]);
-  });
-
   it("builds TRUSTED_ORIGINS = BETTER_AUTH_URL + extras (deduped, trimmed)", () => {
     // default: web origin + the h5 dev origin
     expect(parseCoreEnv(base).TRUSTED_ORIGINS).toEqual([

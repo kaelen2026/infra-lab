@@ -157,16 +157,14 @@ app.route(
 );
 // Per-user todo routes (protected; reuse the session resolver for Cookie + Bearer).
 app.route("/", createTodoRoutes({ todos, requireUser: (h) => sessions.requireUser(h) }));
-// Admin console (web-only): read-only cross-user aggregates behind an allowlist gate.
-// A user is an admin iff their phone is in ADMIN_PHONES (empty ⇒ no admins). Same
-// session resolver as everything else, so the gate rides Cookie or Bearer.
-const adminPhones = new Set(env.ADMIN_PHONES);
+// Admin console (web-only): read-only cross-user aggregates gated on the persisted
+// `user.role` (admin). Same session resolver as everything else, so the gate rides
+// Cookie or Bearer; promote a user to admin via scripts/grant-admin.mjs.
 app.route(
   "/",
   createAdminRoutes({
     admin: createAdminRepository(db),
     requireUser: (h) => sessions.requireUser(h),
-    isAdmin: (user) => adminPhones.size > 0 && adminPhones.has(user.phone),
   }),
 );
 // Per-user timeline routes (protected) plus the public GET /uploads/:name image

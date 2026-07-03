@@ -49,6 +49,7 @@ import {
   timelineSharePath,
   todoPath,
   type UpdateTodoInput,
+  type UserRole,
   type VerifyOtpInput,
   type VerifyOtpResponse,
 } from "@infra/shared";
@@ -465,9 +466,9 @@ export function createAdminClient(options: CreateAdminClientOptions): AdminClien
   }
 
   return {
-    async access(): Promise<boolean> {
+    async access(): Promise<{ role: UserRole; isAdmin: boolean }> {
       const res = await request<AdminAccessResponse>(ADMIN_ROUTES.access);
-      return res.isAdmin;
+      return { role: res.role, isAdmin: res.isAdmin };
     },
 
     async stats(): Promise<AdminStatsDTO> {

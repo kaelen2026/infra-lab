@@ -1,6 +1,6 @@
 "use client";
 
-import type { AdminStatsDTO, AdminUsersResponse } from "@infra/sdk";
+import type { AdminStatsDTO, AdminUsersResponse, Identity, UserRole } from "@infra/sdk";
 import { useQuery } from "@tanstack/react-query";
 
 import { adminClient } from "@/lib/admin-client";
@@ -10,19 +10,29 @@ const STATS_KEY = ["admin", "stats"] as const;
 const USERS_KEY = ["admin", "users"] as const;
 
 /**
- * Whether the current session is an admin. Drives the nav entry and the `/admin`
- * page guard. `enabled` gates it on an authenticated session so we never fire the
- * probe for a logged-out visitor. A plain user resolves to `false` (not an error).
+ * The current session's role + admin flag, and the derived three-state identity
+ * (`guest` when the visitor is unauthenticated — `enabled` false — otherwise the
+ * server-reported role). Drives the nav entry, the account role badge and the
+ * `/admin` page guard. `enabled` gates the probe on an authenticated session so we
+ * never fire it for a logged-out visitor.
  */
-export function useAdminAccess(enabled: boolean): { isAdmin: boolean; loading: boolean } {
+export function useAdminAccess(enabled: boolean): {
+  role: UserRole | null;
+  isAdmin: boolean;
+  identity: Identity;
+  loading: boolean;
+} {
   const query = useQuery({
     queryKey: ACCESS_KEY,
     queryFn: () => adminClient.access(),
     enabled,
-    // Admin status rarely changes within a session; avoid re-probing on every mount.
+    // Role rarely changes within a session; avoid re-probing on every mount.
     staleTime: 5 * 60 * 1000,
   });
-  return { isAdmin: query.data ?? false, loading: query.isLoading };
+  const role = query.data?.role ?? null;
+  // Unauthenticated (probe disabled) ⇒ guest; otherwise the server-reported role.
+  const identity: Identity = !enabled ? "guest" : (role ?? "guest");
+  return { role, isAdmin: query.data?.isAdmin ?? false, identity, loading: query.isLoading };
 }
 
 export function useAdminStats(enabled: boolean): {
