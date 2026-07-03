@@ -14,7 +14,7 @@ const privatePem = privateKey.export({ type: "pkcs8", format: "pem" }).toString(
 const config: ApnsConfig = {
   keyId: "KEY123",
   teamId: "TEAM456",
-  bundleId: "ai.deeplang.infra.ios",
+  bundleId: "dev.w3ctech.infralab",
   privateKey: privatePem,
   production: false,
 };
@@ -69,7 +69,7 @@ describe("createApnsClient.send", () => {
     expect(req?.host).toBe("api.sandbox.push.apple.com");
     expect(req?.path).toBe("/3/device/abc123");
     expect(req?.headers.authorization).toBe("bearer signed.jwt.value");
-    expect(req?.headers["apns-topic"]).toBe("ai.deeplang.infra.ios");
+    expect(req?.headers["apns-topic"]).toBe("dev.w3ctech.infralab");
     expect(req?.headers["apns-push-type"]).toBe("alert");
     expect(JSON.parse(req?.body ?? "{}")).toEqual({
       aps: { alert: { title: "Hi", body: "There" }, sound: "default" },

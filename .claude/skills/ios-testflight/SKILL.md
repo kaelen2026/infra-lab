@@ -16,7 +16,7 @@ credentials are injected on the `make` command line and **never committed**.
    The team id is passed as `TEAM_ID` (don't assume a locally-overridden
    `project.yml` team is the right one — the personal device-dev team may differ
    from the release team).
-2. **App record in App Store Connect** for bundle id `ai.deeplang.infra.ios`
+2. **App record in App Store Connect** for bundle id `dev.w3ctech.infralab`
    (App Store Connect → Apps → New App). Upload fails without it.
 3. **App Store Connect API key with role Admin**, downloaded once from App Store
    Connect → Users and Access → Integrations. An App Manager key is NOT enough:
@@ -70,7 +70,7 @@ make upload TEAM_ID=<team> ASC_KEY_ID=<key> ASC_ISSUER_ID=<issuer>
 - **"Cloud signing permission error" (+ "No profiles for …" as fallout)** — the
   API key's role is too low for cloud-managed distribution certs; recreate the
   key with role **Admin**.
-- **"No Accounts / No profiles for ai.deeplang.infra.ios"** alone — missing
+- **"No Accounts / No profiles for dev.w3ctech.infralab"** alone — missing
   `ASC_KEY_ID`/`ASC_ISSUER_ID`, so `-allowProvisioningUpdates` had no API key to
   do cloud signing with.
 - **ITMS-90474 (invalid bundle, orientations)** — iPhone+iPad apps must declare

@@ -25,9 +25,9 @@ Env → `API_BASE_URL` (defined in `apps/android/app/build.gradle.kts` product f
 
 | env     | API_BASE_URL                       | applicationId            |
 | ------- | ---------------------------------- | ------------------------ |
-| dev     | `http://10.0.2.2:3001` (emulator→host localhost) | `ai.deeplang.infra.dev`     |
-| staging | `https://staging-api.example.com`  | `ai.deeplang.infra.staging` |
-| prod    | `https://api.example.com`          | `ai.deeplang.infra`         |
+| dev     | `http://10.0.2.2:3001` (emulator→host localhost) | `dev.w3ctech.infralab.dev`     |
+| staging | `https://staging-api.example.com`  | `dev.w3ctech.infralab.staging` |
+| prod    | `https://api.example.com`          | `dev.w3ctech.infralab`         |
 
 > The staging/prod URLs are placeholders — confirm they point at the real API before a
 > distributable build.

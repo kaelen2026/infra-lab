@@ -259,9 +259,9 @@ ${color("border", "outline", p)}
     }`;
 
   write(
-    "apps/android/app/src/main/kotlin/ai/deeplang/infra/ui/theme/DesignTokens.kt",
+    "apps/android/app/src/main/kotlin/dev/w3ctech/infralab/ui/theme/DesignTokens.kt",
     `// ${GEN}
-package ai.deeplang.infra.ui.theme
+package dev.w3ctech.infralab.ui.theme
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -304,11 +304,11 @@ ${scheme("Dark", dark)}
   ).join("\n");
 
   write(
-    "apps/android/app/src/main/kotlin/ai/deeplang/infra/ui/auth/AuthCopyGenerated.kt",
+    "apps/android/app/src/main/kotlin/dev/w3ctech/infralab/ui/auth/AuthCopyGenerated.kt",
     `// ${GEN}
-package ai.deeplang.infra.ui.auth
+package dev.w3ctech.infralab.ui.auth
 
-import ai.deeplang.infra.data.contracts.AuthErrorCode
+import dev.w3ctech.infralab.data.contracts.AuthErrorCode
 
 /** Canonical auth copy shared with web / ios / harmony. */
 object AuthCopyGenerated {

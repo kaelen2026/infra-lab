@@ -2,7 +2,7 @@
 # The .xcodeproj is derived, so it is gitignored; this file is the source of truth.
 name: InfraAuth
 options:
-  bundleIdPrefix: ai.deeplang.infra
+  bundleIdPrefix: dev.w3ctech.infralab
   deploymentTarget:
     iOS: "17.0"
   createIntermediateGroups: true
@@ -36,7 +36,7 @@ targets:
       - path: InfraAuth
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: ai.deeplang.infra.ios
+        PRODUCT_BUNDLE_IDENTIFIER: dev.w3ctech.infralab
         TARGETED_DEVICE_FAMILY: "1,2"
         GENERATE_INFOPLIST_FILE: false
         # Xcode 16 splits the app into a preview "debug dylib"; that breaks

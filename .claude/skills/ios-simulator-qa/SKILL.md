@@ -10,7 +10,7 @@ description: >-
 # ios-simulator-qa
 
 Runtime verification loop for the iOS client (`apps/ios`, scheme `InfraAuth`, bundle id
-`ai.deeplang.infra.ios`): build → install → launch → drive the UI → screenshot-assert.
+`dev.w3ctech.infralab`): build → install → launch → drive the UI → screenshot-assert.
 Everything runs headless from the CLI; the only human-granted prerequisite is Accessibility
 permission for the host terminal (needed by `cliclick`).
 
@@ -38,9 +38,9 @@ APP=$(xcodebuild -project InfraAuth.xcodeproj -scheme InfraAuth \
 
 SIM=$(xcrun simctl list devices available | sed -n 's/.*iPhone 17 Pro (\([0-9A-F-]*\)).*/\1/p' | head -1)
 xcrun simctl boot "$SIM" 2>/dev/null; open -a Simulator
-xcrun simctl terminate "$SIM" ai.deeplang.infra.ios 2>/dev/null   # kill the old build first
+xcrun simctl terminate "$SIM" dev.w3ctech.infralab 2>/dev/null   # kill the old build first
 xcrun simctl install "$SIM" "$APP"
-xcrun simctl launch "$SIM" ai.deeplang.infra.ios
+xcrun simctl launch "$SIM" dev.w3ctech.infralab
 ```
 
 Screenshot at any point (then Read the png to inspect):

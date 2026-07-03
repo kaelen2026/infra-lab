@@ -26,7 +26,7 @@ final class KeychainTokenStore: TokenStore {
     private let service: String
     private let account: String
 
-    init(service: String = "ai.deeplang.infra.ios", account: String = "infra.session.tokens") {
+    init(service: String = "dev.w3ctech.infralab", account: String = "infra.session.tokens") {
         self.service = service
         self.account = account
     }

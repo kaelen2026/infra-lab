@@ -64,8 +64,8 @@ jobs:
             apps/web/app/tokens.generated.css \
             apps/h5/src/tokens.generated.css \
             apps/ios/InfraAuth/Generated \
-            apps/android/app/src/main/kotlin/ai/deeplang/infra/ui/theme/DesignTokens.kt \
-            apps/android/app/src/main/kotlin/ai/deeplang/infra/ui/auth/AuthCopyGenerated.kt \
+            apps/android/app/src/main/kotlin/dev/w3ctech/infralab/ui/theme/DesignTokens.kt \
+            apps/android/app/src/main/kotlin/dev/w3ctech/infralab/ui/auth/AuthCopyGenerated.kt \
             apps/android/app/src/main/res/values/colors.generated.xml \
             apps/android/app/src/main/res/values-night/colors.generated.xml \
             apps/harmony/entry/src/main/resources/base/element/color.json \

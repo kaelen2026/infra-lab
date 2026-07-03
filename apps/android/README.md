@@ -50,9 +50,9 @@ picks the variant, finds the APK, and can install it.
 
 | env     | `API_BASE_URL`                     | applicationId               | notes |
 |---------|------------------------------------|-----------------------------|-------|
-| dev     | `http://10.0.2.2:3001`             | `ai.deeplang.infra.dev`     | emulator → host `localhost`; cleartext, debug only |
-| staging | `https://staging-api.example.com`  | `ai.deeplang.infra.staging` | placeholder — set to real staging API |
-| prod    | `https://api.example.com`          | `ai.deeplang.infra`         | placeholder — set to real production API |
+| dev     | `http://10.0.2.2:3001`             | `dev.w3ctech.infralab.dev`     | emulator → host `localhost`; cleartext, debug only |
+| staging | `https://staging-api.example.com`  | `dev.w3ctech.infralab.staging` | placeholder — set to real staging API |
+| prod    | `https://api.example.com`          | `dev.w3ctech.infralab`         | placeholder — set to real production API |
 
 The `applicationId` suffixes let dev/staging/prod be installed side by side. The APK lands at
 `app/build/outputs/apk/<env>/<buildType>/app-<env>-<buildType>.apk`.
