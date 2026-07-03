@@ -62,6 +62,9 @@ object AuthRoutes {
     const val ME = "/auth/me"
     const val DEVICES = "/auth/devices"
     const val LOGIN_EVENTS = "/auth/login-events"
+
+    /** Native approve of a scanned QR login ticket (see the QR cross-device flow). */
+    const val QR_APPROVE = "/auth/qr/approve"
 }
 
 // ── Requests ───────────────────────────────────────────────────────────────────
@@ -93,6 +96,16 @@ data class VerifyOtpRequest(
 @Serializable
 data class RefreshRequest(
     val refreshToken: String,
+)
+
+/**
+ * Native approve of a QR login: the scanning (already-authenticated) app sends only the public
+ * ticket id decoded from the QR; its own Bearer session authenticates the approval. Mirrors
+ * `approveQrLoginSchema`.
+ */
+@Serializable
+data class ApproveQrLoginRequest(
+    val ticketId: String,
 )
 
 // ── Responses ───────────────────────────────────────────────────────────────────

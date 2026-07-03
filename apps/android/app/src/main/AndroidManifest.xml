@@ -11,6 +11,12 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Infra">
 
+        <!-- Ask Play Services to download the code-scanner module at install time (QR login),
+             so the first scan doesn't stall on an on-demand module fetch. -->
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="barcode_ui" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

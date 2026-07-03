@@ -1,5 +1,6 @@
 package dev.w3ctech.infralab.data
 
+import dev.w3ctech.infralab.data.contracts.ApproveQrLoginRequest
 import dev.w3ctech.infralab.data.contracts.AuthTokens
 import dev.w3ctech.infralab.data.contracts.AuthUser
 import dev.w3ctech.infralab.data.contracts.DeviceDTO
@@ -60,6 +61,13 @@ class AuthClientImpl(
     override suspend fun listDevices(): List<DeviceDTO> = unwrap(api.devices()).devices
 
     override suspend fun listLoginEvents(): List<LoginEventDTO> = unwrap(api.loginEvents()).events
+
+    override suspend fun approveQrLogin(ticketId: String) {
+        val response = api.approveQrLogin(ApproveQrLoginRequest(ticketId))
+        if (!response.isSuccessful) {
+            throw AuthErrorParser.parse(response.code(), response.errorBody()?.string())
+        }
+    }
 
     override suspend fun logout() {
         // Best-effort server revoke; always drop local tokens regardless of the outcome.
