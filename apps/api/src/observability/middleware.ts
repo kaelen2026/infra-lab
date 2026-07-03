@@ -28,6 +28,15 @@ function clientIp(c: Context): string {
   return c.req.header("x-real-ip") ?? "0.0.0.0";
 }
 
+export interface ObservabilityOptions {
+  /**
+   * A successful request (status < 400) slower than this many ms is logged at
+   * `warn` with `slow: true` instead of `info`, so latency regressions surface in
+   * the access log without a metrics backend. 0 (default) disables the escalation.
+   */
+  slowRequestMs?: number;
+}
+
 /**
  * Assigns a request id, exposes a request-scoped child logger on the context,
  * echoes the id in the `x-request-id` response header, and logs one structured
@@ -35,7 +44,11 @@ function clientIp(c: Context): string {
  *
  * Never logs request bodies, phone numbers, OTP codes, or tokens.
  */
-export function observability(logger: Logger): MiddlewareHandler<ObsEnv> {
+export function observability(
+  logger: Logger,
+  options: ObservabilityOptions = {},
+): MiddlewareHandler<ObsEnv> {
+  const slowRequestMs = options.slowRequestMs ?? 0;
   return async (c, next) => {
     const requestId = inboundRequestId(c);
     const log = logger.child({ requestId });
@@ -53,9 +66,11 @@ export function observability(logger: Logger): MiddlewareHandler<ObsEnv> {
     } finally {
       const durationMs = Date.now() - startedAt;
       const status = c.res.status;
-      const fields = { method, path, status, durationMs, ip: clientIp(c) };
+      const slow = slowRequestMs > 0 && durationMs >= slowRequestMs;
+      const fields = { method, path, status, durationMs, ip: clientIp(c), ...(slow && { slow }) };
       if (status >= 500) log.error("request failed", fields);
       else if (status >= 400) log.warn("request rejected", fields);
+      else if (slow) log.warn("slow request", fields);
       else log.info("request", fields);
     }
   };

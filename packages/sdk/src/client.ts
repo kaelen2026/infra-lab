@@ -4,6 +4,7 @@ import {
   type AuthErrorCode,
   type AuthTokens,
   type AuthUser,
+  type CreateTimelinePostInput,
   type CreateTodoInput,
   type DeviceDTO,
   type DevicesResponse,
@@ -13,11 +14,20 @@ import {
   type RefreshInput,
   type RequestOtpInput,
   type RequestOtpResponse,
+  TIMELINE_ROUTES,
+  type TimelineClient,
+  type TimelineImageContentType,
+  type TimelineImageDTO,
+  type TimelineImageResponse,
+  type TimelinePostDTO,
+  type TimelinePostResponse,
+  type TimelinePostsResponse,
   TODO_ROUTES,
   type TodoClient,
   type TodoDTO,
   type TodoResponse,
   type TodosResponse,
+  timelinePostPath,
   todoPath,
   type UpdateTodoInput,
   type VerifyOtpInput,
@@ -225,4 +235,95 @@ export function createTodoClient(options: CreateTodoClientOptions): TodoClient {
  */
 export function createWebTodoClient(baseUrl: string, fetchImpl?: typeof fetch): TodoClient {
   return createTodoClient({ baseUrl, platform: "web", fetch: fetchImpl });
+}
+
+export interface CreateTimelineClientOptions {
+  baseUrl: string;
+  platform: Platform;
+  /** Defaults to a no-op store (web). Native platforms supply a secure store. */
+  tokens?: TokenStore;
+  fetch?: typeof fetch;
+}
+
+/**
+ * Reference {@link TimelineClient}. Shares the auth transport model: web rides the
+ * HttpOnly cookie (`credentials: "include"`), native sends the Bearer header from
+ * the supplied {@link TokenStore}. Image upload is a `multipart/form-data` POST
+ * (field `file`), matching the two-step publish the API expects; every other call
+ * is JSON. Non-2xx responses throw {@link HttpAuthError}, whose `code`/`status`
+ * carry the timeline error codes.
+ */
+export function createTimelineClient(options: CreateTimelineClientOptions): TimelineClient {
+  const doFetch = options.fetch ?? globalThis.fetch;
+  const store = options.tokens ?? noopTokenStore;
+  const isWeb = options.platform === "web";
+
+  /** Bearer header for native; web relies on the session cookie instead. */
+  async function authHeaders(): Promise<Record<string, string>> {
+    if (isWeb) return {};
+    const t = await store.load();
+    return t ? { authorization: `${t.tokenType} ${t.accessToken}` } : {};
+  }
+
+  async function request<T>(path: string, method: string, body?: unknown): Promise<T> {
+    const headers: Record<string, string> = {
+      "content-type": "application/json",
+      ...(await authHeaders()),
+    };
+    const res = await doFetch(`${options.baseUrl}${path}`, {
+      method,
+      headers,
+      credentials: isWeb ? "include" : "omit",
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+    const json: unknown = await res.json().catch(() => ({}));
+    if (!res.ok) throw new HttpAuthError(res.status, json);
+    return json as T;
+  }
+
+  return {
+    async list(): Promise<TimelinePostDTO[]> {
+      const res = await request<TimelinePostsResponse>(TIMELINE_ROUTES.list, "GET");
+      return res.posts;
+    },
+
+    async uploadImage(
+      bytes: Uint8Array,
+      contentType: TimelineImageContentType,
+    ): Promise<TimelineImageDTO> {
+      // multipart body: let fetch set the boundary — don't hand-set content-type.
+      // Copy into a fresh ArrayBuffer so the Blob part is a plain ArrayBuffer
+      // (a Uint8Array over ArrayBufferLike isn't assignable to BlobPart).
+      const buffer = new ArrayBuffer(bytes.byteLength);
+      new Uint8Array(buffer).set(bytes);
+      const form = new FormData();
+      form.append("file", new Blob([buffer], { type: contentType }), "upload");
+      const res = await doFetch(`${options.baseUrl}${TIMELINE_ROUTES.uploadImage}`, {
+        method: "POST",
+        headers: await authHeaders(),
+        credentials: isWeb ? "include" : "omit",
+        body: form,
+      });
+      const json: unknown = await res.json().catch(() => ({}));
+      if (!res.ok) throw new HttpAuthError(res.status, json);
+      return (json as TimelineImageResponse).image;
+    },
+
+    async create(input: CreateTimelinePostInput): Promise<TimelinePostDTO> {
+      const res = await request<TimelinePostResponse>(TIMELINE_ROUTES.create, "POST", input);
+      return res.post;
+    },
+
+    async remove(id: string): Promise<void> {
+      await request<{ ok: true }>(timelinePostPath(id), "DELETE");
+    },
+  };
+}
+
+/**
+ * Web-flavored {@link createTimelineClient}: fixes `platform: "web"` so requests
+ * carry the HttpOnly `infra.session` cookie and no token is stored in the browser.
+ */
+export function createWebTimelineClient(baseUrl: string, fetchImpl?: typeof fetch): TimelineClient {
+  return createTimelineClient({ baseUrl, platform: "web", fetch: fetchImpl });
 }

@@ -50,7 +50,11 @@ targets:
       path: InfraAuth/Info.plist
       properties:
         CFBundleDisplayName: Infra Auth
-        UILaunchScreen: {}
+        # Segment A — the system static launch window. Paint it with the
+        # LaunchBackground colorset (paper #FCFAF4 / charcoal #13110F) so a dark
+        # cold-start never flashes white before the SwiftUI splash takes over.
+        UILaunchScreen:
+          UIColorName: LaunchBackground
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         # iPad multitasking requires all four orientations (ITMS-90474);

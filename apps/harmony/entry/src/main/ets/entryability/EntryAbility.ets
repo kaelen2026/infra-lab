@@ -27,7 +27,9 @@ export default class EntryAbility extends UIAbility {
   }
 
   onWindowStageCreate(windowStage: window.WindowStage): void {
-    windowStage.loadContent("pages/AuthPage", (err) => {
+    // Load the in-app brand splash first (it hands off to pages/AuthPage via router).
+    // The persisted theme is already applied in onCreate, so this stays flash-free.
+    windowStage.loadContent("pages/SplashPage", (err) => {
       if (err.code) {
         hilog.error(DOMAIN, TAG, "loadContent failed: %{public}s", JSON.stringify(err));
         return;

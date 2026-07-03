@@ -66,6 +66,20 @@ const CoreEnvSchema = z
     APNS_PRIVATE_KEY_PATH: optionalNonEmpty,
     // Which APNS host to hit: true → api.push.apple.com, false (default) → sandbox.
     APNS_PRODUCTION: envFlag.default(false),
+    // Global request-body ceiling (bytes). A body larger than this is rejected with a
+    // 413 before the handler runs, bounding the memory one request can force the API to
+    // buffer. Must stay above the largest legitimate body — a timeline image upload
+    // (TIMELINE_IMAGE_MAX_BYTES = 8 MiB) plus multipart framing — so the default leaves
+    // headroom; the per-route image check still enforces the exact image limit.
+    MAX_REQUEST_BODY_BYTES: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(10 * 1024 * 1024),
+    // A successful request slower than this many ms is logged at `warn` with `slow: true`
+    // instead of `info`, so latency regressions surface in the access log without a
+    // metrics backend. 0 disables the escalation. Errors/4xx keep their own levels.
+    SLOW_REQUEST_MS: z.coerce.number().int().min(0).default(1000),
   })
   .superRefine((e, ctx) => {
     // Hard production guardrail: OTP_DEBUG_RETURN_CODE echoes the code into responses

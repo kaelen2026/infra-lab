@@ -1,7 +1,7 @@
 "use client";
 
 import type { AuthUser } from "@infra/sdk";
-import { ListTodo, LogOut } from "lucide-react";
+import { ListTodo, LogOut, Newspaper } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -73,6 +73,12 @@ export function AppNav() {
                   <Link href="/todos">
                     <ListTodo />
                     待办
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/timeline">
+                    <Newspaper />
+                    动态
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
