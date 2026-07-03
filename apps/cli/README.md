@@ -48,9 +48,10 @@ infra-lab todo rm <id>     # 删除待办
 
 ## 浏览器辅助登录("打开浏览器复用状态")
 
-原始需求还提到「打开浏览器复用状态」。web 会话是 **HttpOnly cookie**,独立的 CLI
-进程读不到浏览器的 cookie jar,所以要把浏览器里的登录态"交接"给 CLI,需要新增一个
-loopback + 令牌交接端点(cookie 会话 → CLI 的 Bearer/refresh),这是一处**新的、需
-安全评审的认证面**。设计已写在
-[`docs/plans/cli-plan.md`](../../docs/plans/cli-plan.md),作为待定的下一步,未在本次
-落地——当前 `auth login` 走终端 OTP,不依赖任何新增 API。
+原始需求还提到「打开浏览器复用状态」。参考 **GitHub CLI(`gh auth login`)** 的做法:
+不是读浏览器 cookie,而是 **OAuth device flow**——CLI 取一个一次性码,打开浏览器让用户
+在**已登录的 web 会话**里点批准,CLI 轮询自己的 token 端点拿到**自己的** Bearer/refresh。
+"复用状态"= 复用浏览器现有登录态来授权,用户无需重登、CLI 从不接触 cookie。这需要新增
+device flow 端点(一处需安全评审的认证面),设计已写在
+[`docs/plans/cli-plan.md`](../../docs/plans/cli-plan.md),作为待定的 `auth login --web`,
+未在本次落地——当前 `auth login` 走终端 OTP,不依赖任何新增 API。
