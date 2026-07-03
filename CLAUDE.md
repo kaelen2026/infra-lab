@@ -15,7 +15,11 @@ Postgres holds long-term data; Redis holds all short-term OTP/rate-limit/QR-tick
 pnpm install
 docker compose up -d                 # Postgres 16 + Redis 7 (healthchecked)
 cp .env.example .env                 # DATABASE_URL, REDIS_URL, OTP_SECRET, BETTER_AUTH_SECRET
-pnpm --filter @infra/db push         # create tables (incl. Better Auth's) via drizzle-kit
+pnpm --filter @infra/db migrate      # apply versioned migrations (creates all tables incl. Better Auth's)
+
+# schema change flow: edit packages/db/schema/* → `pnpm --filter @infra/db generate` (emits
+# packages/db/migrations/NNNN_*.sql — commit it) → `pnpm --filter @infra/db migrate` to apply.
+# `push` remains for throwaway local experiments only; real changes always go through a migration.
 
 pnpm build        # tsup per package (topological), next build for web
 pnpm typecheck    # per-package `tsc --noEmit` (pnpm -r typecheck)

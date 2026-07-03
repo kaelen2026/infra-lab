@@ -39,7 +39,7 @@ pnpm install
 cp .env.example .env                 # 配置 DATABASE_URL / REDIS_URL / OTP_SECRET / BETTER_AUTH_SECRET
 docker compose up -d                 # Postgres 16 + Redis 7（含 healthcheck）
 pnpm build
-pnpm --filter @infra/db push         # 建表（含 Better Auth 所需的表）
+pnpm --filter @infra/db migrate      # 应用版本化迁移（建全部表，含 Better Auth 所需的表）
 
 pnpm dev                             # API → :3001 + Web → :3000（单启：pnpm dev:api / pnpm dev:web / pnpm dev:h5 → :3002）
 ```

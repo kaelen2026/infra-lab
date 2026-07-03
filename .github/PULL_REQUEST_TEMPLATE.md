@@ -25,7 +25,7 @@ Closes #
       → 需同步 web / h5 / ios / android / harmony 各端，说明已同步哪些：
 - [ ] **安全**：涉及 OTP / 限流 / 令牌 / 会话 / 鉴权路径
       → 确认无手机号、OTP、令牌落日志；限流与锁定语义未被绕过：
-- [ ] **数据库**：改了 drizzle schema（需 `pnpm --filter @infra/db push` / 迁移）：
+- [ ] **数据库**：改了 drizzle schema（需 `pnpm --filter @infra/db generate` 生成迁移并提交，`migrate` 应用）：
 - [ ] **构建 / 配置**：改了 tsup / turbo / 环境变量 / CI / 依赖：
 - [ ] **纯文档 / 内部改动**，无运行时影响
 
