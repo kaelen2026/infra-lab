@@ -6,11 +6,15 @@ import { z } from "zod";
  */
 
 // ── Platforms ────────────────────────────────────────────────────────────────
-export const PLATFORMS = ["web", "ios", "android", "harmony"] as const;
+// `cli` is the terminal client (apps/cli). It has no cookie jar, so — like the
+// native platforms — it authenticates with Bearer + refresh tokens, persisting
+// them in a local credentials file. Adding it is additive: native clients only
+// ever send their own value and never decode this enum, so they are unaffected.
+export const PLATFORMS = ["web", "ios", "android", "harmony", "cli"] as const;
 export const platformSchema = z.enum(PLATFORMS);
 export type Platform = (typeof PLATFORMS)[number];
 
-/** Web authenticates via HttpOnly cookie; native platforms via Bearer tokens. */
+/** Web authenticates via HttpOnly cookie; every other platform via Bearer tokens. */
 export function isCookiePlatform(platform: Platform): boolean {
   return platform === "web";
 }
