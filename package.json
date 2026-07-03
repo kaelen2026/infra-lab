@@ -9,7 +9,7 @@
   },
   "scripts": {
     "build": "turbo run build",
-    "dev": "turbo run dev --filter=!@infra/bot",
+    "dev": "turbo run dev --filter=!@infra/bot --filter=!@infra/cli",
     "dev:api": "turbo run dev --filter @infra/api",
     "dev:web": "turbo run dev --filter @infra/web",
     "dev:h5": "turbo run dev --filter @infra/h5",

@@ -1,8 +1,8 @@
 import { relations } from "drizzle-orm";
 import { boolean, index, pgEnum, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
-/** device.platform — the four supported clients. */
-export const platformEnum = pgEnum("platform", ["web", "ios", "android", "harmony"]);
+/** device.platform — the supported clients (`cli` is the terminal client, apps/cli). */
+export const platformEnum = pgEnum("platform", ["web", "ios", "android", "harmony", "cli"]);
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Better Auth core tables (user / session / account / verification).

@@ -39,6 +39,7 @@ const PLATFORM_LABELS: Record<Platform, string> = {
   ios: "iOS",
   android: "Android",
   harmony: "HarmonyOS",
+  cli: "CLI",
 };
 
 export function platformLabel(platform: Platform): string {

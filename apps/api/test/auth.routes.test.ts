@@ -1,4 +1,4 @@
-import { createOtpService } from "@infra/auth";
+import { createCliDeviceFlowService, createOtpService } from "@infra/auth";
 import { FakeRedis } from "@infra/auth/testing";
 import type { AuthTokens, DeviceInfo, Platform } from "@infra/shared";
 import { Hono } from "hono";
@@ -34,6 +34,9 @@ class FakeUserRepository implements UserRepository {
 
   async findByPhone(phone: string): Promise<UserRecord | null> {
     return [...this.users.values()].find((u) => u.phone === phone) ?? null;
+  }
+  async findById(id: string): Promise<UserRecord | null> {
+    return this.users.get(id) ?? null;
   }
   async createWithProfile(phone: string): Promise<UserRecord> {
     const id = `user_${++this.seq}`;
@@ -171,6 +174,10 @@ class FakeSessionService implements SessionService {
 function setup() {
   const store = new FakeRedis();
   const otp = createOtpService({ store, secret: "route-test-secret", now: store.now });
+  const cliDeviceFlow = createCliDeviceFlowService({
+    store: new FakeRedis(),
+    secret: "route-test-secret",
+  });
   const users = new FakeUserRepository();
   const sessions = new FakeSessionService();
   const sentSms: Array<{ phone: string; code: string }> = [];
@@ -178,17 +185,18 @@ function setup() {
     otp,
     users,
     sessions,
+    cliDeviceFlow,
     sms: async (phone, code) => {
       sentSms.push({ phone, code });
     },
-    config: { debugReturnCode: false },
+    config: { debugReturnCode: false, webBaseUrl: "http://localhost:3000" },
   });
   // Mount behind the observability middleware, exactly as server.ts does, so handlers
   // can read the request-scoped logger (`c.get("log")`). Quiet level keeps test output clean.
   const app = new Hono<ObsEnv>();
   app.use("*", observability(createLogger({ level: "error" })));
   app.route("/", routes);
-  return { app, store, otp, users, sessions, sentSms };
+  return { app, store, otp, users, sessions, sentSms, cliDeviceFlow };
 }
 
 function post(
@@ -533,5 +541,63 @@ describe("POST /auth/devices/push-token", () => {
     });
     expect(res.status).toBe(200);
     expect((await readJson(res)).ok).toBe(true);
+  });
+});
+
+describe("CLI device flow", () => {
+  it("request → pending → approve → token (device + login event recorded)", async () => {
+    const { app, users, sessions } = setup();
+    const user = await users.createWithProfile("+8613800138001");
+    sessions.currentUser = user;
+
+    const start = await readJson(await post(app, "/auth/cli/device", { deviceId: "cli-dev-1" }));
+    expect(typeof start.deviceCode).toBe("string");
+    expect(typeof start.userCode).toBe("string");
+    expect(start.verificationUri).toBe("http://localhost:3000/auth/cli");
+
+    const pending = await readJson(
+      await post(app, "/auth/cli/device/token", { deviceCode: start.deviceCode }),
+    );
+    expect(pending).toEqual({ ok: false, status: "authorization_pending" });
+
+    const approve = await readJson(
+      await post(app, "/auth/cli/device/approve", { userCode: start.userCode }),
+    );
+    expect(approve).toEqual({ ok: true, result: "approved" });
+
+    const tok = await readJson(
+      await post(app, "/auth/cli/device/token", { deviceCode: start.deviceCode }),
+    );
+    expect(tok.ok).toBe(true);
+    expect(typeof tok.tokens.accessToken).toBe("string");
+    expect(tok.user.phone).toBe("+8613800138001");
+    expect(
+      users.devices.some((d) => d.device.deviceId === "cli-dev-1" && d.device.platform === "cli"),
+    ).toBe(true);
+    expect(users.events.some((e) => e.platform === "cli" && e.success)).toBe(true);
+  });
+
+  it("approve requires an authenticated session (401)", async () => {
+    const { app } = setup();
+    const start = await readJson(await post(app, "/auth/cli/device", { deviceId: "d" }));
+    const res = await post(app, "/auth/cli/device/approve", { userCode: start.userCode });
+    expect(res.status).toBe(401);
+  });
+
+  it("polling an unknown device code returns expired_token", async () => {
+    const { app } = setup();
+    const res = await readJson(await post(app, "/auth/cli/device/token", { deviceCode: "nope" }));
+    expect(res).toEqual({ ok: false, status: "expired_token" });
+  });
+
+  it("deny in the browser surfaces as access_denied to the poller", async () => {
+    const { app, users, sessions } = setup();
+    sessions.currentUser = await users.createWithProfile("+8613800138002");
+    const start = await readJson(await post(app, "/auth/cli/device", { deviceId: "d2" }));
+    await post(app, "/auth/cli/device/approve", { userCode: start.userCode, deny: true });
+    const res = await readJson(
+      await post(app, "/auth/cli/device/token", { deviceCode: start.deviceCode }),
+    );
+    expect(res).toEqual({ ok: false, status: "access_denied" });
   });
 });

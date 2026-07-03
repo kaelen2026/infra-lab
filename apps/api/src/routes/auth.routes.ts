@@ -1,8 +1,15 @@
-import type { OtpService } from "@infra/auth";
+import type { CliDeviceFlowService, OtpService } from "@infra/auth";
 import {
+  AUTH_ROUTES,
   type AuthErrorCode,
   type AuthTokens,
   type AuthUser,
+  CLI_VERIFICATION_PATH,
+  type CliDeviceCodeResponse,
+  type CliDeviceTokenResponse,
+  cliDeviceApproveSchema,
+  cliDeviceCodeRequestSchema,
+  cliDeviceTokenRequestSchema,
   type DeviceDTO,
   type DeviceInfo,
   isCookiePlatform,
@@ -28,6 +35,8 @@ export interface UserRecord {
 
 export interface UserRepository {
   findByPhone(phone: string): Promise<UserRecord | null>;
+  /** Load a user by id (used to issue tokens after a CLI device-flow approval). */
+  findById(id: string): Promise<UserRecord | null>;
   /** Creates the user row AND its profile row in one transaction. */
   createWithProfile(phone: string): Promise<UserRecord>;
   recordDevice(userId: string, device: DeviceInfo): Promise<void>;
@@ -96,10 +105,14 @@ export interface AuthRouteDeps {
   otp: OtpService;
   users: UserRepository;
   sessions: SessionService;
+  /** Drives the CLI browser-assisted login (OAuth device flow). */
+  cliDeviceFlow: CliDeviceFlowService;
   /** Deliver the code via your SMS provider. The code is never persisted in plaintext. */
   sms: (phone: string, code: string) => Promise<void>;
   config: {
     debugReturnCode: boolean;
+    /** Web origin the CLI opens for device-flow approval (the `verificationUri` base). */
+    webBaseUrl: string;
     /**
      * Number of trusted reverse proxies that append `X-Forwarded-For`. The client IP
      * is read this many entries from the right of the XFF list. `0` (default) means
@@ -167,7 +180,7 @@ export function toAuthUser(user: UserRecord, isNew: boolean): AuthUser {
 }
 
 export function createAuthRoutes(deps: AuthRouteDeps): Hono<ObsEnv> {
-  const { otp, users, sessions, sms, config } = deps;
+  const { otp, users, sessions, cliDeviceFlow, sms, config } = deps;
   const trustedProxyCount = config.trustedProxyCount ?? 0;
   const app = new Hono<ObsEnv>();
 
@@ -344,6 +357,74 @@ export function createAuthRoutes(deps: AuthRouteDeps): Hono<ObsEnv> {
     const user = await sessions.requireUser(c.req.raw.headers);
     if (!user) return fail(c, "UNAUTHORIZED");
     return c.json({ ok: true, events: await users.listLoginEvents(user.id) });
+  });
+
+  // ── CLI browser-assisted login: device flow (gh-style, RFC 8628) ─────────────
+  // 1) Start: the CLI (unauthenticated — the deviceCode it receives is the proof)
+  //    asks for a deviceCode + userCode and the page to open.
+  app.post(AUTH_ROUTES.cliDevice, async (c) => {
+    const parsed = cliDeviceCodeRequestSchema.safeParse(await readJson(c));
+    if (!parsed.success) return fail(c, "INVALID_REQUEST", { issues: parsed.error.issues });
+    const started = await cliDeviceFlow.requestCode(parsed.data);
+    return c.json({
+      ok: true,
+      deviceCode: started.deviceCode,
+      userCode: started.userCode,
+      verificationUri: `${config.webBaseUrl}${CLI_VERIFICATION_PATH}`,
+      expiresIn: started.expiresIn,
+      interval: started.interval,
+    } satisfies CliDeviceCodeResponse);
+  });
+
+  // 2) Poll: the CLI polls with its deviceCode. Pending states return HTTP 200 with a
+  //    status (not an error) so the CLI just keeps polling; approval yields the tokens
+  //    exactly once (the code is consumed), issued here — never through the browser.
+  app.post(AUTH_ROUTES.cliDeviceToken, async (c) => {
+    const parsed = cliDeviceTokenRequestSchema.safeParse(await readJson(c));
+    if (!parsed.success) return fail(c, "INVALID_REQUEST", { issues: parsed.error.issues });
+    const result = await cliDeviceFlow.poll(parsed.data.deviceCode);
+    if (result.status !== "approved") {
+      return c.json({ ok: false, status: result.status } satisfies CliDeviceTokenResponse);
+    }
+    // Approved: the bound user still must exist to mint a session.
+    const user = await users.findById(result.userId);
+    if (!user)
+      return c.json({ ok: false, status: "expired_token" } satisfies CliDeviceTokenResponse);
+    const ip = clientIp(c.req.raw.headers, trustedProxyCount);
+    await users.recordDevice(user.id, result.device);
+    await users.recordLoginEvent({
+      userId: user.id,
+      phone: user.phone,
+      platform: "cli",
+      ip,
+      deviceId: result.device.deviceId,
+      success: true,
+    });
+    const tokens = await sessions.issueTokens(user, {
+      ip,
+      headers: c.req.raw.headers,
+      platform: "cli",
+      deviceId: result.device.deviceId,
+    });
+    return c.json({
+      ok: true,
+      user: toAuthUser(user, false),
+      tokens,
+    } satisfies CliDeviceTokenResponse);
+  });
+
+  // 3) Approve/deny: the browser, carrying the user's HttpOnly session cookie (SameSite=Lax,
+  //    same posture as /auth/logout — no cross-site POST carries it), binds the pending
+  //    request to the current user. No token is returned to the browser.
+  app.post(AUTH_ROUTES.cliDeviceApprove, async (c) => {
+    const user = await sessions.requireUser(c.req.raw.headers);
+    if (!user) return fail(c, "UNAUTHORIZED");
+    const parsed = cliDeviceApproveSchema.safeParse(await readJson(c));
+    if (!parsed.success) return fail(c, "INVALID_REQUEST", { issues: parsed.error.issues });
+    const result = await cliDeviceFlow.approve(parsed.data.userCode, user.id, {
+      deny: parsed.data.deny,
+    });
+    return c.json({ ok: true, result });
   });
 
   return app;

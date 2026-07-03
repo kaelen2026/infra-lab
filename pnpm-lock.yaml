@@ -101,6 +101,19 @@ importers:
         specifier: 4.22.4
         version: 4.22.4
 
+  apps/cli:
+    dependencies:
+      '@infra/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+      '@infra/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+    devDependencies:
+      tsx:
+        specifier: 4.22.4
+        version: 4.22.4
+
   apps/h5:
     dependencies:
       '@infra/design':

@@ -24,8 +24,27 @@ export function createUserRepository(db: Db): UserRepository {
     };
   }
 
+  async function loadById(id: string): Promise<UserRecord | null> {
+    const rows = await db
+      .select({ user, profile })
+      .from(user)
+      .leftJoin(profile, eq(profile.userId, user.id))
+      .where(eq(user.id, id))
+      .limit(1);
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      id: row.user.id,
+      phone: row.user.phone ?? "",
+      displayName: row.profile?.displayName ?? null,
+      avatarUrl: row.profile?.avatarUrl ?? null,
+      createdAt: row.user.createdAt,
+    };
+  }
+
   return {
     findByPhone: loadByPhone,
+    findById: loadById,
 
     async createWithProfile(phone) {
       const id = randomUUID();
