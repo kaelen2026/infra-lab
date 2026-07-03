@@ -3,6 +3,7 @@ package dev.w3ctech.infralab.ui.shell
 import dev.w3ctech.infralab.data.contracts.AuthUser
 import dev.w3ctech.infralab.ui.account.AccountScreen
 import dev.w3ctech.infralab.ui.auth.AuthCopyGenerated
+import dev.w3ctech.infralab.ui.timeline.TimelineScreen
 import dev.w3ctech.infralab.ui.todos.TodosScreen
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -27,12 +28,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
-/** The two signed-in business screens, mirroring web's `/` (account) and `/todos`. */
-private enum class Tab(val label: String) { ACCOUNT("账户"), TODOS("待办") }
+/** The signed-in business screens, mirroring web's `/` (account), `/todos` and `/timeline`. */
+private enum class Tab(val label: String) { ACCOUNT("账户"), TODOS("待办"), TIMELINE("动态") }
 
 /**
  * The signed-in surface — the Android counterpart of web's `AppShell`: a top bar (brand + theme
- * toggle + logout) over the current tab, with a bottom tab bar switching account / todos.
+ * toggle + logout) over the current tab, with a bottom tab bar switching account / todos / timeline.
  */
 @Composable
 fun AuthenticatedShell(
@@ -51,6 +52,7 @@ fun AuthenticatedShell(
             when (tab) {
                 Tab.ACCOUNT -> AccountScreen(user = user)
                 Tab.TODOS -> TodosScreen()
+                Tab.TIMELINE -> TimelineScreen()
             }
         }
 
