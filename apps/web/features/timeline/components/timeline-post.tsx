@@ -2,11 +2,13 @@
 
 import type { TimelinePostDTO } from "@infra/sdk";
 import { Trash2 } from "lucide-react";
+import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { resolveImageUrl } from "@/lib/timeline-client";
 import { cn } from "@/lib/utils";
+import { ImageLightbox } from "./image-lightbox";
 
 interface TimelinePostCardProps {
   post: TimelinePostDTO;
@@ -30,6 +32,9 @@ function gridCols(count: number): string {
 
 /** One feed card: timestamp + delete, optional text, then the image grid. */
 export function TimelinePostCard({ post, pending, onRemove }: TimelinePostCardProps) {
+  // Index of the image the lightbox is open on, or null when closed.
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+
   return (
     <Card className={cn(pending && "opacity-50")}>
       <CardContent className="space-y-3">
@@ -53,19 +58,34 @@ export function TimelinePostCard({ post, pending, onRemove }: TimelinePostCardPr
 
         {post.images.length > 0 && (
           <ul className={cn("grid gap-2", gridCols(post.images.length))}>
-            {post.images.map((image) => (
+            {post.images.map((image, i) => (
               <li key={image.url} className="overflow-hidden rounded-lg border bg-muted">
-                <img
-                  src={resolveImageUrl(image.url)}
-                  alt="动态图片"
-                  loading="lazy"
-                  className="aspect-square size-full object-cover"
-                />
+                <button
+                  type="button"
+                  onClick={() => setViewerIndex(i)}
+                  aria-label="查看大图"
+                  className="block size-full cursor-zoom-in"
+                >
+                  <img
+                    src={resolveImageUrl(image.url)}
+                    alt="动态图片"
+                    loading="lazy"
+                    className="aspect-square size-full object-cover"
+                  />
+                </button>
               </li>
             ))}
           </ul>
         )}
       </CardContent>
+
+      {viewerIndex !== null && (
+        <ImageLightbox
+          images={post.images}
+          startIndex={viewerIndex}
+          onClose={() => setViewerIndex(null)}
+        />
+      )}
     </Card>
   );
 }
