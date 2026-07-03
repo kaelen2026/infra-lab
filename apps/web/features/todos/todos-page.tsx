@@ -1,31 +1,21 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
-
 import { AppNav } from "@/components/app-nav";
-import { useSession } from "@/features/session";
+import { useRequireAuth } from "@/features/session";
 import { AddTodoForm } from "./components/add-todo-form";
 import { TodoList } from "./components/todo-list";
 import { useTodos } from "./use-todos";
 
 /**
  * Protected todo list. Like the dashboard, the session lives behind the API
- * (cookie), so the guard is client-side: unauthenticated visitors go to /auth.
+ * (cookie), so the guard is client-side (see {@link useRequireAuth}).
  */
 export default function TodosPage() {
-  const router = useRouter();
-  const { status } = useSession();
-  const { todos, loading, error, creating, pendingIds, create, toggle, remove } = useTodos(
-    status === "authenticated",
-  );
-
-  useEffect(() => {
-    if (status === "unauthenticated") router.replace("/auth");
-  }, [status, router]);
+  const { ready } = useRequireAuth();
+  const { todos, loading, error, creating, pendingIds, create, toggle, remove } = useTodos(ready);
 
   // Hold the layout (with nav) while resolving / redirecting, so there's no flash.
-  if (status !== "authenticated") {
+  if (!ready) {
     return (
       <>
         <AppNav />

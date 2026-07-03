@@ -13,6 +13,7 @@
     "clean": "rm -rf .next"
   },
   "dependencies": {
+    "@infra/design": "workspace:*",
     "@infra/sdk": "workspace:*",
     "@infra/shared": "workspace:*",
     "@radix-ui/react-avatar": "^1.2.0",

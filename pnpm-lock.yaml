@@ -152,6 +152,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@infra/design':
+        specifier: workspace:*
+        version: link:../../packages/design
       '@infra/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk

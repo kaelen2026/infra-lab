@@ -9,6 +9,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 
+import { describeError } from "@/lib/errors";
 import { timelineClient } from "@/lib/timeline-client";
 
 /** The payload the composer hands to {@link UseTimeline.publish}. */
@@ -84,7 +85,7 @@ export function useTimeline(enabled: boolean): UseTimeline {
         ...(prev ?? []),
       ]);
     },
-    onError: () => setActionError("发布失败，请重试。"),
+    onError: (err) => setActionError(describeError(err, "发布失败，请重试。")),
   });
 
   const removeMutation = useMutation({
@@ -99,7 +100,7 @@ export function useTimeline(enabled: boolean): UseTimeline {
         (prev) => prev?.filter((p) => p.id !== id) ?? prev,
       );
     },
-    onError: () => setActionError("删除失败，请重试。"),
+    onError: (err) => setActionError(describeError(err, "删除失败，请重试。")),
     onSettled: (_data, _err, id) => removePending(id),
   });
 

@@ -2,12 +2,10 @@
 
 import { ListTodo } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
 
 import { AppNav } from "@/components/app-nav";
 import { Button } from "@/components/ui/button";
-import { useSession } from "@/features/session";
+import { useRequireAuth, useSession } from "@/features/session";
 import { DevicesCard } from "./components/devices-card";
 import { LoginEventsCard } from "./components/login-events-card";
 import { ProfileCard } from "./components/profile-card";
@@ -16,19 +14,15 @@ import { useAccountData } from "./use-account-data";
 
 /**
  * Protected account dashboard. The session lives behind the API (cookie), so the
- * guard is client-side: unauthenticated visitors are sent to /auth.
+ * guard is client-side (see {@link useRequireAuth}).
  */
 export default function DashboardPage() {
-  const router = useRouter();
-  const { user, status } = useSession();
-  const { devices, events, loading, error } = useAccountData(status === "authenticated");
-
-  useEffect(() => {
-    if (status === "unauthenticated") router.replace("/auth");
-  }, [status, router]);
+  const { user } = useSession();
+  const { ready } = useRequireAuth();
+  const { devices, events, loading, error } = useAccountData(ready);
 
   // Hold the layout (with nav) while resolving / redirecting, so there's no flash of content.
-  if (status !== "authenticated" || !user) {
+  if (!ready || !user) {
     return (
       <>
         <AppNav />

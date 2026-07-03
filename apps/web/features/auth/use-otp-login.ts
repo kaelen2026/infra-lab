@@ -4,7 +4,7 @@ import { OTP_LIMITS } from "@infra/shared";
 import { useCallback, useEffect, useState } from "react";
 
 import { authClient } from "@/lib/auth-client";
-import { describeAuthError } from "./messages";
+import { describeError } from "@/lib/errors";
 
 export type Step = "phone" | "code";
 
@@ -67,7 +67,7 @@ export function useOtpLogin({ onAuthenticated }: UseOtpLoginOptions): OtpLogin {
       setCooldown(res.resendAfterSeconds ?? OTP_LIMITS.resendCooldownSeconds);
       setStep("code");
     } catch (err) {
-      setError(describeAuthError(err));
+      setError(describeError(err));
     } finally {
       setBusy(false);
     }
@@ -81,7 +81,7 @@ export function useOtpLogin({ onAuthenticated }: UseOtpLoginOptions): OtpLogin {
       await onAuthenticated();
       // Stay busy through the redirect so buttons don't flash re-enabled.
     } catch (err) {
-      setError(describeAuthError(err));
+      setError(describeError(err));
       setBusy(false);
     }
   }, [phone, code, onAuthenticated]);

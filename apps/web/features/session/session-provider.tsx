@@ -1,10 +1,14 @@
 "use client";
 
+import { COPY } from "@infra/design";
 import type { AuthUser } from "@infra/sdk";
 import { useQueryClient } from "@tanstack/react-query";
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 
+import { useToast } from "@/features/toast";
 import { authClient } from "@/lib/auth-client";
+import { onUnauthorized } from "@/lib/auth-events";
+import { logger } from "@/lib/logger";
 
 type SessionStatus = "loading" | "authenticated" | "unauthenticated";
 
@@ -24,6 +28,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [status, setStatus] = useState<SessionStatus>("loading");
   const queryClient = useQueryClient();
+  const { toast } = useToast();
+  // Mirror status in a ref so the (stable) unauthorized handler reads the live value
+  // without re-subscribing on every status change.
+  const statusRef = useRef<SessionStatus>(status);
+  statusRef.current = status;
 
   const refresh = useCallback(async () => {
     try {
@@ -51,6 +60,21 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // A 401 from any cached request (see the query provider) means the cookie session
+  // expired mid-use — there's no client-side refresh for web. Reset to unauthenticated
+  // (protected pages then redirect to /auth via useRequireAuth), drop cached data, and
+  // tell the user why. Skip if already unauthenticated so it fires once per expiry.
+  useEffect(() => {
+    return onUnauthorized(() => {
+      if (statusRef.current === "unauthenticated") return;
+      logger.warn("session_expired");
+      setUser(null);
+      setStatus("unauthenticated");
+      queryClient.clear();
+      toast(COPY.errors.messages.UNAUTHORIZED, "destructive");
+    });
+  }, [queryClient, toast]);
 
   return (
     <SessionContext.Provider value={{ user, status, refresh, logout }}>
