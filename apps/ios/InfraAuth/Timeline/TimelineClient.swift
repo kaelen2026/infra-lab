@@ -5,11 +5,20 @@ import Foundation
 /// (read from the shared ``TokenStore``). Mirrors the `TimelineClient` interface
 /// in `@infra/shared`.
 protocol TimelineClient {
-    func list() async throws -> [TimelinePostDTO]
+    /// Fetch one page, newest first. `cursor` is the previous page's `nextCursor`
+    /// (nil ⇒ first page); `limit` of nil uses the server's default page size.
+    func list(cursor: String?, limit: Int?) async throws -> TimelinePage
     /// Upload one image; returns the reference to attach to a post.
     func uploadImage(_ data: Data, contentType: TimelineImageContentType) async throws -> TimelineImage
     func create(text: String, images: [TimelineImage]) async throws -> TimelinePostDTO
     func remove(id: String) async throws
+}
+
+extension TimelineClient {
+    /// The first page with the server's default page size.
+    func list() async throws -> TimelinePage {
+        try await list(cursor: nil, limit: nil)
+    }
 }
 
 /// Transport-level failure of a timeline request. Non-2xx responses surface a
@@ -43,11 +52,15 @@ final class HTTPTimelineClient: TimelineClient {
 
     // MARK: TimelineClient
 
-    func list() async throws -> [TimelinePostDTO] {
+    func list(cursor: String?, limit: Int?) async throws -> TimelinePage {
+        var query: [URLQueryItem] = []
+        if let cursor { query.append(URLQueryItem(name: "cursor", value: cursor)) }
+        if let limit { query.append(URLQueryItem(name: "limit", value: String(limit))) }
         let res: TimelinePostsResponse = try await send(
-            TimelineRoutes.list, method: "GET", body: Optional<CreateTimelinePostInput>.none
+            TimelineRoutes.list, method: "GET",
+            body: Optional<CreateTimelinePostInput>.none, query: query
         )
-        return res.posts
+        return TimelinePage(posts: res.posts, nextCursor: res.nextCursor)
     }
 
     func create(text: String, images: [TimelineImage]) async throws -> TimelinePostDTO {
@@ -98,9 +111,15 @@ final class HTTPTimelineClient: TimelineClient {
     }
 
     private func send<Body: Encodable, Response: Decodable>(
-        _ path: String, method: String, body: Body?
+        _ path: String, method: String, body: Body?, query: [URLQueryItem] = []
     ) async throws -> Response {
-        var request = URLRequest(url: baseURL.appendingPathComponent(path))
+        var url = baseURL.appendingPathComponent(path)
+        if !query.isEmpty,
+           var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+            components.queryItems = query
+            url = components.url ?? url
+        }
+        var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         authorize(&request)

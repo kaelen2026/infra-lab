@@ -23,7 +23,7 @@ function fakeFetch(status: number, body: unknown) {
 }
 
 describe("createWebTimelineClient", () => {
-  it("GETs the feed with credentials included and unwraps posts", async () => {
+  it("GETs the first page with credentials included and unwraps posts + nextCursor", async () => {
     const { fn, calls } = fakeFetch(200, {
       ok: true,
       posts: [
@@ -35,16 +35,33 @@ describe("createWebTimelineClient", () => {
           updatedAt: "2026-07-02T00:00:00Z",
         },
       ],
+      nextCursor: "opaque-token",
     });
     const client = createWebTimelineClient(BASE, fn);
 
-    const posts = await client.list();
+    const page = await client.list();
 
-    expect(posts).toHaveLength(1);
-    expect(posts[0]?.text).toBe("hi");
+    expect(page.posts).toHaveLength(1);
+    expect(page.posts[0]?.text).toBe("hi");
+    expect(page.nextCursor).toBe("opaque-token");
+    // No options ⇒ no query string; the server applies its default limit.
     expect(calls[0]?.url).toBe(`${BASE}${TIMELINE_ROUTES.list}`);
     expect(calls[0]?.init.method).toBe("GET");
     expect(calls[0]?.init.credentials).toBe("include");
+  });
+
+  it("passes cursor and limit through as query params", async () => {
+    const { fn, calls } = fakeFetch(200, { ok: true, posts: [], nextCursor: null });
+    const client = createWebTimelineClient(BASE, fn);
+
+    const page = await client.list({ cursor: "abc+/=", limit: 5 });
+
+    expect(page.posts).toEqual([]);
+    expect(page.nextCursor).toBeNull();
+    const url = new URL(calls[0]?.url ?? "");
+    expect(url.pathname).toBe(TIMELINE_ROUTES.list);
+    expect(url.searchParams.get("cursor")).toBe("abc+/=");
+    expect(url.searchParams.get("limit")).toBe("5");
   });
 
   it("POSTs a create with the text + image refs as JSON", async () => {

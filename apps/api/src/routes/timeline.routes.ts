@@ -1,5 +1,7 @@
+import { Buffer } from "node:buffer";
 import {
   createTimelinePostSchema,
+  listTimelineQuerySchema,
   TIMELINE_IMAGE_CONTENT_TYPES,
   TIMELINE_IMAGE_MAX_BYTES,
   type TimelineErrorCode,
@@ -22,12 +24,22 @@ export interface TimelinePostRecord {
   updatedAt: Date;
 }
 
+/** Keyset position: list resumes strictly after this (createdAt, id) pair. */
+export interface TimelineListPosition {
+  createdAt: Date;
+  id: string;
+}
+
 /**
  * Every method takes the owner's `userId`; the repository enforces per-user
  * isolation so a caller can never read or delete another user's posts.
  */
 export interface TimelinePostRepository {
-  list(userId: string): Promise<TimelinePostRecord[]>;
+  /** Newest first, at most `limit` rows, only rows older than `before` when given. */
+  list(
+    userId: string,
+    opts: { limit: number; before?: TimelineListPosition },
+  ): Promise<TimelinePostRecord[]>;
   create(
     userId: string,
     input: { text: string; images: TimelineImageRef[] },
@@ -75,6 +87,26 @@ function isAllowedContentType(value: string): value is TimelineImageContentType 
   return (TIMELINE_IMAGE_CONTENT_TYPES as readonly string[]).includes(value);
 }
 
+// ── List cursor ───────────────────────────────────────────────────────────────
+// Opaque to clients: base64url of `<created_at ms>:<post id>` of the last post
+// on the page. Purely positional — it carries no user data, and every query is
+// still scoped to the authenticated user, so a forged cursor can only move the
+// window within the caller's own feed.
+
+function encodeCursor(record: TimelineListPosition): string {
+  return Buffer.from(`${record.createdAt.getTime()}:${record.id}`, "utf8").toString("base64url");
+}
+
+function decodeCursor(raw: string): TimelineListPosition | null {
+  const decoded = Buffer.from(raw, "base64url").toString("utf8");
+  const sep = decoded.indexOf(":");
+  if (sep <= 0) return null;
+  const ms = Number(decoded.slice(0, sep));
+  const id = decoded.slice(sep + 1);
+  if (!Number.isSafeInteger(ms) || id.length === 0) return null;
+  return { createdAt: new Date(ms), id };
+}
+
 function toPostDTO(record: TimelinePostRecord): TimelinePostDTO {
   return {
     id: record.id,
@@ -100,12 +132,29 @@ export function createTimelineRoutes(deps: TimelineRouteDeps): Hono {
     }
   }
 
-  // ── List the current user's posts (newest first) ──────────────────────────────
+  // ── List one page of the current user's posts (newest first) ──────────────────
+  // Cursor pagination for infinite scroll: fetch limit+1 rows to learn whether
+  // an older page exists, return `nextCursor` (opaque) when it does.
   app.get("/timeline", async (c) => {
     const user = await requireUser(c.req.raw.headers);
     if (!user) return fail(c, "UNAUTHORIZED");
-    const records = await posts.list(user.id);
-    return c.json({ ok: true, posts: records.map(toPostDTO) });
+
+    const parsed = listTimelineQuerySchema.safeParse(c.req.query());
+    if (!parsed.success) return fail(c, "INVALID_REQUEST", { issues: parsed.error.issues });
+    const { cursor, limit } = parsed.data;
+
+    let before: TimelineListPosition | undefined;
+    if (cursor !== undefined) {
+      const decoded = decodeCursor(cursor);
+      if (!decoded) return fail(c, "INVALID_REQUEST", { reason: "invalid cursor" });
+      before = decoded;
+    }
+
+    const records = await posts.list(user.id, { limit: limit + 1, before });
+    const page = records.slice(0, limit);
+    const last = page[page.length - 1];
+    const nextCursor = records.length > limit && last ? encodeCursor(last) : null;
+    return c.json({ ok: true, posts: page.map(toPostDTO), nextCursor });
   });
 
   // ── Upload one image (multipart/form-data, field `file`) ──────────────────────

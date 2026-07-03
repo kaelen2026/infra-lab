@@ -22,10 +22,18 @@ export const timelinePost = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     text: text("text").notNull().default(""),
     images: jsonb("images").$type<TimelineImageRef[]>().notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    // Millisecond precision: the list cursor is keyset on (created_at, id) and
+    // round-trips created_at through a JS Date (ms). Microsecond storage would
+    // make the cursor comparison skip rows that share a millisecond.
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 3 }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 3 }).notNull().defaultNow(),
   },
-  (t) => [index("timeline_post_user_id_idx").on(t.userId)],
+  (t) => [
+    index("timeline_post_user_id_idx").on(t.userId),
+    // Serves the keyset list query: WHERE user_id = ? [AND (created_at, id) < ?]
+    // ORDER BY created_at DESC, id DESC.
+    index("timeline_post_user_created_id_idx").on(t.userId, t.createdAt.desc(), t.id.desc()),
+  ],
 );
 
 export const timelinePostRelations = relations(timelinePost, ({ one }) => ({

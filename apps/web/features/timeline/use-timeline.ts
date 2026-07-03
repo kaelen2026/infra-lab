@@ -4,9 +4,15 @@ import {
   TIMELINE_IMAGE_CONTENT_TYPES,
   type TimelineImage,
   type TimelineImageContentType,
+  type TimelinePage,
   type TimelinePostDTO,
 } from "@infra/sdk";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  type InfiniteData,
+  useInfiniteQuery,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 
 import { describeError } from "@/lib/errors";
@@ -19,9 +25,16 @@ export interface PublishInput {
 }
 
 export interface UseTimeline {
+  /** Every loaded page flattened, newest first. */
   posts: TimelinePostDTO[] | null;
   loading: boolean;
   error: string | null;
+  /** True when an older page exists (drives the infinite-scroll sentinel). */
+  hasMore: boolean;
+  /** True while an older page is being appended. */
+  loadingMore: boolean;
+  /** Fetch the next (older) page; no-op while one is in flight or at the end. */
+  loadMore: () => void;
   /** True while a publish (image upload + create) is in flight. */
   publishing: boolean;
   /** Ids with a delete in flight (disables that card). */
@@ -32,27 +45,40 @@ export interface UseTimeline {
 
 const TIMELINE_KEY = ["timeline"] as const;
 
+/** The infinite query's cache shape: one entry per fetched page. */
+type TimelineData = InfiniteData<TimelinePage, string | null>;
+
 function isAllowedType(value: string): value is TimelineImageContentType {
   return (TIMELINE_IMAGE_CONTENT_TYPES as readonly string[]).includes(value);
 }
 
 /**
  * Owns the current user's timeline feed plus its publish/delete mutations, backed
- * by TanStack Query (mirrors {@link useTodos}). The list is a cached query
- * (`["timeline"]`); mutations write the server's returned DTO straight into the
- * cache. Publish is two steps — upload each image, then create the post
- * referencing the returned urls — matching the API's two-step contract.
+ * by TanStack Query (mirrors {@link useTodos}). The feed is an infinite query
+ * (`["timeline"]`): each page comes from the cursor the previous page returned,
+ * and mutations write the server's returned DTO straight into the cached pages.
+ * Publish is two steps — upload each image, then create the post referencing the
+ * returned urls — matching the API's two-step contract.
  */
 export function useTimeline(enabled: boolean): UseTimeline {
   const queryClient = useQueryClient();
   const [actionError, setActionError] = useState<string | null>(null);
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
 
-  const query = useQuery({
+  const query = useInfiniteQuery({
     queryKey: TIMELINE_KEY,
-    queryFn: () => timelineClient.list(),
+    queryFn: ({ pageParam }) =>
+      timelineClient.list(pageParam === null ? undefined : { cursor: pageParam }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
     enabled,
   });
+  const { fetchNextPage, hasNextPage, isFetchingNextPage } = query;
+
+  const loadMore = useCallback(() => {
+    if (!hasNextPage || isFetchingNextPage) return;
+    fetchNextPage().then(noop, noop);
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
   const addPending = useCallback((id: string) => {
     setPendingIds((prev) => new Set(prev).add(id));
@@ -79,11 +105,13 @@ export function useTimeline(enabled: boolean): UseTimeline {
     },
     onMutate: () => setActionError(null),
     onSuccess: (created) => {
-      // Feed is newest-first; the new post leads.
-      queryClient.setQueryData<TimelinePostDTO[]>(TIMELINE_KEY, (prev) => [
-        created,
-        ...(prev ?? []),
-      ]);
+      // Feed is newest-first; the new post leads the first page. Cursors are
+      // positional (strictly-older-than), so older pages are unaffected.
+      queryClient.setQueryData<TimelineData>(TIMELINE_KEY, (prev) => {
+        const [first, ...rest] = prev?.pages ?? [];
+        if (!prev || !first) return prev;
+        return { ...prev, pages: [{ ...first, posts: [created, ...first.posts] }, ...rest] };
+      });
     },
     onError: (err) => setActionError(describeError(err, "发布失败，请重试。")),
   });
@@ -95,9 +123,16 @@ export function useTimeline(enabled: boolean): UseTimeline {
       addPending(id);
     },
     onSuccess: (_data, id) => {
-      queryClient.setQueryData<TimelinePostDTO[]>(
-        TIMELINE_KEY,
-        (prev) => prev?.filter((p) => p.id !== id) ?? prev,
+      queryClient.setQueryData<TimelineData>(TIMELINE_KEY, (prev) =>
+        prev
+          ? {
+              ...prev,
+              pages: prev.pages.map((page) => ({
+                ...page,
+                posts: page.posts.filter((p) => p.id !== id),
+              })),
+            }
+          : prev,
       );
     },
     onError: (err) => setActionError(describeError(err, "删除失败，请重试。")),
@@ -116,9 +151,12 @@ export function useTimeline(enabled: boolean): UseTimeline {
   );
 
   return {
-    posts: query.data ?? null,
+    posts: query.data ? query.data.pages.flatMap((page) => page.posts) : null,
     loading: query.isLoading,
     error: actionError ?? (query.isError ? "无法加载动态，请稍后重试。" : null),
+    hasMore: hasNextPage,
+    loadingMore: isFetchingNextPage,
+    loadMore,
     publishing: publishMutation.isPending,
     pendingIds,
     publish,

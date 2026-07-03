@@ -66,6 +66,15 @@ struct TimelineImageDTO: Decodable {
 struct TimelinePostsResponse: Decodable {
     let ok: Bool
     let posts: [TimelinePostDTO]
+    /// Opaque token for the next (older) page; nil when this was the last page.
+    let nextCursor: String?
+}
+
+/// One page of the feed as the client consumes it (mirrors `TimelinePage`).
+struct TimelinePage {
+    let posts: [TimelinePostDTO]
+    /// Pass back as `?cursor=` to fetch the next (older) page; nil ⇒ exhausted.
+    let nextCursor: String?
 }
 
 struct TimelinePostResponse: Decodable {

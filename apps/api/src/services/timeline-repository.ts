@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { type Db, timelinePost } from "@infra/db";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, lt, or } from "drizzle-orm";
 import type { TimelinePostRepository } from "../routes/timeline.routes.js";
 
 /** Drizzle-backed {@link TimelinePostRepository}. Every query is scoped by `userId`. */
@@ -10,12 +10,22 @@ export function createTimelineRepository(db: Db): TimelinePostRepository {
     and(eq(timelinePost.userId, userId), eq(timelinePost.id, id));
 
   return {
-    async list(userId) {
+    async list(userId, { limit, before }) {
+      // Keyset on (created_at, id) DESC: `before` is the last row of the previous
+      // page; ties on created_at fall back to id so the order is total and a
+      // page boundary never skips or repeats a row.
+      const olderThan = before
+        ? or(
+            lt(timelinePost.createdAt, before.createdAt),
+            and(eq(timelinePost.createdAt, before.createdAt), lt(timelinePost.id, before.id)),
+          )
+        : undefined;
       return db
         .select()
         .from(timelinePost)
-        .where(eq(timelinePost.userId, userId))
-        .orderBy(desc(timelinePost.createdAt));
+        .where(and(eq(timelinePost.userId, userId), olderThan))
+        .orderBy(desc(timelinePost.createdAt), desc(timelinePost.id))
+        .limit(limit);
     },
 
     async create(userId, input) {

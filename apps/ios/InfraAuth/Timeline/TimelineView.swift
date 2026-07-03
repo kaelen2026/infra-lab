@@ -14,8 +14,10 @@ struct TimelineView: View {
                     TimelineListCard(
                         posts: timeline.posts,
                         loading: timeline.loading,
+                        hasMore: timeline.hasMore,
                         pendingIds: timeline.pendingIds,
-                        onRemove: { id in Task { await timeline.remove(id: id) } }
+                        onRemove: { id in Task { await timeline.remove(id: id) } },
+                        onLoadMore: { Task { await timeline.loadMore() } }
                     )
                     ErrorBanner(message: timeline.error)
                 }
@@ -46,12 +48,15 @@ struct TimelineView: View {
     }
 }
 
-/// The feed body: skeleton while loading, an empty state, or the post cards.
+/// The feed body: skeleton while loading, an empty state, or the post cards
+/// followed by an infinite-scroll footer while older pages remain.
 struct TimelineListCard: View {
     let posts: [TimelinePostDTO]?
     let loading: Bool
+    let hasMore: Bool
     let pendingIds: Set<String>
     let onRemove: (String) -> Void
+    let onLoadMore: () -> Void
 
     var body: some View {
         if loading {
@@ -60,13 +65,22 @@ struct TimelineListCard: View {
                 SkeletonBar(widthFraction: 0.66, height: 22)
             }
         } else if let posts, !posts.isEmpty {
-            VStack(spacing: 16) {
+            // Lazy so the footer only materializes (and fires onAppear) when the
+            // user actually scrolls near the bottom.
+            LazyVStack(spacing: 16) {
                 ForEach(posts) { post in
                     TimelinePostCard(
                         post: post,
                         pending: pendingIds.contains(post.id),
                         onRemove: { onRemove(post.id) }
                     )
+                }
+                if hasMore {
+                    ProgressView()
+                        .tint(DesignTokens.textSecondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .onAppear(perform: onLoadMore)
                 }
             }
         } else {

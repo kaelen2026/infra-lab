@@ -32,8 +32,11 @@ final class PreviewTodoClient: TodoClient {
 
 /// Canned ``TimelineClient`` for SwiftUI previews — no network, deterministic data.
 final class PreviewTimelineClient: TimelineClient {
-    func list() async throws -> [TimelinePostDTO] {
-        [.preview(1, imageCount: 0), .preview(2, imageCount: 2)]
+    func list(cursor: String?, limit: Int?) async throws -> TimelinePage {
+        TimelinePage(
+            posts: [.preview(1, imageCount: 0), .preview(2, imageCount: 2)],
+            nextCursor: nil
+        )
     }
     func uploadImage(_ data: Data, contentType: TimelineImageContentType) async throws -> TimelineImage {
         TimelineImage(url: "/uploads/preview.jpg")
