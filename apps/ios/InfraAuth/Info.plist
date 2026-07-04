@@ -24,8 +24,6 @@
 	<string>1</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
-	<key>NSCameraUsageDescription</key>
-	<string>拍照以在动态中发布图片。</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
@@ -33,6 +31,8 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>拍照以在动态中发布图片，或扫描网页端的登录二维码。</string>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>
