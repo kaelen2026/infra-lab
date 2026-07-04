@@ -1,16 +1,16 @@
-# SwiftLint config for the InfraAuth iOS client.
+# SwiftLint config for the InfraLab iOS client.
 # Run locally with `make lint` (see apps/ios/Makefile). Not wired into CI —
 # iOS builds need a macOS runner, so the gate is local + pre-push discipline.
 # Coding conventions this enforces live in .claude/rules/ios.md.
 
 included:
-  - InfraAuth
-  - InfraAuthTests
+  - InfraLab
+  - InfraLabTests
 
 excluded:
   # Design tokens + copy are generated from @infra/design; never hand-edited,
   # so they are not held to the source style rules.
-  - InfraAuth/Generated
+  - InfraLab/Generated
   - .build
   - build
   - DerivedData

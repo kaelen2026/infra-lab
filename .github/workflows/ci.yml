@@ -63,7 +63,7 @@ jobs:
           git diff --exit-code -- \
             apps/web/app/tokens.generated.css \
             apps/h5/src/tokens.generated.css \
-            apps/ios/InfraAuth/Generated \
+            apps/ios/InfraLab/Generated \
             apps/android/app/src/main/kotlin/dev/w3ctech/infralab/ui/theme/DesignTokens.kt \
             apps/android/app/src/main/kotlin/dev/w3ctech/infralab/ui/auth/AuthCopyGenerated.kt \
             apps/android/app/src/main/res/values/colors.generated.xml \

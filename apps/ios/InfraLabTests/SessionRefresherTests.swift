@@ -1,4 +1,4 @@
-@testable import InfraAuth
+@testable import InfraLab
 import XCTest
 
 final class SessionRefresherTests: XCTestCase {

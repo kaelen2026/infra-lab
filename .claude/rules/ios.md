@@ -32,7 +32,7 @@ semantics (login == register); only the transport (URLSession) and secure storag
   SDK calls and input normalization live in `AuthViewModel`.
 - Depend on the `AuthClient` **protocol**, not `HTTPAuthClient`. Inject it (and
   `TokenStore`, `URLSession`) via `init` so tests can supply fakes (see
-  `InfraAuthTests/MockURLProtocol.swift`).
+  `InfraLabTests/MockURLProtocol.swift`).
 - Contracts in `Auth/AuthContracts.swift` must stay byte-compatible with
   `@infra/shared` — same field names, same casing. Changing them is a cross-client
   contract change (see `.claude/docs/architecture.md`).
@@ -45,6 +45,6 @@ semantics (login == register); only the transport (URLSession) and secure storag
 
 ## Design tokens
 
-- Colors and copy under `InfraAuth/Generated/` are emitted from `@infra/design`
+- Colors and copy under `InfraLab/Generated/` are emitted from `@infra/design`
   (`pnpm gen:design`). **Never hand-edit them** — change the source and regenerate.
   They are excluded from SwiftLint for the same reason.

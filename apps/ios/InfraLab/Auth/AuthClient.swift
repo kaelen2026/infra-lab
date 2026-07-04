@@ -51,7 +51,7 @@ final class HTTPAuthClient: AuthClient {
 
     /// Convenience wiring for tests / standalone use: build a private transport +
     /// refresher over `session`. Production shares one set across every client (see
-    /// `InfraAuthApp`) so a `401` on any client triggers a single-flight refresh.
+    /// `InfraLabApp`) so a `401` on any client triggers a single-flight refresh.
     convenience init(
         baseURL: URL, platform: Platform = .ios, store: TokenStore, session: URLSession = .shared
     ) {

@@ -1,5 +1,5 @@
 /*
- * DevEco CodeLinter config for the InfraAuth HarmonyOS (ArkTS) client.
+ * DevEco CodeLinter config for the InfraLab HarmonyOS (ArkTS) client.
  * Runs in DevEco Studio (Code Linter) or via the SDK command-line tools:
  *   cd apps/harmony && codelinter -c ./code-linter.json5 -f json .
  * (Prefer DevEco Studio's Code Linter for inline results; the CLI prints a report.)

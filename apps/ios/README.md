@@ -14,13 +14,13 @@ behind a tab bar.
   opaque refresh token (30-day, rotated on `/auth/refresh`). See the repo
   architecture doc for how this differs from the web cookie session.
 - The Xcode project is **generated** from [`project.yml`](project.yml) by
-  [XcodeGen](https://github.com/yonsm/XcodeGen) — `InfraAuth.xcodeproj` is gitignored.
+  [XcodeGen](https://github.com/yonsm/XcodeGen) — `InfraLab.xcodeproj` is gitignored.
 
 ## Layout
 
 ```
-InfraAuth/
-  InfraAuthApp.swift         @main — wires Keychain store + HTTP clients → view models
+InfraLab/
+  InfraLabApp.swift         @main — wires Keychain store + HTTP clients → view models
   Auth/
     AuthContracts.swift      Swift mirror of @infra/shared auth contracts (DTOs, codes, limits)
     AuthError.swift          AuthClientError + error→copy mapping (mirrors web messages.ts)
@@ -39,7 +39,7 @@ InfraAuth/
     TodoViewModel.swift      list + create/toggle/delete state (mirrors web useTodos)
     TodosView.swift          composer + list with completion toggle and delete
   Views/                     RootView, phone/code steps, authenticated tabs + shared theme
-InfraAuthTests/              hermetic AuthClient / TodoClient tests (URLProtocol-stubbed)
+InfraLabTests/              hermetic AuthClient / TodoClient tests (URLProtocol-stubbed)
 ```
 
 ## Develop
@@ -48,10 +48,10 @@ InfraAuthTests/              hermetic AuthClient / TodoClient tests (URLProtocol
 brew install xcodegen          # one-time
 cd apps/ios
 
-make project                   # generate InfraAuth.xcodeproj
+make project                   # generate InfraLab.xcodeproj
 make build                     # build for the iPhone simulator
 make test                      # run the hermetic unit tests
-open InfraAuth.xcodeproj       # or work in Xcode
+open InfraLab.xcodeproj       # or work in Xcode
 
 brew install swiftlint         # one-time (for the lint gate)
 make lint                      # SwiftLint --strict; run before pushing
@@ -72,7 +72,7 @@ The contracts here track `packages/shared/src/contracts/auth.ts` and
 ## Release (TestFlight)
 
 ```bash
-make ipa    TEAM_ID=<team> ASC_KEY_ID=<key> ASC_ISSUER_ID=<issuer>  # build/export/InfraAuth.ipa
+make ipa    TEAM_ID=<team> ASC_KEY_ID=<key> ASC_ISSUER_ID=<issuer>  # build/export/InfraLab.ipa
 make upload TEAM_ID=<team> ASC_KEY_ID=<key> ASC_ISSUER_ID=<issuer>  # archive + upload to App Store Connect
 ```
 

@@ -1,4 +1,4 @@
-# detekt config for the InfraAuth Android client.
+# detekt config for the InfraLab Android client.
 # `buildUponDefaultConfig = true` (see build.gradle.kts) means this only layers
 # overrides on top of detekt's defaults. Run: `./gradlew detekt` (or `:app:detekt`).
 # Coding conventions live in .claude/rules/android.md. Local gate only, not in CI.
