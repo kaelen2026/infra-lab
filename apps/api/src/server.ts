@@ -134,6 +134,7 @@ app.route(
     otp,
     users,
     sessions,
+    images,
     cliDeviceFlow,
     sms,
     config: {

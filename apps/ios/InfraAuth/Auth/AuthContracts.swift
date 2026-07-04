@@ -153,6 +153,28 @@ struct MeResponse: Decodable {
     let user: AuthUser
 }
 
+// MARK: - Profile editing (display name + avatar)
+
+/// Update the current user's profile. Mirrors `updateProfileSchema`. Fields are
+/// optional (a partial update); `JSONEncoder` drops `nil`, so send only what
+/// you're changing — the server leaves omitted fields untouched.
+struct UpdateProfileInput: Encodable {
+    var displayName: String?
+    var avatarUrl: String?
+}
+
+/// Longest a user-chosen display name may be. Mirrors `DISPLAY_NAME_MAX_LENGTH`.
+enum ProfileLimits {
+    static let displayNameMaxLength = 50
+}
+
+/// Response to a profile update or an avatar upload: the refreshed user.
+/// Mirrors `ProfileResponse`.
+struct ProfileResponse: Decodable {
+    let ok: Bool
+    let user: AuthUser
+}
+
 // MARK: - Account dashboard: devices & login history
 
 /// A registered client install for the current user. Mirrors `DeviceDTO`.
@@ -194,6 +216,8 @@ enum AuthRoutes {
     static let refresh = "/auth/refresh"
     static let logout = "/auth/logout"
     static let me = "/auth/me"
+    static let updateProfile = "/auth/profile"
+    static let avatar = "/auth/avatar"
     static let devices = "/auth/devices"
     static let pushToken = "/auth/devices/push-token"
     static let loginEvents = "/auth/login-events"

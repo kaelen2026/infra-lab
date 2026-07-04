@@ -1,4 +1,9 @@
 import { z } from "zod";
+// Avatars reuse the app's image-upload rules (accepted content types + size cap),
+// which live with the timeline contract — the single source of truth for "an
+// uploaded image". Importing the type here keeps avatar callers from reaching
+// into the timeline domain directly.
+import type { TimelineImageContentType } from "./timeline";
 
 /**
  * Auth contracts shared by the API and all four client SDKs (web / ios / android / harmony).
@@ -162,6 +167,35 @@ export interface RefreshResponse {
 
 // ── Response: current user ──────────────────────────────────────────────────────
 export interface MeResponse {
+  ok: true;
+  user: AuthUser;
+}
+
+// ── Request: update the current user's profile ──────────────────────────────────
+// Editing (display name + avatar) for the account screen. Both fields are optional
+// (a partial update): an omitted key leaves the field unchanged, an explicit `null`
+// clears it. The avatar image is normally set via the dedicated upload endpoint
+// (`AUTH_ROUTES.avatar`, which persists the file and returns the refreshed user);
+// this JSON path is for renaming and for clearing either field.
+/** Max length of a user-chosen display name. */
+export const DISPLAY_NAME_MAX_LENGTH = 50;
+
+/** A `/uploads/<name>` reference the server issued (same shape as timeline images). */
+const uploadedImageUrlSchema = z
+  .string()
+  .trim()
+  .regex(/^\/uploads\/[A-Za-z0-9_-]+\.[a-z0-9]+$/, "must be an uploaded image url");
+
+export const updateProfileSchema = z
+  .object({
+    displayName: z.string().trim().min(1).max(DISPLAY_NAME_MAX_LENGTH).nullable().optional(),
+    avatarUrl: uploadedImageUrlSchema.nullable().optional(),
+  })
+  .strict();
+export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
+
+/** Response to a profile update or an avatar upload: the refreshed user. */
+export interface ProfileResponse {
   ok: true;
   user: AuthUser;
 }
@@ -347,6 +381,8 @@ export const AUTH_ROUTES = {
   refresh: "/auth/refresh",
   logout: "/auth/logout",
   me: "/auth/me",
+  updateProfile: "/auth/profile",
+  avatar: "/auth/avatar",
   devices: "/auth/devices",
   pushToken: "/auth/devices/push-token",
   loginEvents: "/auth/login-events",
@@ -373,6 +409,14 @@ export interface AuthClient {
   /** No-op on web (cookie handles it); native rotates the refresh token. */
   refresh(): Promise<AuthTokens | null>;
   me(): Promise<AuthUser>;
+  /** Update the current user's display name / avatar; returns the refreshed user. */
+  updateProfile(input: UpdateProfileInput): Promise<AuthUser>;
+  /**
+   * Upload a new avatar image (multipart); the server persists it, sets it on the
+   * profile and returns the refreshed user. `contentType` must be one the upload
+   * endpoint accepts (see {@link TimelineImageContentType}).
+   */
+  uploadAvatar(bytes: Uint8Array, contentType: TimelineImageContentType): Promise<AuthUser>;
   /** Registered client installs for the current user (account dashboard). */
   listDevices(): Promise<DeviceDTO[]>;
   /** Recent OTP verification attempts for the current user (account dashboard). */
