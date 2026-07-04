@@ -1,5 +1,5 @@
 # The Xcode project is generated from project.yml by XcodeGen — never commit it.
-InfraAuth.xcodeproj/
+InfraLab.xcodeproj/
 *.xcworkspace/
 # Build output
 .build/

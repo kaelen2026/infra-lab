@@ -4,7 +4,7 @@
 
 补齐 Android 端的 **QR 跨端登录**:已登录的 Android App 扫描 web 端展示的登录二维码,
 在手机上确认后,该浏览器即以当前 Android 用户的身份登录。这是「Android 对齐 iOS」系列的
-一环——iOS 已有 `approveQrLogin` client 方法(见 `apps/ios/InfraAuth/Auth/AuthClient.swift`),
+一环——iOS 已有 `approveQrLogin` client 方法(见 `apps/ios/InfraLab/Auth/AuthClient.swift`),
 但**尚未接入扫码 UI**;Android 本次在提供同一 client 能力的同时,额外接入了可用的扫码入口。
 
 ## 流程(契约既有,未改动)

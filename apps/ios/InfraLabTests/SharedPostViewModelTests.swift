@@ -1,4 +1,4 @@
-@testable import InfraAuth
+@testable import InfraLab
 import XCTest
 
 /// Scriptable ``TimelineClient`` — only `getShared` matters for these tests.

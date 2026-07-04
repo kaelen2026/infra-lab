@@ -39,7 +39,7 @@ export interface HarmonySession {
 
 /**
  * Wire one {@link TokenStore} to a shared refresher + transport. Mirrors the
- * production wiring in iOS `InfraAuthApp`: one refresher/transport pair shared by
+ * production wiring in iOS `InfraLabApp`: one refresher/transport pair shared by
  * every client so concurrent `401`s collapse into a single token rotation.
  */
 export function createSession(baseUrl: string, store: TokenStore): HarmonySession {

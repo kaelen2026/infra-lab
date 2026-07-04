@@ -55,7 +55,7 @@ final class HTTPTimelineClient: TimelineClient {
 
     /// Convenience wiring for tests / standalone use: build a private transport +
     /// refresher over `session` and the auth ``TokenStore``. Production shares one
-    /// transport across every client (see `InfraAuthApp`).
+    /// transport across every client (see `InfraLabApp`).
     convenience init(baseURL: URL, store: TokenStore, session: URLSession = .shared) {
         let refresher = SessionRefresher(store: store) {
             try await AuthSession.rotateTokens(baseURL: baseURL, store: store, session: session)

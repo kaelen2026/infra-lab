@@ -4,7 +4,7 @@ import SwiftUI
 /// shared by a URLSession auth client and todo client against the dev API — into
 /// the auth, account and todo view models.
 @main
-struct InfraAuthApp: App {
+struct InfraLabApp: App {
     // Bridges APNS remote-notification callbacks into PushRegistration.
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
