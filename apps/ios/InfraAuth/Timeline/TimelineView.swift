@@ -112,13 +112,14 @@ struct TimelineListCard: View {
 
 /// One feed card. Content leads: an identity row (avatar + name, quiet relative
 /// time, overflow menu), then the text, then the image grid. Delete lives behind
-/// the ⋯ menu so the card face carries no destructive affordance.
+/// the ⋯ button so the card face carries no destructive affordance.
 struct TimelinePostCard: View {
     let post: TimelinePostDTO
     let pending: Bool
     let onRemove: () -> Void
 
     @EnvironmentObject private var auth: AuthViewModel
+    @State private var confirmingDelete = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -165,10 +166,12 @@ struct TimelinePostCard: View {
 
             Spacer(minLength: 8)
 
-            Menu {
-                Button(role: .destructive, action: onRemove) {
-                    Label("删除", systemImage: "trash")
-                }
+            // A confirmation dialog instead of a Menu: the single destructive
+            // action gets the standard bottom sheet (uniformly red, confirm
+            // step included) rather than a floating menu that inherits the
+            // app's orange tint on its icon.
+            Button {
+                confirmingDelete = true
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.subheadline)
@@ -178,6 +181,11 @@ struct TimelinePostCard: View {
             }
             .disabled(pending)
             .accessibilityLabel("更多操作")
+            .confirmationDialog("删除这条动态?", isPresented: $confirmingDelete,
+                                titleVisibility: .visible) {
+                Button("删除", role: .destructive, action: onRemove)
+                Button("取消", role: .cancel) {}
+            }
         }
     }
 
@@ -229,16 +237,21 @@ struct TimelineImageGrid: View {
         }
     }
 
+    // The image sits in an overlay of a Color.clear base so its scaled-to-fill
+    // size never leaks into layout — a bare `.fill` image reports the scaled
+    // width and pushes the grid row wider than the card.
     private func tile(_ image: TimelineImage, index: Int) -> some View {
-        CachedAsyncImage(url: image.absoluteURL(base: AppConfig.apiBaseURL)) {
-            ZStack {
-                DesignTokens.textSecondary.opacity(0.08)
-                ProgressView().tint(DesignTokens.textSecondary)
+        Color.clear
+            .overlay {
+                CachedAsyncImage(url: image.absoluteURL(base: AppConfig.apiBaseURL)) {
+                    ZStack {
+                        DesignTokens.textSecondary.opacity(0.08)
+                        ProgressView().tint(DesignTokens.textSecondary)
+                    }
+                }
             }
-        }
-        .frame(maxWidth: .infinity)
-        .contentShape(Rectangle())
-        .onTapGesture { viewer = ImageViewerContext(images: images, startIndex: index) }
+            .contentShape(Rectangle())
+            .onTapGesture { viewer = ImageViewerContext(images: images, startIndex: index) }
     }
 }
 
