@@ -65,6 +65,12 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         API_BASE_URL: $(API_BASE_URL)
+        # Custom scheme for deep links (mirror of TIMELINE_APP_SCHEME in
+        # @infra/shared): the h5 share landing opens infralab://timeline/<id>.
+        CFBundleURLTypes:
+          - CFBundleURLName: dev.w3ctech.infralab
+            CFBundleURLSchemes:
+              - infralab
         # Camera access for the timeline composer (taking a photo to publish) and
         # the QR login scanner (account sheet). Library picking uses PhotosPicker
         # (PHPicker, out-of-process), which needs no permission, so only the

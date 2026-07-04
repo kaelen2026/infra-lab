@@ -8,7 +8,7 @@ import {
   createNotificationRoutes,
   type PushTargetRepository,
 } from "../src/routes/notification.routes.js";
-import type { ApnsClient, ApnsSendResult } from "../src/services/apns-client.js";
+import type { ApnsClient, ApnsPayload, ApnsSendResult } from "../src/services/apns-client.js";
 
 const readJson = (res: Response): Promise<any> => res.json() as Promise<any>;
 
@@ -23,10 +23,11 @@ class FakePushRepo implements PushTargetRepository {
   }
 }
 
-// APNS stub whose per-token result is scripted by the test.
-function fakeApns(results: Record<string, ApnsSendResult>): ApnsClient {
+// APNS stub whose per-token result is scripted by the test; records each payload.
+function fakeApns(results: Record<string, ApnsSendResult>, sent: ApnsPayload[]): ApnsClient {
   return {
-    async send(deviceToken) {
+    async send(deviceToken, payload) {
+      sent.push(payload);
       return results[deviceToken] ?? { ok: true };
     },
   };
@@ -40,8 +41,9 @@ function setup(opts: {
   const push = new FakePushRepo();
   push.tokens = opts.tokens ?? [];
   const current: { id: string | null } = { id: opts.userId === undefined ? "user_a" : opts.userId };
+  const sent: ApnsPayload[] = [];
   const routes = createNotificationRoutes({
-    apns: fakeApns(opts.results ?? {}),
+    apns: fakeApns(opts.results ?? {}, sent),
     push,
     requireUser: async () => (current.id ? { id: current.id } : null),
   });
@@ -50,7 +52,7 @@ function setup(opts: {
   const app = new Hono<ObsEnv>();
   app.use("*", observability(createLogger({ level: "error" })));
   app.route("/", routes);
-  return { app, push, current };
+  return { app, push, current, sent };
 }
 
 function post(app: Hono<ObsEnv>, body?: unknown) {
@@ -95,6 +97,21 @@ describe("POST /notifications/test", () => {
     const res = await post(app);
     expect(await readJson(res)).toEqual({ ok: true, devices: 2, sent: 1, cleared: 1 });
     expect(push.cleared).toEqual(["dead"]);
+  });
+
+  it("passes an optional deep link through as the custom `link` data key", async () => {
+    const { app, sent } = setup({ tokens: [{ deviceId: "d1", pushToken: "t1" }] });
+    const res = await post(app, { title: "Ping", body: "Pong", link: "infralab://timeline/p1" });
+    expect(res.status).toBe(200);
+    expect(sent).toEqual([
+      { title: "Ping", body: "Pong", data: { link: "infralab://timeline/p1" } },
+    ]);
+  });
+
+  it("omits the data key entirely when no link is provided", async () => {
+    const { app, sent } = setup({ tokens: [{ deviceId: "d1", pushToken: "t1" }] });
+    await post(app, { title: "Ping", body: "Pong" });
+    expect(sent).toEqual([{ title: "Ping", body: "Pong" }]);
   });
 
   it("does not clear a token on a transient failure", async () => {

@@ -13,7 +13,10 @@ enum AppConfig {
            let url = URL(string: raw) {
             return url
         }
-        return URL(string: "http://localhost:3001")!
+        guard let fallback = URL(string: "http://localhost:3001") else {
+            preconditionFailure("constant localhost url must parse")
+        }
+        return fallback
     }()
 }
 

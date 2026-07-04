@@ -51,9 +51,13 @@ export function createNotificationRoutes(deps: NotificationRouteDeps): Hono<ObsE
     if (!user) return c.json({ ok: false, code: "UNAUTHORIZED" }, 401);
 
     const raw = await readJson(c);
+    // Optional deep link the app opens on tap (e.g. `infralab://timeline/<id>`),
+    // delivered as the custom `link` key alongside `aps` (see `ApnsPayload.data`).
+    const link = field(raw, "link", "", 512);
     const payload = {
       title: field(raw, "title", "Test", 128),
       body: field(raw, "body", "Hello from infra-lab 👋", 512),
+      ...(link ? { data: { link } } : {}),
     };
 
     const targets = await push.listPushTokens(user.id, "ios");

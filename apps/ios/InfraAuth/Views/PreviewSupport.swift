@@ -50,6 +50,7 @@ final class PreviewTimelineClient: TimelineClient {
         .preview(99, text: text, imageCount: images.count)
     }
     func remove(id: String) async throws {}
+    func getShared(id: String) async throws -> TimelinePostDTO { .preview(1, imageCount: 2) }
 }
 
 /// Canned ``HealthClient`` for SwiftUI previews — returns a fixed status, no network.

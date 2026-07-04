@@ -12,6 +12,10 @@ protocol TimelineClient {
     func uploadImage(_ data: Data, contentType: TimelineImageContentType) async throws -> TimelineImage
     func create(text: String, images: [TimelineImage]) async throws -> TimelinePostDTO
     func remove(id: String) async throws
+    /// Read one post through the PUBLIC share endpoint (no auth) — backs the
+    /// `infralab://timeline/<id>` deep link. Throws ``TimelineClientError`` with
+    /// `.postNotFound` when the id is unknown.
+    func getShared(id: String) async throws -> TimelinePostDTO
 }
 
 extension TimelineClient {
@@ -86,6 +90,13 @@ final class HTTPTimelineClient: TimelineClient {
         let _: OkResponse = try await send(
             TimelineRoutes.item(id), method: "DELETE", body: Optional<CreateTimelinePostInput>.none
         )
+    }
+
+    func getShared(id: String) async throws -> TimelinePostDTO {
+        let res: TimelinePostResponse = try await send(
+            TimelineRoutes.share(id), method: "GET", body: Optional<CreateTimelinePostInput>.none
+        )
+        return res.post
     }
 
     func uploadImage(_ data: Data, contentType: TimelineImageContentType) async throws -> TimelineImage {

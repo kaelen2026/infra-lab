@@ -15,6 +15,11 @@ struct InfraAuthApp: App {
     @StateObject private var timeline: TimelineViewModel
     @StateObject private var serverStatus: ServerStatusMonitor
     @StateObject private var appearance = AppearanceStore()
+    // Deep links arrive from onOpenURL and the notification delegate; the router
+    // is the shared funnel and this app observes it to present the target UI.
+    @StateObject private var deepLink = DeepLinkRouter.shared
+    /// Kept beyond init so the deep-link sheet can build its view model.
+    private let timelineClient: TimelineClient
 
     init() {
         let store = KeychainTokenStore()
@@ -34,6 +39,7 @@ struct InfraAuthApp: App {
         let todoClient = HTTPTodoClient(baseURL: baseURL, transport: transport)
         let timelineClient = HTTPTimelineClient(baseURL: baseURL, transport: transport)
         let healthClient = HTTPHealthClient(baseURL: baseURL)
+        self.timelineClient = timelineClient
         _auth = StateObject(wrappedValue: AuthViewModel(client: authClient))
         _account = StateObject(wrappedValue: AccountViewModel(client: authClient))
         _qrApprove = StateObject(wrappedValue: QrApproveViewModel(client: authClient))
@@ -60,6 +66,13 @@ struct InfraAuthApp: App {
                 .environmentObject(serverStatus)
                 .environmentObject(appearance)
                 .preferredColorScheme(appearance.preference.colorScheme)
+                // infralab://timeline/<id> — from the h5 share landing's
+                // "在 app 中查看" or any other surface building timelineAppLink.
+                .onOpenURL { deepLink.open($0) }
+                .sheet(item: $deepLink.sharedPost) { route in
+                    SharedPostView(postId: route.id, client: timelineClient)
+                        .preferredColorScheme(appearance.preference.colorScheme)
+                }
         }
     }
 }

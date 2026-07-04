@@ -96,6 +96,10 @@ private final class StubAuthClient: AuthClient {
     }
     func refresh() async throws -> AuthTokens? { nil }
     func me() async throws -> AuthUser { .stub }
+    func updateProfile(displayName: String) async throws -> AuthUser { .stub }
+    func uploadAvatar(_ data: Data, contentType: TimelineImageContentType) async throws -> AuthUser {
+        .stub
+    }
     func listDevices() async throws -> [DeviceDTO] { [] }
     func updatePushToken(deviceId: String, pushToken: String) async throws {}
     func listLoginEvents() async throws -> [LoginEventDTO] { [] }

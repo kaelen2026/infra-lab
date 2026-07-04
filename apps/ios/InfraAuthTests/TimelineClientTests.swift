@@ -2,6 +2,8 @@
 import XCTest
 
 final class TimelineClientTests: XCTestCase {
+    // Constant test fixture — force-unwrap is tolerated in tests only.
+    // swiftlint:disable:next force_unwrapping
     private let baseURL = URL(string: "http://localhost:3001")!
 
     override func tearDown() {
@@ -119,6 +121,36 @@ final class TimelineClientTests: XCTestCase {
         }
         do {
             try await makeClient().remove(id: "missing")
+            XCTFail("expected failure")
+        } catch let error as TimelineClientError {
+            XCTAssertEqual(error.code, .postNotFound)
+        } catch {
+            XCTFail("unexpected error: \(error)")
+        }
+    }
+
+    func testGetSharedHitsPublicPathAndParsesPost() async throws {
+        var seenURL: URL?
+        MockURLProtocol.handler = { request in
+            seenURL = request.url
+            return (200, self.json([
+                "ok": true,
+                "post": self.postBody(id: "p5", text: "共享的动态", images: ["/uploads/s.jpg"])
+            ]))
+        }
+        // No token seeded: the share endpoint is public, the request must still work.
+        let post = try await makeClient().getShared(id: "p5")
+        XCTAssertEqual(post.id, "p5")
+        XCTAssertEqual(post.images.first?.url, "/uploads/s.jpg")
+        XCTAssertEqual(seenURL?.path, "/timeline/share/p5")
+    }
+
+    func testGetSharedNotFoundMapsErrorCode() async {
+        MockURLProtocol.handler = { _ in
+            (404, self.json(["ok": false, "code": "TIMELINE_POST_NOT_FOUND"]))
+        }
+        do {
+            _ = try await makeClient().getShared(id: "missing")
             XCTFail("expected failure")
         } catch let error as TimelineClientError {
             XCTAssertEqual(error.code, .postNotFound)

@@ -38,7 +38,9 @@ struct ServerStatusBanner: View {
                 .font(.footnote.weight(.medium))
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 8)
-            Button(action: { Task { await monitor.refresh() } }) {
+            Button {
+                Task { await monitor.refresh() }
+            } label: {
                 if monitor.checking {
                     ProgressView().controlSize(.mini).tint(tint)
                 } else {
