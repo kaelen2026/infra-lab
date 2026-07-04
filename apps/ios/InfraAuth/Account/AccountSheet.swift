@@ -8,6 +8,7 @@ import SwiftUI
 struct AccountSheet: View {
     @EnvironmentObject private var auth: AuthViewModel
     @EnvironmentObject private var account: AccountViewModel
+    @EnvironmentObject private var qrApprove: QrApproveViewModel
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -18,6 +19,7 @@ struct AccountSheet: View {
                         ProfileCard(user: user)
                     }
                     SessionCard()
+                    QrLoginCard(viewModel: qrApprove)
                     AppearanceCard()
                     DevicesCard(devices: account.devices, loading: account.loading)
                     LoginEventsCard(events: account.events, loading: account.loading)
@@ -277,6 +279,7 @@ struct LoginEventsCard: View {
     AccountSheet()
         .environmentObject(AuthViewModel(client: PreviewAuthClient()))
         .environmentObject(AccountViewModel(client: PreviewAuthClient()))
+        .environmentObject(QrApproveViewModel(client: PreviewAuthClient()))
         .environmentObject(AppearanceStore())
 }
 #endif

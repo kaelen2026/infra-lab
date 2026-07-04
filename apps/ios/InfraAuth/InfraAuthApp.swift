@@ -10,6 +10,7 @@ struct InfraAuthApp: App {
 
     @StateObject private var auth: AuthViewModel
     @StateObject private var account: AccountViewModel
+    @StateObject private var qrApprove: QrApproveViewModel
     @StateObject private var todos: TodoViewModel
     @StateObject private var timeline: TimelineViewModel
     @StateObject private var serverStatus: ServerStatusMonitor
@@ -35,6 +36,7 @@ struct InfraAuthApp: App {
         let healthClient = HTTPHealthClient(baseURL: baseURL)
         _auth = StateObject(wrappedValue: AuthViewModel(client: authClient))
         _account = StateObject(wrappedValue: AccountViewModel(client: authClient))
+        _qrApprove = StateObject(wrappedValue: QrApproveViewModel(client: authClient))
         _todos = StateObject(wrappedValue: TodoViewModel(client: todoClient))
         _timeline = StateObject(wrappedValue: TimelineViewModel(client: timelineClient))
         _serverStatus = StateObject(wrappedValue: ServerStatusMonitor(client: healthClient))
@@ -52,6 +54,7 @@ struct InfraAuthApp: App {
             RootView()
                 .environmentObject(auth)
                 .environmentObject(account)
+                .environmentObject(qrApprove)
                 .environmentObject(todos)
                 .environmentObject(timeline)
                 .environmentObject(serverStatus)
