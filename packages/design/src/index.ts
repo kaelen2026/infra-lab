@@ -8,4 +8,5 @@
  */
 
 export * from "./copy";
+export * from "./legal";
 export * from "./tokens";

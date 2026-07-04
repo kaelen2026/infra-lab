@@ -1,6 +1,7 @@
 "use client";
 
-import { OTP_LIMITS } from "@infra/shared";
+import { COPY } from "@infra/design";
+import { LEGAL_ROUTES, OTP_LIMITS } from "@infra/shared";
 import { QrCode } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -94,6 +95,23 @@ export default function AuthPage() {
           )}
 
           <p className="border-t pt-4 text-center text-xs leading-relaxed text-muted-foreground">
+            {COPY.legal.consentPrefix}
+            <Link
+              href={LEGAL_ROUTES.terms}
+              className="text-foreground underline underline-offset-2"
+            >
+              {COPY.legal.termsLabel}
+            </Link>
+            {COPY.legal.and}
+            <Link
+              href={LEGAL_ROUTES.privacy}
+              className="text-foreground underline underline-offset-2"
+            >
+              {COPY.legal.privacyLabel}
+            </Link>
+          </p>
+
+          <p className="text-center text-xs leading-relaxed text-muted-foreground">
             原生客户端（iOS / Android / HarmonyOS）将改用 Bearer accessToken + refreshToken。
           </p>
         </CardContent>

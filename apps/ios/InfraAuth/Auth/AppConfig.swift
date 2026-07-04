@@ -18,6 +18,21 @@ enum AppConfig {
         }
         return fallback
     }()
+
+    /// Origin of the h5 share landing (`/t/:id`) that a post's share sheet hands
+    /// out. Defaults to the h5 dev server (`apps/h5`, :3002); staging/prod builds
+    /// override it via `SHARE_BASE_URL`, same mechanism as `API_BASE_URL`.
+    static let shareBaseURL: URL = {
+        if let raw = Bundle.main.object(forInfoDictionaryKey: "SHARE_BASE_URL") as? String,
+           !raw.isEmpty,
+           let url = URL(string: raw) {
+            return url
+        }
+        guard let fallback = URL(string: "http://localhost:3002") else {
+            preconditionFailure("constant localhost url must parse")
+        }
+        return fallback
+    }()
 }
 
 /// Collects this install's device metadata for the `device` field of

@@ -160,6 +160,16 @@ export function timelineSharePath(id: string): string {
   return `/timeline/share/${id}`;
 }
 
+/**
+ * Path of the h5 share landing for a post (the `/t/:id` route in `apps/h5`).
+ * Combine with the h5 deployment origin to get the url a user shares outward;
+ * the landing itself reads the post via {@link timelineSharePath}. Native
+ * clients mirror this in their contract files — keep them in lockstep.
+ */
+export function timelineShareLandingPath(id: string): string {
+  return `/t/${id}`;
+}
+
 // ── App deep link (shared so every surface builds the same url) ─────────────────
 /** Custom URL scheme the native clients register to receive a shared post. */
 export const TIMELINE_APP_SCHEME = "infralab";

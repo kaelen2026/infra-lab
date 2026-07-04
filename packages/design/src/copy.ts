@@ -79,6 +79,19 @@ export const COPY = {
     loadError: "加载失败，请稍后再试。",
   },
 
+  /**
+   * Login-screen consent line + labels linking to the legal documents. Rendered as
+   * `{consentPrefix}《用户服务协议》{and}《隐私协议》` with the two labels as links.
+   * h5/web-only surface (like `timelineShare`) — NOT emitted to the native clients,
+   * which reference the pages by url via `@infra/shared` `legalUrl` instead.
+   */
+  legal: {
+    consentPrefix: "登录 / 注册即代表你已阅读并同意",
+    and: "和",
+    termsLabel: "《用户服务协议》",
+    privacyLabel: "《隐私协议》",
+  },
+
   errors: {
     messages: ERROR_MESSAGES,
     network: "网络异常，请稍后再试。",

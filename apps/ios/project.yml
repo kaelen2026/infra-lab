@@ -27,6 +27,10 @@ settings:
     # http://localhost:3001. Release builds pass it via `make ... API_URL=…`
     # so no machine-specific address is ever committed.
     API_BASE_URL: ""
+    # Origin of the h5 share landing (`/t/:id`), substituted into Info.plist's
+    # SHARE_BASE_URL (see AppConfig.swift). Empty → http://localhost:3002, the
+    # h5 dev server.
+    SHARE_BASE_URL: ""
 
 targets:
   InfraAuth:
@@ -49,7 +53,7 @@ targets:
     info:
       path: InfraAuth/Info.plist
       properties:
-        CFBundleDisplayName: Infra Auth
+        CFBundleDisplayName: Infra Lab
         # Segment A — the system static launch window. Paint it with the
         # LaunchBackground colorset (paper #FCFAF4 / charcoal #13110F) so a dark
         # cold-start never flashes white before the SwiftUI splash takes over.
@@ -65,6 +69,7 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         API_BASE_URL: $(API_BASE_URL)
+        SHARE_BASE_URL: $(SHARE_BASE_URL)
         # Custom scheme for deep links (mirror of TIMELINE_APP_SCHEME in
         # @infra/shared): the h5 share landing opens infralab://timeline/<id>.
         CFBundleURLTypes:
