@@ -70,10 +70,11 @@ targets:
           - UIInterfaceOrientationLandscapeRight
         API_BASE_URL: $(API_BASE_URL)
         SHARE_BASE_URL: $(SHARE_BASE_URL)
-        # Camera access for the timeline composer (taking a photo to publish).
-        # Library picking uses PhotosPicker (PHPicker, out-of-process), which needs
-        # no permission, so only the camera usage string is required.
-        NSCameraUsageDescription: 拍照以在动态中发布图片。
+        # Camera access for the timeline composer (taking a photo to publish) and
+        # the QR login scanner (account sheet). Library picking uses PhotosPicker
+        # (PHPicker, out-of-process), which needs no permission, so only the
+        # camera usage string is required.
+        NSCameraUsageDescription: 拍照以在动态中发布图片，或扫描网页端的登录二维码。
         # Lab app: the API is a dev server reached over cleartext HTTP
         # (localhost or a LAN IP via API_BASE_URL), so allow arbitrary loads.
         # Distribution is TestFlight-only; revisit before any App Store release.

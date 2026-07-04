@@ -17,13 +17,21 @@ import {
   type Platform,
   refreshSchema,
   requestOtpSchema,
+  TIMELINE_IMAGE_CONTENT_TYPES,
+  TIMELINE_IMAGE_MAX_BYTES,
+  type TimelineImageContentType,
   type UserRole,
+  updateProfileSchema,
   updatePushTokenSchema,
   verifyOtpSchema,
 } from "@infra/shared";
 import { type Context, Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { ObsEnv } from "../observability/middleware.js";
+// The avatar endpoint persists an uploaded image through the same port the
+// timeline uses — one image store for the whole app; only the port type is
+// borrowed here (a type-only import, no runtime coupling).
+import type { ImageStore } from "./timeline.routes.js";
 
 // ── Ports the routes depend on (implemented in src/services with db + better-auth) ──
 export interface UserRecord {
@@ -42,6 +50,15 @@ export interface UserRepository {
   findById(id: string): Promise<UserRecord | null>;
   /** Creates the user row AND its profile row in one transaction. */
   createWithProfile(phone: string): Promise<UserRecord>;
+  /**
+   * Update this user's profile row (display name / avatar). Only the keys present
+   * in `patch` change; `null` clears a field. Returns the refreshed user, or
+   * `null` when the user no longer exists.
+   */
+  updateProfile(
+    userId: string,
+    patch: { displayName?: string | null; avatarUrl?: string | null },
+  ): Promise<UserRecord | null>;
   recordDevice(userId: string, device: DeviceInfo): Promise<void>;
   recordLoginEvent(event: {
     /** `null` for failed attempts on a phone with no existing account. */
@@ -108,6 +125,8 @@ export interface AuthRouteDeps {
   otp: OtpService;
   users: UserRepository;
   sessions: SessionService;
+  /** Persists uploaded avatar bytes and serves them back (shared with timeline). */
+  images: ImageStore;
   /** Drives the CLI browser-assisted login (OAuth device flow). */
   cliDeviceFlow: CliDeviceFlowService;
   /** Deliver the code via your SMS provider. The code is never persisted in plaintext. */
@@ -182,8 +201,12 @@ export function toAuthUser(user: UserRecord, isNew: boolean): AuthUser {
   };
 }
 
+function isUploadableImageType(value: string): value is TimelineImageContentType {
+  return (TIMELINE_IMAGE_CONTENT_TYPES as readonly string[]).includes(value);
+}
+
 export function createAuthRoutes(deps: AuthRouteDeps): Hono<ObsEnv> {
-  const { otp, users, sessions, cliDeviceFlow, sms, config } = deps;
+  const { otp, users, sessions, images, cliDeviceFlow, sms, config } = deps;
   const trustedProxyCount = config.trustedProxyCount ?? 0;
   const app = new Hono<ObsEnv>();
 
@@ -327,6 +350,60 @@ export function createAuthRoutes(deps: AuthRouteDeps): Hono<ObsEnv> {
     const user = await sessions.requireUser(c.req.raw.headers);
     if (!user) return fail(c, "UNAUTHORIZED");
     return c.json({ ok: true, user: toAuthUser(user, false) });
+  });
+
+  // ── Update this user's profile (display name / avatar) ───────────────────────
+  // PATCH is the canonical verb; PUT is registered too because HarmonyOS's
+  // NetworkKit has no PATCH (same shared handler, as the todo update does).
+  const updateProfile = async (c: Context) => {
+    const user = await sessions.requireUser(c.req.raw.headers);
+    if (!user) return fail(c, "UNAUTHORIZED");
+
+    const parsed = updateProfileSchema.safeParse(await readJson(c));
+    if (!parsed.success) return fail(c, "INVALID_REQUEST", { issues: parsed.error.issues });
+
+    const updated = await users.updateProfile(user.id, parsed.data);
+    // The session resolved a live user a line ago; a null here means it vanished
+    // mid-request — treat as unauthenticated rather than 500.
+    if (!updated) return fail(c, "UNAUTHORIZED");
+    return c.json({ ok: true, user: toAuthUser(updated, false) });
+  };
+  app.patch("/auth/profile", updateProfile);
+  app.put("/auth/profile", updateProfile);
+
+  // ── Upload + set this user's avatar (multipart/form-data, field `file`) ───────
+  // One call: persist the bytes through the shared image store, point the profile
+  // at the issued url, and return the refreshed user. Reuses the app-wide image
+  // rules (accepted types + size cap) so avatars and timeline images agree.
+  app.post("/auth/avatar", async (c) => {
+    const user = await sessions.requireUser(c.req.raw.headers);
+    if (!user) return fail(c, "UNAUTHORIZED");
+
+    let file: unknown;
+    try {
+      file = (await c.req.parseBody()).file;
+    } catch {
+      return fail(c, "INVALID_REQUEST");
+    }
+    if (!(file instanceof File)) return fail(c, "INVALID_REQUEST");
+    // These two image-validation codes live in the timeline error vocabulary, not
+    // the auth one, so they're returned directly (not via `fail`) with the same
+    // status timeline uses. Native clients validate size/type before upload for a
+    // precise message; this is defence in depth.
+    if (!isUploadableImageType(file.type)) {
+      return c.json({ ok: false, code: "UNSUPPORTED_IMAGE_TYPE" }, 415);
+    }
+
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    if (bytes.byteLength === 0) return fail(c, "INVALID_REQUEST");
+    if (bytes.byteLength > TIMELINE_IMAGE_MAX_BYTES) {
+      return c.json({ ok: false, code: "IMAGE_TOO_LARGE" }, 413);
+    }
+
+    const saved = await images.save({ bytes, contentType: file.type });
+    const updated = await users.updateProfile(user.id, { avatarUrl: saved.url });
+    if (!updated) return fail(c, "UNAUTHORIZED");
+    return c.json({ ok: true, user: toAuthUser(updated, false) });
   });
 
   // ── Account dashboard: this user's devices ───────────────────────────────────

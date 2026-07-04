@@ -8,6 +8,7 @@ import SwiftUI
 struct AccountSheet: View {
     @EnvironmentObject private var auth: AuthViewModel
     @EnvironmentObject private var account: AccountViewModel
+    @EnvironmentObject private var qrApprove: QrApproveViewModel
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -18,6 +19,7 @@ struct AccountSheet: View {
                         ProfileCard(user: user)
                     }
                     SessionCard()
+                    QrLoginCard(viewModel: qrApprove)
                     AppearanceCard()
                     DevicesCard(devices: account.devices, loading: account.loading)
                     LoginEventsCard(events: account.events, loading: account.loading)
@@ -56,13 +58,50 @@ struct AccountAvatarButton: View {
 
     var body: some View {
         Button(action: action) {
-            Text(user.map(monogram) ?? "··")
-                .font(.footnote.weight(.medium))
-                .foregroundStyle(DesignTokens.primaryForeground)
-                .frame(width: 30, height: 30)
-                .background(DesignTokens.primary, in: Circle())
+            Avatar(user: user, diameter: 30, font: .footnote.weight(.medium))
         }
         .accessibilityLabel("账户")
+    }
+}
+
+/// Circular avatar: the user's uploaded image when present, else a monogram on
+/// the brand color. Shared by the nav-bar button and the profile card so both
+/// render the same identity.
+struct Avatar: View {
+    let user: AuthUser?
+    let diameter: CGFloat
+    var font: Font = .title2.weight(.medium)
+
+    private var imageURL: URL? {
+        guard let raw = user?.avatarUrl, !raw.isEmpty else { return nil }
+        return URL(string: raw, relativeTo: AppConfig.apiBaseURL)?.absoluteURL
+    }
+
+    var body: some View {
+        Group {
+            if let imageURL {
+                AsyncImage(url: imageURL) { phase in
+                    switch phase {
+                    case let .success(image):
+                        image.resizable().scaledToFill()
+                    default:
+                        monogramView
+                    }
+                }
+            } else {
+                monogramView
+            }
+        }
+        .frame(width: diameter, height: diameter)
+        .clipShape(Circle())
+    }
+
+    private var monogramView: some View {
+        Text(user.map(monogram) ?? "··")
+            .font(font)
+            .foregroundStyle(DesignTokens.primaryForeground)
+            .frame(width: diameter, height: diameter)
+            .background(DesignTokens.primary, in: Circle())
     }
 }
 
@@ -75,23 +114,21 @@ private func monogram(_ user: AuthUser) -> String {
     return digits.isEmpty ? "··" : String(digits.suffix(2))
 }
 
-/// The hero of the account modal: who you are.
+/// The hero of the account modal: who you are, with an entry to edit it.
 struct ProfileCard: View {
     let user: AuthUser
 
     var body: some View {
         HStack(spacing: 16) {
-            Text(monogram(user))
-                .font(.title2.weight(.medium))
-                .foregroundStyle(DesignTokens.primaryForeground)
-                .frame(width: 56, height: 56)
-                .background(DesignTokens.primary, in: Circle())
+            Avatar(user: user, diameter: 56)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(user.displayName ?? "未命名用户")
                     .font(.title3.weight(.medium))
                     .foregroundStyle(DesignTokens.textPrimary)
-                Text(user.phone)
+                // Privacy-masked (138****8000) — the account owner already knows
+                // their number; masking keeps a shoulder-surfer from reading it.
+                Text(Format.maskedPhone(user.phone))
                     .font(.subheadline.monospaced())
                     .foregroundStyle(DesignTokens.textSecondary)
                 Text("注册于 \(Format.date(user.createdAt))")
@@ -100,6 +137,16 @@ struct ProfileCard: View {
                     .padding(.top, 2)
             }
             Spacer(minLength: 0)
+
+            NavigationLink {
+                EditProfileView(user: user)
+            } label: {
+                Image(systemName: "square.and.pencil")
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(DesignTokens.primary)
+                    .frame(width: 32, height: 32)
+            }
+            .accessibilityLabel("编辑资料")
         }
         .padding(20)
         .background(DesignTokens.surface,
@@ -232,6 +279,7 @@ struct LoginEventsCard: View {
     AccountSheet()
         .environmentObject(AuthViewModel(client: PreviewAuthClient()))
         .environmentObject(AccountViewModel(client: PreviewAuthClient()))
+        .environmentObject(QrApproveViewModel(client: PreviewAuthClient()))
         .environmentObject(AppearanceStore())
 }
 #endif

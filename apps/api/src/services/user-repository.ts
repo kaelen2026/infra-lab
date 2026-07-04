@@ -62,6 +62,18 @@ export function createUserRepository(db: Db): UserRepository {
       return { id, phone, displayName: null, avatarUrl: null, role: "user", createdAt: now };
     },
 
+    async updateProfile(userId, patch) {
+      const set: { displayName?: string | null; avatarUrl?: string | null; updatedAt: Date } = {
+        updatedAt: new Date(),
+      };
+      if (patch.displayName !== undefined) set.displayName = patch.displayName;
+      if (patch.avatarUrl !== undefined) set.avatarUrl = patch.avatarUrl;
+      await db.update(profile).set(set).where(eq(profile.userId, userId));
+      // Re-read through the same join the rest of the repo uses so the caller gets
+      // a consistent UserRecord (or null if the user disappeared).
+      return loadById(userId);
+    },
+
     async recordDevice(userId, info: DeviceInfo) {
       await db
         .insert(deviceTable)

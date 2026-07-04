@@ -58,6 +58,21 @@ enum Format {
         return "\(year)年\(month)月\(day)日"
     }
 
+    /// Privacy-masked phone for display: keep the first 3 and last 4 digits,
+    /// hide the middle (e.g. `138****8000`). Works on the national number — a
+    /// leading `+` and, for the primary market, a `+86` country code are dropped
+    /// first so a CN number reads naturally. Falls back to the raw value when it's
+    /// too short to mask meaningfully.
+    static func maskedPhone(_ phone: String) -> String {
+        var digits = phone.hasPrefix("+") ? String(phone.dropFirst()) : phone
+        // Strip the CN country code so 11-digit mobiles render as 138****8000.
+        if digits.hasPrefix("86"), digits.count > 9 {
+            digits = String(digits.dropFirst(2))
+        }
+        guard digits.count >= 7, digits.allSatisfy(\.isNumber) else { return phone }
+        return "\(digits.prefix(3))****\(digits.suffix(4))"
+    }
+
     static func platformLabel(_ platform: Platform) -> String {
         switch platform {
         case .web: return "Web"

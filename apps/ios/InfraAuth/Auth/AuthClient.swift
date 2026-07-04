@@ -9,6 +9,11 @@ protocol AuthClient {
     /// Reads the Keychain refresh token and rotates it; nil when none is stored.
     func refresh() async throws -> AuthTokens?
     func me() async throws -> AuthUser
+    /// Update the current user's display name; returns the refreshed user.
+    func updateProfile(displayName: String) async throws -> AuthUser
+    /// Upload a new avatar image (multipart); the server persists it, sets it on
+    /// the profile and returns the refreshed user.
+    func uploadAvatar(_ data: Data, contentType: TimelineImageContentType) async throws -> AuthUser
     /// Registered client installs for the current user (account dashboard).
     func listDevices() async throws -> [DeviceDTO]
     /// Update this device's APNS push token (acquired asynchronously after login).
@@ -85,6 +90,60 @@ final class HTTPAuthClient: AuthClient {
         return res.user
     }
 
+    func updateProfile(displayName: String) async throws -> AuthUser {
+        let input = UpdateProfileInput(displayName: displayName, avatarUrl: nil)
+        let res: ProfileResponse = try await send(AuthRoutes.updateProfile, method: "PATCH", body: input)
+        return res.user
+    }
+
+    func uploadAvatar(_ data: Data, contentType: TimelineImageContentType) async throws -> AuthUser {
+        // multipart/form-data with a single `file` part — same shape the timeline
+        // image upload uses, so the server parses both identically.
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var body = Data()
+        body.appendString("--\(boundary)\r\n")
+        body.appendString(
+            "Content-Disposition: form-data; name=\"file\"; filename=\"avatar.\(contentType.fileExtension)\"\r\n"
+        )
+        body.appendString("Content-Type: \(contentType.rawValue)\r\n\r\n")
+        body.append(data)
+        body.appendString("\r\n--\(boundary)--\r\n")
+        let payload = body
+
+        let responseData: Data
+        let http: HTTPURLResponse
+        do {
+            (responseData, http) = try await transport.send {
+                var request = URLRequest(url: self.baseURL.appendingPathComponent(AuthRoutes.avatar))
+                request.httpMethod = "POST"
+                request.setValue(
+                    "multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type"
+                )
+                request.httpBody = payload
+                return request
+            }
+        } catch {
+            throw AuthClientError.transport(error)
+        }
+
+        guard (200..<300).contains(http.statusCode) else {
+            let parsed = try? decoder.decode(AuthErrorBody.self, from: responseData)
+            throw AuthClientError.http(
+                status: http.statusCode,
+                code: parsed?.code ?? .unknown,
+                message: parsed?.message,
+                retryAfter: parsed?.retryAfter,
+                remainingAttempts: parsed?.remainingAttempts
+            )
+        }
+
+        do {
+            return try decoder.decode(ProfileResponse.self, from: responseData).user
+        } catch {
+            throw AuthClientError.decoding(error)
+        }
+    }
+
     func listDevices() async throws -> [DeviceDTO] {
         let res: DevicesResponse = try await send(AuthRoutes.devices, method: "GET",
                                                   body: Optional<RefreshInput>.none)
@@ -154,5 +213,13 @@ final class HTTPAuthClient: AuthClient {
         } catch {
             throw AuthClientError.decoding(error)
         }
+    }
+}
+
+private extension Data {
+    /// Append a UTF-8 string; drops it silently if it somehow can't encode
+    /// (never happens for the ASCII multipart preamble) — avoids a force-unwrap.
+    mutating func appendString(_ string: String) {
+        if let encoded = string.data(using: .utf8) { append(encoded) }
     }
 }
