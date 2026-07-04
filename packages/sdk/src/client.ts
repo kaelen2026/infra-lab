@@ -24,6 +24,7 @@ import {
   type LoginEventDTO,
   type LoginEventsResponse,
   type Platform,
+  type ProfileResponse,
   type QrLoginClient,
   type QrLoginStatus,
   type QrLoginStatusQuery,
@@ -48,6 +49,7 @@ import {
   timelinePostPath,
   timelineSharePath,
   todoPath,
+  type UpdateProfileInput,
   type UpdateTodoInput,
   type UserRole,
   type VerifyOtpInput,
@@ -118,14 +120,20 @@ export function createAuthClient(options: CreateAuthClientOptions): AuthClient {
   const store = options.tokens ?? noopTokenStore;
   const isWeb = options.platform === "web";
 
-  async function request<T>(path: string, body?: unknown): Promise<T> {
-    const headers: Record<string, string> = { "content-type": "application/json" };
-    if (!isWeb) {
-      const t = await store.load();
-      if (t) headers.authorization = `${t.tokenType} ${t.accessToken}`;
-    }
+  /** Bearer header for native; web relies on the session cookie instead. */
+  async function authHeaders(): Promise<Record<string, string>> {
+    if (isWeb) return {};
+    const t = await store.load();
+    return t ? { authorization: `${t.tokenType} ${t.accessToken}` } : {};
+  }
+
+  async function request<T>(path: string, body?: unknown, method?: string): Promise<T> {
+    const headers: Record<string, string> = {
+      "content-type": "application/json",
+      ...(await authHeaders()),
+    };
     const res = await doFetch(`${options.baseUrl}${path}`, {
-      method: body === undefined ? "GET" : "POST",
+      method: method ?? (body === undefined ? "GET" : "POST"),
       headers,
       credentials: isWeb ? "include" : "omit",
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -159,6 +167,33 @@ export function createAuthClient(options: CreateAuthClientOptions): AuthClient {
     async me(): Promise<AuthUser> {
       const res = await request<{ user: AuthUser }>(AUTH_ROUTES.me);
       return res.user;
+    },
+
+    async updateProfile(input: UpdateProfileInput): Promise<AuthUser> {
+      const res = await request<ProfileResponse>(AUTH_ROUTES.updateProfile, input, "PATCH");
+      return res.user;
+    },
+
+    async uploadAvatar(
+      bytes: Uint8Array,
+      contentType: TimelineImageContentType,
+    ): Promise<AuthUser> {
+      // multipart body: let fetch set the boundary — don't hand-set content-type.
+      // Copy into a fresh ArrayBuffer so the Blob part is a plain ArrayBuffer
+      // (a Uint8Array over ArrayBufferLike isn't assignable to BlobPart).
+      const buffer = new ArrayBuffer(bytes.byteLength);
+      new Uint8Array(buffer).set(bytes);
+      const form = new FormData();
+      form.append("file", new Blob([buffer], { type: contentType }), "avatar");
+      const res = await doFetch(`${options.baseUrl}${AUTH_ROUTES.avatar}`, {
+        method: "POST",
+        headers: await authHeaders(),
+        credentials: isWeb ? "include" : "omit",
+        body: form,
+      });
+      const json: unknown = await res.json().catch(() => ({}));
+      if (!res.ok) throw new HttpAuthError(res.status, json);
+      return (json as ProfileResponse).user;
     },
 
     async listDevices(): Promise<DeviceDTO[]> {

@@ -12,6 +12,7 @@ import {
   type UserRecord,
   type UserRepository,
 } from "../src/routes/auth.routes.js";
+import type { ImageStore } from "../src/routes/timeline.routes.js";
 
 const PHONE = "+8613800138000";
 const IP = "203.0.113.7";
@@ -50,6 +51,20 @@ class FakeUserRepository implements UserRepository {
     };
     this.users.set(id, rec);
     return rec;
+  }
+  async updateProfile(
+    userId: string,
+    patch: { displayName?: string | null; avatarUrl?: string | null },
+  ): Promise<UserRecord | null> {
+    const rec = this.users.get(userId);
+    if (!rec) return null;
+    const next: UserRecord = {
+      ...rec,
+      ...(patch.displayName !== undefined ? { displayName: patch.displayName } : {}),
+      ...(patch.avatarUrl !== undefined ? { avatarUrl: patch.avatarUrl } : {}),
+    };
+    this.users.set(userId, next);
+    return next;
   }
   async recordDevice(userId: string, device: DeviceInfo): Promise<void> {
     this.devices.push({ userId, device });
@@ -172,6 +187,26 @@ class FakeSessionService implements SessionService {
   }
 }
 
+// ── In-memory image store ────────────────────────────────────────────────────
+// Enough for the avatar endpoint: hand back a deterministic `/uploads/<n>.<ext>`
+// url and remember the bytes so assertions can inspect what was saved.
+class FakeImageStore implements ImageStore {
+  saved: Array<{ name: string; bytes: Uint8Array; contentType: string }> = [];
+  private seq = 0;
+  async save(input: { bytes: Uint8Array; contentType: string }) {
+    const ext = input.contentType === "image/png" ? "png" : "jpg";
+    const name = `img_${++this.seq}.${ext}`;
+    this.saved.push({ name, bytes: input.bytes, contentType: input.contentType });
+    return { name, url: `/uploads/${name}` };
+  }
+  async read() {
+    return null;
+  }
+  async has() {
+    return true;
+  }
+}
+
 function setup() {
   const store = new FakeRedis();
   const otp = createOtpService({ store, secret: "route-test-secret", now: store.now });
@@ -181,11 +216,13 @@ function setup() {
   });
   const users = new FakeUserRepository();
   const sessions = new FakeSessionService();
+  const images = new FakeImageStore();
   const sentSms: Array<{ phone: string; code: string }> = [];
   const routes = createAuthRoutes({
     otp,
     users,
     sessions,
+    images,
     cliDeviceFlow,
     sms: async (phone, code) => {
       sentSms.push({ phone, code });
@@ -197,7 +234,7 @@ function setup() {
   const app = new Hono<ObsEnv>();
   app.use("*", observability(createLogger({ level: "error" })));
   app.route("/", routes);
-  return { app, store, otp, users, sessions, sentSms, cliDeviceFlow };
+  return { app, store, otp, users, sessions, images, sentSms, cliDeviceFlow };
 }
 
 function post(
@@ -603,5 +640,109 @@ describe("CLI device flow", () => {
       await post(app, "/auth/cli/device/token", { deviceCode: start.deviceCode }),
     );
     expect(res).toEqual({ ok: false, status: "access_denied" });
+  });
+});
+
+describe("PATCH /auth/profile", () => {
+  it("401s when unauthenticated", async () => {
+    const { app } = setup();
+    const res = await app.request("/auth/profile", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ displayName: "小明" }),
+    });
+    expect(res.status).toBe(401);
+    expect((await readJson(res)).code).toBe("UNAUTHORIZED");
+  });
+
+  it("updates the display name and returns the refreshed user", async () => {
+    const { app, users, sessions } = setup();
+    sessions.currentUser = await users.createWithProfile(PHONE);
+    const res = await app.request("/auth/profile", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ displayName: "小明" }),
+    });
+    expect(res.status).toBe(200);
+    const body = await readJson(res);
+    expect(body.ok).toBe(true);
+    expect(body.user.displayName).toBe("小明");
+    // The change is persisted (a follow-up read sees it).
+    expect((await users.findById(sessions.currentUser.id))?.displayName).toBe("小明");
+  });
+
+  it("rejects a display name over the length cap with 400", async () => {
+    const { app, users, sessions } = setup();
+    sessions.currentUser = await users.createWithProfile(PHONE);
+    const res = await app.request("/auth/profile", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ displayName: "x".repeat(51) }),
+    });
+    expect(res.status).toBe(400);
+    expect((await readJson(res)).code).toBe("INVALID_REQUEST");
+  });
+
+  it("accepts PUT too (HarmonyOS NetworkKit has no PATCH)", async () => {
+    const { app, users, sessions } = setup();
+    sessions.currentUser = await users.createWithProfile(PHONE);
+    const res = await app.request("/auth/profile", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ displayName: "小红" }),
+    });
+    expect(res.status).toBe(200);
+    expect((await readJson(res)).user.displayName).toBe("小红");
+  });
+});
+
+describe("POST /auth/avatar", () => {
+  const upload = (app: ReturnType<typeof createAuthRoutes>, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return app.request("/auth/avatar", { method: "POST", body: form });
+  };
+
+  it("401s when unauthenticated", async () => {
+    const { app } = setup();
+    const res = await upload(
+      app,
+      new File([new Uint8Array([1, 2, 3])], "a.jpg", { type: "image/jpeg" }),
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it("saves the image, sets avatarUrl and returns the refreshed user", async () => {
+    const { app, users, sessions, images } = setup();
+    sessions.currentUser = await users.createWithProfile(PHONE);
+    const res = await upload(
+      app,
+      new File([new Uint8Array([1, 2, 3, 4])], "a.png", { type: "image/png" }),
+    );
+    expect(res.status).toBe(200);
+    const body = await readJson(res);
+    expect(body.ok).toBe(true);
+    expect(body.user.avatarUrl).toMatch(/^\/uploads\/img_\d+\.png$/);
+    expect(images.saved).toHaveLength(1);
+    // The url is persisted on the profile.
+    expect((await users.findById(sessions.currentUser.id))?.avatarUrl).toBe(body.user.avatarUrl);
+  });
+
+  it("rejects an unsupported content type with 415", async () => {
+    const { app, users, sessions } = setup();
+    sessions.currentUser = await users.createWithProfile(PHONE);
+    const res = await upload(app, new File([new Uint8Array([1])], "a.gif", { type: "image/gif" }));
+    expect(res.status).toBe(415);
+    expect((await readJson(res)).code).toBe("UNSUPPORTED_IMAGE_TYPE");
+  });
+
+  it("rejects an oversized image with 413", async () => {
+    const { app, users, sessions } = setup();
+    sessions.currentUser = await users.createWithProfile(PHONE);
+    // One byte over the 8 MiB cap.
+    const big = new Uint8Array(8 * 1024 * 1024 + 1);
+    const res = await upload(app, new File([big], "a.jpg", { type: "image/jpeg" }));
+    expect(res.status).toBe(413);
+    expect((await readJson(res)).code).toBe("IMAGE_TOO_LARGE");
   });
 });

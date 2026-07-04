@@ -22,9 +22,11 @@ identity model (Drizzle adapter + `bearer()` plugin) and session resolution.
   JWT from the Bearer header or the cookie — so **both Cookie and Bearer resolve through one guard**.
 
 **Routes** (`apps/api/src/routes/auth.routes.ts`): `/auth/otp/request`, `/auth/otp/verify`,
-`/auth/refresh`, `/auth/logout`, `/auth/me`, plus account-dashboard reads (`/auth/devices`,
-`/auth/login-events`), push-token registration (`POST /auth/devices/push-token`), the QR endpoints (below),
-and the CLI device-flow endpoints (below). Error codes map to HTTP status via `ERROR_STATUS`
+`/auth/refresh`, `/auth/logout`, `/auth/me`, profile editing (`PATCH`+`PUT /auth/profile` for the
+display name, `POST /auth/avatar` multipart upload — the latter persists the image through the same
+`ImageStore` the timeline uses and returns the refreshed user), plus account-dashboard reads
+(`/auth/devices`, `/auth/login-events`), push-token registration (`POST /auth/devices/push-token`),
+the QR endpoints (below), and the CLI device-flow endpoints (below). Error codes map to HTTP status via `ERROR_STATUS`
 (cooldown/limits → 429, LOCKED → 423, invalid/expired/unauthorized → 401). A new phone that verifies
 successfully auto-creates `user` + `profile` in one transaction. The `Platform` enum is
 `["web", "ios", "android", "harmony", "cli"]` — `cli` rides the native Bearer channel.

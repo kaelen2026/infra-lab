@@ -106,6 +106,12 @@ final class AuthViewModel: ObservableObject {
         }
     }
 
+    /// Replace the current user after a profile edit (rename / new avatar) so every
+    /// screen bound to `user` — the account sheet, the nav-bar avatar — refreshes.
+    func apply(_ updatedUser: AuthUser) {
+        user = updatedUser
+    }
+
     func changePhone() {
         errorMessage = nil
         code = ""
