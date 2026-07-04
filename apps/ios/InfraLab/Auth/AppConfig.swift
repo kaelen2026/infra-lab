@@ -13,7 +13,10 @@ enum AppConfig {
            let url = URL(string: raw) {
             return url
         }
-        return URL(string: "http://localhost:3001")!
+        guard let fallback = URL(string: "http://localhost:3001") else {
+            preconditionFailure("constant localhost url must parse")
+        }
+        return fallback
     }()
 
     /// Origin of the h5 share landing (`/t/:id`) that a post's share sheet hands
@@ -25,7 +28,10 @@ enum AppConfig {
            let url = URL(string: raw) {
             return url
         }
-        return URL(string: "http://localhost:3002")!
+        guard let fallback = URL(string: "http://localhost:3002") else {
+            preconditionFailure("constant localhost url must parse")
+        }
+        return fallback
     }()
 }
 

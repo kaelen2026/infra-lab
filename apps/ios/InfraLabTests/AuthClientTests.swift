@@ -2,6 +2,8 @@
 import XCTest
 
 final class AuthClientTests: XCTestCase {
+    // Constant test fixture — force-unwrap is tolerated in tests only.
+    // swiftlint:disable:next force_unwrapping
     private let baseURL = URL(string: "http://localhost:3001")!
 
     override func tearDown() {

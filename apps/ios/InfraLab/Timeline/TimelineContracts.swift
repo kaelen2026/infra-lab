@@ -114,10 +114,18 @@ enum TimelineRoutes {
     /// Path for a single post (delete).
     static func item(_ id: String) -> String { "/timeline/\(id)" }
 
+    /// Path for the PUBLIC single-post read that backs a share link. The random
+    /// UUID in the path is the capability; no auth is required.
+    static func share(_ id: String) -> String { "/timeline/share/\(id)" }
+
     /// Path of the h5 share landing for a post — mirrors
     /// `timelineShareLandingPath` in `@infra/shared`. Resolved against
     /// `AppConfig.shareBaseURL` to form the externally shareable url.
     static func shareLanding(_ id: String) -> String { "/t/\(id)" }
+
+    /// Custom URL scheme this app registers (mirror of `TIMELINE_APP_SCHEME`).
+    /// The h5 share landing deep-links `infralab://timeline/<id>` into the app.
+    static let appScheme = "infralab"
 }
 
 // MARK: - URL resolution
