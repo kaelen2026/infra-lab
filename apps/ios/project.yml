@@ -27,6 +27,10 @@ settings:
     # http://localhost:3001. Release builds pass it via `make ... API_URL=…`
     # so no machine-specific address is ever committed.
     API_BASE_URL: ""
+    # Origin of the h5 share landing (`/t/:id`), substituted into Info.plist's
+    # SHARE_BASE_URL (see AppConfig.swift). Empty → http://localhost:3002, the
+    # h5 dev server.
+    SHARE_BASE_URL: ""
 
 targets:
   InfraAuth:
@@ -65,6 +69,7 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         API_BASE_URL: $(API_BASE_URL)
+        SHARE_BASE_URL: $(SHARE_BASE_URL)
         # Camera access for the timeline composer (taking a photo to publish) and
         # the QR login scanner (account sheet). Library picking uses PhotosPicker
         # (PHPicker, out-of-process), which needs no permission, so only the

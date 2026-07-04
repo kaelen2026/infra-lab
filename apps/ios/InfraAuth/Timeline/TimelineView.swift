@@ -112,13 +112,14 @@ struct TimelineListCard: View {
 
 /// One feed card. Content leads: an identity row (avatar + name, quiet relative
 /// time, overflow menu), then the text, then the image grid. Delete lives behind
-/// the ⋯ menu so the card face carries no destructive affordance.
+/// the ⋯ button so the card face carries no destructive affordance.
 struct TimelinePostCard: View {
     let post: TimelinePostDTO
     let pending: Bool
     let onRemove: () -> Void
 
     @EnvironmentObject private var auth: AuthViewModel
+    @State private var confirmingDelete = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -165,10 +166,24 @@ struct TimelinePostCard: View {
 
             Spacer(minLength: 8)
 
-            Menu {
-                Button(role: .destructive, action: onRemove) {
-                    Label("删除", systemImage: "trash")
-                }
+            // Public share link: the h5 landing (`/t/:id`) backed by the
+            // unauthenticated share endpoint — anyone with the url can read
+            // this one post.
+            ShareLink(item: shareURL, preview: SharePreview(sharePreviewTitle)) {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.subheadline)
+                    .foregroundStyle(DesignTokens.textSecondary)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel("分享")
+
+            // A confirmation dialog instead of a Menu: the single destructive
+            // action gets the standard bottom sheet (uniformly red, confirm
+            // step included) rather than a floating menu that inherits the
+            // app's orange tint on its icon.
+            Button {
+                confirmingDelete = true
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.subheadline)
@@ -178,7 +193,25 @@ struct TimelinePostCard: View {
             }
             .disabled(pending)
             .accessibilityLabel("更多操作")
+            .confirmationDialog("删除这条动态?", isPresented: $confirmingDelete,
+                                titleVisibility: .visible) {
+                Button("删除", role: .destructive, action: onRemove)
+                Button("取消", role: .cancel) {}
+            }
         }
+    }
+
+    /// The externally shareable url: the h5 landing resolved against the
+    /// configured share origin.
+    private var shareURL: URL {
+        URL(string: TimelineRoutes.shareLanding(post.id), relativeTo: AppConfig.shareBaseURL)?
+            .absoluteURL ?? AppConfig.shareBaseURL
+    }
+
+    /// Share-sheet header: the post text, so the sheet reads as the post rather
+    /// than the bare host of the landing url.
+    private var sharePreviewTitle: String {
+        post.text.isEmpty ? "分享动态" : post.text
     }
 
     /// Avatar monogram: first glyph of a name, else the last two phone digits.
@@ -229,16 +262,21 @@ struct TimelineImageGrid: View {
         }
     }
 
+    // The image sits in an overlay of a Color.clear base so its scaled-to-fill
+    // size never leaks into layout — a bare `.fill` image reports the scaled
+    // width and pushes the grid row wider than the card.
     private func tile(_ image: TimelineImage, index: Int) -> some View {
-        CachedAsyncImage(url: image.absoluteURL(base: AppConfig.apiBaseURL)) {
-            ZStack {
-                DesignTokens.textSecondary.opacity(0.08)
-                ProgressView().tint(DesignTokens.textSecondary)
+        Color.clear
+            .overlay {
+                CachedAsyncImage(url: image.absoluteURL(base: AppConfig.apiBaseURL)) {
+                    ZStack {
+                        DesignTokens.textSecondary.opacity(0.08)
+                        ProgressView().tint(DesignTokens.textSecondary)
+                    }
+                }
             }
-        }
-        .frame(maxWidth: .infinity)
-        .contentShape(Rectangle())
-        .onTapGesture { viewer = ImageViewerContext(images: images, startIndex: index) }
+            .contentShape(Rectangle())
+            .onTapGesture { viewer = ImageViewerContext(images: images, startIndex: index) }
     }
 }
 

@@ -33,6 +33,8 @@
 	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>拍照以在动态中发布图片，或扫描网页端的登录二维码。</string>
+	<key>SHARE_BASE_URL</key>
+	<string>$(SHARE_BASE_URL)</string>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>
