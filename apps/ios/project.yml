@@ -53,7 +53,7 @@ targets:
     info:
       path: InfraAuth/Info.plist
       properties:
-        CFBundleDisplayName: Infra Auth
+        CFBundleDisplayName: Infra Lab
         # Segment A — the system static launch window. Paint it with the
         # LaunchBackground colorset (paper #FCFAF4 / charcoal #13110F) so a dark
         # cold-start never flashes white before the SwiftUI splash takes over.
