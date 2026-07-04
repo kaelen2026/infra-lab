@@ -1,7 +1,7 @@
 import { COPY } from "@infra/design";
-import { OTP_LIMITS } from "@infra/shared";
+import { LEGAL_ROUTES, OTP_LIMITS } from "@infra/shared";
 import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useSession } from "@/features/session";
@@ -85,7 +85,14 @@ export function AuthPage() {
       </div>
 
       <p className="mx-auto max-w-sm pt-6 text-center text-xs leading-relaxed text-muted-foreground">
-        {COPY.footer}
+        {COPY.legal.consentPrefix}
+        <Link to={LEGAL_ROUTES.terms} className="text-foreground underline underline-offset-2">
+          {COPY.legal.termsLabel}
+        </Link>
+        {COPY.legal.and}
+        <Link to={LEGAL_ROUTES.privacy} className="text-foreground underline underline-offset-2">
+          {COPY.legal.privacyLabel}
+        </Link>
       </p>
     </main>
   );
