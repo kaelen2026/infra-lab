@@ -169,7 +169,7 @@ struct TimelinePostCard: View {
             // Public share link: the h5 landing (`/t/:id`) backed by the
             // unauthenticated share endpoint — anyone with the url can read
             // this one post.
-            ShareLink(item: shareURL) {
+            ShareLink(item: shareURL, preview: SharePreview(sharePreviewTitle)) {
                 Image(systemName: "square.and.arrow.up")
                     .font(.subheadline)
                     .foregroundStyle(DesignTokens.textSecondary)
@@ -206,6 +206,12 @@ struct TimelinePostCard: View {
     private var shareURL: URL {
         URL(string: TimelineRoutes.shareLanding(post.id), relativeTo: AppConfig.shareBaseURL)?
             .absoluteURL ?? AppConfig.shareBaseURL
+    }
+
+    /// Share-sheet header: the post text, so the sheet reads as the post rather
+    /// than the bare host of the landing url.
+    private var sharePreviewTitle: String {
+        post.text.isEmpty ? "分享动态" : post.text
     }
 
     /// Avatar monogram: first glyph of a name, else the last two phone digits.
