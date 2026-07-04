@@ -1,6 +1,6 @@
 # XcodeGen spec — regenerate the project with `xcodegen generate` (or `make project`).
 # The .xcodeproj is derived, so it is gitignored; this file is the source of truth.
-name: InfraAuth
+name: InfraLab
 options:
   bundleIdPrefix: dev.w3ctech.infralab
   deploymentTarget:
@@ -33,11 +33,11 @@ settings:
     SHARE_BASE_URL: ""
 
 targets:
-  InfraAuth:
+  InfraLab:
     type: application
     platform: iOS
     sources:
-      - path: InfraAuth
+      - path: InfraLab
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.w3ctech.infralab
@@ -49,9 +49,9 @@ targets:
         # Push Notifications capability (aps-environment). Simulator ignores it; a
         # device / TestFlight build needs a provisioning profile that carries the
         # Push Notifications entitlement (Automatic signing + DEVELOPMENT_TEAM).
-        CODE_SIGN_ENTITLEMENTS: InfraAuth/InfraAuth.entitlements
+        CODE_SIGN_ENTITLEMENTS: InfraLab/InfraLab.entitlements
     info:
-      path: InfraAuth/Info.plist
+      path: InfraLab/Info.plist
       properties:
         CFBundleDisplayName: Infra Lab
         # Segment A — the system static launch window. Paint it with the
@@ -85,22 +85,22 @@ targets:
         # builds skip the per-build encryption questionnaire.
         ITSAppUsesNonExemptEncryption: false
 
-  InfraAuthTests:
+  InfraLabTests:
     type: bundle.unit-test
     platform: iOS
     sources:
-      - path: InfraAuthTests
+      - path: InfraLabTests
     dependencies:
-      - target: InfraAuth
+      - target: InfraLab
     settings:
       base:
         GENERATE_INFOPLIST_FILE: true
 
 schemes:
-  InfraAuth:
+  InfraLab:
     build:
       targets:
-        InfraAuth: all
+        InfraLab: all
     test:
       targets:
-        - InfraAuthTests
+        - InfraLabTests

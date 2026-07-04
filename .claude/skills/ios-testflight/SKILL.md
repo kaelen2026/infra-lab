@@ -1,6 +1,6 @@
 ---
 name: ios-testflight
-description: Archive apps/ios (InfraAuth) into an .ipa and upload it to App Store Connect / TestFlight. Use when asked to 打包/出包/上传/发布 the iOS app, build an ipa, or push a TestFlight build.
+description: Archive apps/ios (InfraLab) into an .ipa and upload it to App Store Connect / TestFlight. Use when asked to 打包/出包/上传/发布 the iOS app, build an ipa, or push a TestFlight build.
 ---
 
 # iOS → App Store Connect (TestFlight)
@@ -27,7 +27,7 @@ credentials are injected on the `make` command line and **never committed**.
 4. Full Xcode (not just Command Line Tools: `xcode-select -p` should point into
    `Xcode.app`) and `xcodegen` (`brew install xcodegen`).
 5. An app icon in the asset catalog — App Store Connect rejects icon-less binaries
-   (ITMS-90022). If `InfraAuth` has no `AppIcon` yet, stop and tell the user.
+   (ITMS-90022). If `InfraLab` has no `AppIcon` yet, stop and tell the user.
 
 ## Inputs
 
@@ -45,7 +45,7 @@ credentials are injected on the `make` command line and **never committed**.
 ```bash
 cd apps/ios
 
-# Local .ipa only (lands at build/export/InfraAuth.ipa):
+# Local .ipa only (lands at build/export/InfraLab.ipa):
 make ipa TEAM_ID=<team> ASC_KEY_ID=<key> ASC_ISSUER_ID=<issuer>
 
 # Archive + upload to App Store Connect (TestFlight):
@@ -60,7 +60,7 @@ make upload TEAM_ID=<team> ASC_KEY_ID=<key> ASC_ISSUER_ID=<issuer>
 - Success looks like `EXPORT SUCCEEDED` plus an upload log ending without errors;
   the build then appears in App Store Connect → TestFlight after processing
   (a few minutes; Apple emails if processing rejects it).
-- The signed archive itself is `build/InfraAuth.xcarchive` (gitignored, as is the
+- The signed archive itself is `build/InfraLab.xcarchive` (gitignored, as is the
   whole `build/`).
 
 ## Troubleshooting

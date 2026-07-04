@@ -1,11 +1,11 @@
 # Convenience wrappers around XcodeGen + xcodebuild for the iOS app.
-SCHEME = InfraAuth
+SCHEME = InfraLab
 DESTINATION ?= platform=iOS Simulator,name=iPhone 17 Pro
 
 # Release / TestFlight knobs (see .claude/skills/ios-testflight/SKILL.md).
 # The committed project.yml signs ad-hoc for offline simulator builds; release
 # signing is injected here on the command line and never committed.
-ARCHIVE = build/InfraAuth.xcarchive
+ARCHIVE = build/InfraLab.xcarchive
 TEAM_ID ?= $(shell sed -n 's/^ *DEVELOPMENT_TEAM: *//p' project.yml | head -1)
 ASC_KEY_PATH ?= $(HOME)/.appstoreconnect/private_keys/AuthKey_$(ASC_KEY_ID).p8
 ifneq ($(ASC_KEY_ID),)
@@ -24,7 +24,7 @@ endif
 
 .PHONY: project build test lint format clean archive ipa upload
 
-project: ## Generate InfraAuth.xcodeproj from project.yml
+project: ## Generate InfraLab.xcodeproj from project.yml
 	xcodegen generate
 
 lint: ## Static-analyse Swift sources (fails on any violation). Install: brew install swiftlint
@@ -34,20 +34,20 @@ format: ## Auto-fix the violations SwiftLint can fix in place
 	swiftlint lint --fix --config .swiftlint.yml
 
 build: project ## Build the app for the simulator
-	xcodebuild build -project InfraAuth.xcodeproj -scheme $(SCHEME) \
+	xcodebuild build -project InfraLab.xcodeproj -scheme $(SCHEME) \
 		-destination "$(DESTINATION)"
 
 test: project ## Run the unit tests on the simulator
-	xcodebuild test -project InfraAuth.xcodeproj -scheme $(SCHEME) \
+	xcodebuild test -project InfraLab.xcodeproj -scheme $(SCHEME) \
 		-destination "$(DESTINATION)"
 
 archive: project ## Signed device archive (needs TEAM_ID from a paid Developer Program team)
 	@test -n "$(TEAM_ID)" || { echo "TEAM_ID is empty — pass TEAM_ID=<team id> (paid Apple Developer Program)"; exit 1; }
-	xcodebuild archive -project InfraAuth.xcodeproj -scheme $(SCHEME) \
+	xcodebuild archive -project InfraLab.xcodeproj -scheme $(SCHEME) \
 		-destination "generic/platform=iOS" -archivePath $(ARCHIVE) \
 		CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM=$(TEAM_ID) $(BUILD_OVERRIDE) $(API_OVERRIDE) $(ASC_AUTH)
 
-ipa: archive ## Export build/export/InfraAuth.ipa from the archive
+ipa: archive ## Export build/export/InfraLab.ipa from the archive
 	xcodebuild -exportArchive -archivePath $(ARCHIVE) \
 		-exportOptionsPlist ExportOptions.plist -exportPath build/export $(ASC_AUTH)
 
@@ -57,4 +57,4 @@ upload: archive ## Archive + upload straight to App Store Connect (TestFlight)
 		-exportOptionsPlist ExportOptionsUpload.plist -exportPath build/upload $(ASC_AUTH)
 
 clean:
-	rm -rf InfraAuth.xcodeproj build DerivedData
+	rm -rf InfraLab.xcodeproj build DerivedData

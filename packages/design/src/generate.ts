@@ -95,7 +95,7 @@ function emitIos(): void {
     `    static let ${name} = dyn(light: "${oklchToHex(light[role])}", dark: "${oklchToHex(dark[role])}")`;
 
   write(
-    "apps/ios/InfraAuth/Generated/DesignTokens.swift",
+    "apps/ios/InfraLab/Generated/DesignTokens.swift",
     `// ${GEN}
 import SwiftUI
 import UIKit
@@ -140,7 +140,7 @@ private extension UIColor {
   ).join("\n");
 
   write(
-    "apps/ios/InfraAuth/Generated/AuthCopy.swift",
+    "apps/ios/InfraLab/Generated/AuthCopy.swift",
     `// ${GEN}
 import Foundation
 
@@ -222,7 +222,7 @@ ${errCases}
     };
   };
   write(
-    "apps/ios/InfraAuth/Assets.xcassets/LaunchBackground.colorset/Contents.json",
+    "apps/ios/InfraLab/Assets.xcassets/LaunchBackground.colorset/Contents.json",
     `${JSON.stringify(
       {
         colors: [
