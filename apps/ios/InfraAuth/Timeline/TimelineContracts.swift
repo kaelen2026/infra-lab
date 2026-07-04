@@ -113,6 +113,11 @@ enum TimelineRoutes {
 
     /// Path for a single post (delete).
     static func item(_ id: String) -> String { "/timeline/\(id)" }
+
+    /// Path of the h5 share landing for a post — mirrors
+    /// `timelineShareLandingPath` in `@infra/shared`. Resolved against
+    /// `AppConfig.shareBaseURL` to form the externally shareable url.
+    static func shareLanding(_ id: String) -> String { "/t/\(id)" }
 }
 
 // MARK: - URL resolution

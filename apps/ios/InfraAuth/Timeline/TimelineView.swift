@@ -166,6 +166,18 @@ struct TimelinePostCard: View {
 
             Spacer(minLength: 8)
 
+            // Public share link: the h5 landing (`/t/:id`) backed by the
+            // unauthenticated share endpoint — anyone with the url can read
+            // this one post.
+            ShareLink(item: shareURL) {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.subheadline)
+                    .foregroundStyle(DesignTokens.textSecondary)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel("分享")
+
             // A confirmation dialog instead of a Menu: the single destructive
             // action gets the standard bottom sheet (uniformly red, confirm
             // step included) rather than a floating menu that inherits the
@@ -187,6 +199,13 @@ struct TimelinePostCard: View {
                 Button("取消", role: .cancel) {}
             }
         }
+    }
+
+    /// The externally shareable url: the h5 landing resolved against the
+    /// configured share origin.
+    private var shareURL: URL {
+        URL(string: TimelineRoutes.shareLanding(post.id), relativeTo: AppConfig.shareBaseURL)?
+            .absoluteURL ?? AppConfig.shareBaseURL
     }
 
     /// Avatar monogram: first glyph of a name, else the last two phone digits.
