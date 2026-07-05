@@ -1,0 +1,10 @@
+# Applies to `docker build -f apps/web/Dockerfile .` when BuildKit is enabled.
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+**/*.tsbuildinfo
+.git
+**/.env
+**/.env.local
+**/.uploads

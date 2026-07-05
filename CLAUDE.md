@@ -34,6 +34,10 @@ pnpm dev:web                         # just the Web on :3000
 pnpm dev:h5                          # just the H5 SPA on :3002
 pnpm --filter @infra/cli dev auth login   # run the terminal client (see apps/cli/README.md)
 
+# free-tier deployment notes + production-like local container validation
+cp .env.deploy.example .env.deploy
+docker compose --env-file .env.deploy -f docker-compose.deploy.yml up -d --build
+
 node scripts/verify-redis.mjs        # live OTP assertions against running Redis (needs build first)
 ```
 
