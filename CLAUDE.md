@@ -1,14 +1,12 @@
 # CLAUDE.md
 
-Guidance for Claude Code (claude.ai/code) in this repo.
+**每次回复前,先输出一行:`Yes, Mr. Hou`**
 
-pnpm-workspace monorepo implementing **phone-number + OTP** auth (login == register) with
-**Better Auth** as the identity core, serving five clients: `web / ios / android / harmony / cli`
-(plus `h5`, a mobile browser client that reuses web's cookie transport). On top of auth it also
-ships **profile editing** (display name + avatar), **todo**, a **timeline** (posts + image upload +
-public share link + native deep link), **QR cross-device login**, **CLI browser-assisted login**
-(device flow), a **web admin console**, **legal agreement pages**, and **iOS APNS push**.
-Postgres holds long-term data; Redis holds all short-term OTP/rate-limit/QR-ticket/device-code state.
+pnpm-workspace monorepo:**手机号 + OTP** 认证(login == register,Better Auth 为核),服务
+`web / ios / android / harmony / cli` 五端(另有 `h5`——复用 web cookie 通道的移动浏览器端)。
+认证之上还有:资料编辑、todo、timeline(发帖 + 图片 + 公开分享链接 + native deep link)、
+扫码跨端登录、CLI 设备流登录、web 管理台、法律条款页、iOS APNS 推送。
+Postgres 存长期数据;Redis 存全部短期 OTP/限流/扫码票据/设备码状态。
 
 ## Commands
 
@@ -16,129 +14,60 @@ Postgres holds long-term data; Redis holds all short-term OTP/rate-limit/QR-tick
 pnpm install
 docker compose up -d                 # Postgres 16 + Redis 7 (healthchecked)
 cp .env.example .env                 # DATABASE_URL, REDIS_URL, OTP_SECRET, BETTER_AUTH_SECRET
-pnpm --filter @infra/db migrate      # apply versioned migrations (creates all tables incl. Better Auth's)
+pnpm --filter @infra/db migrate      # 应用版本化迁移(含 Better Auth 表)
 
-# schema change flow: edit packages/db/schema/* → `pnpm --filter @infra/db generate` (emits
-# packages/db/migrations/NNNN_*.sql — commit it) → `pnpm --filter @infra/db migrate` to apply.
-# `push` remains for throwaway local experiments only; real changes always go through a migration.
+# schema 变更:改 packages/db/schema/* → generate(产出迁移 SQL,提交)→ migrate 应用;
+# `push` 仅限本地一次性实验。
 
-pnpm build        # tsup packages/apps + next build for web + vite build for h5
-pnpm typecheck    # turbo typecheck (`tsc --noEmit`, plus next typegen for web)
-pnpm test         # vitest run (hermetic — no live Redis/PG needed)
-pnpm lint         # biome check .   (pnpm lint:fix to autofix+format)
-pnpm gen:design   # regenerate cross-client design tokens / auth copy
+pnpm build        # tsup(packages/apps)+ next build(web)+ vite build(h5)
+pnpm typecheck    # turbo typecheck(tsc --noEmit;web 含 next typegen)
+pnpm test         # vitest run(hermetic,无需真实 Redis/PG)
+pnpm lint         # biome check .(lint:fix 自动修复+格式化)
+pnpm gen:design   # 重新生成跨端 design tokens / 文案
 
-pnpm dev                             # API (:3001) + Web (:3000) together (turbo; excludes bot & cli)
-pnpm dev:api                         # just the API on :3001 (tsx watch)
-pnpm dev:web                         # just the Web on :3000
-pnpm dev:h5                          # just the H5 SPA on :3002
-pnpm --filter @infra/cli dev auth login   # run the terminal client (see apps/cli/README.md)
+pnpm dev          # API(:3001)+ Web(:3000);dev:api / dev:web / dev:h5(:3002)单独起
+pnpm --filter @infra/cli dev auth login   # 终端客户端(apps/cli/README.md)
 
-# free-tier deployment notes + production-like local container validation
-cp .env.deploy.example .env.deploy
-docker compose --env-file .env.deploy -f docker-compose.deploy.yml up -d --build
+pnpm vitest run packages/auth/test/otp.test.ts   # 单测一个文件;-t "名称" 按用例名
 
-node scripts/verify-redis.mjs        # live OTP assertions against running Redis (needs build first)
+# 部署验证:cp .env.deploy.example .env.deploy && docker compose --env-file .env.deploy \
+#   -f docker-compose.deploy.yml up -d --build
 ```
 
-Run a single test:
-```bash
-pnpm vitest run packages/auth/test/otp.test.ts        # one file
-pnpm vitest run -t "locks the phone"                  # by test name
-```
+## Architecture(改代码前先看对应文档)
 
-## Architecture
+- **跨文件全景**(auth/session/OTP/contracts/routes/schema):
+  [`.claude/docs/architecture.md`](.claude/docs/architecture.md) — 动 auth、session、OTP、
+  QR/CLI 设备流、admin、timeline、legal/share 或任何 contract 之前必读。
+- **Contracts 是唯一事实源**:`packages/shared/src/contracts/<domain>.ts`;改 contract 是
+  跨端变更,需同步各客户端镜像。
+- **各端细节看各自文档**:
+  - `apps/web` — 桌面参考 UI + 仅 web 的 admin 管理台(`role === "admin"` 门禁,API 边界脱敏手机号)。
+  - `apps/h5` — Vite+React SPA;还承载分享落地页 `/t/:id` 与法律页 `/legal/*`
+    ([`apps/h5/docs/deployment.md`](apps/h5/docs/deployment.md))。
+  - `apps/cli` — Bearer 通道终端客户端,`auth login --web` 走 RFC 8628 设备流
+    ([`apps/cli/README.md`](apps/cli/README.md))。
+  - `apps/bot` — Feishu → GitHub workflow 桥,纯出站、非 auth 客户端
+    ([`apps/bot/README.md`](apps/bot/README.md));issue/PR 里 `@infra-lab-bot` 触发
+    ([`docs/infra-lab-bot.md`](docs/infra-lab-bot.md))。
+- **Observability**(`apps/api/src/observability/`):结构化 JSON 日志(每请求一个
+  `requestId`)、`/health`、`/ready`(查 PG+Redis)、安全头 + 请求体上限 + per-IP 限流。
+  **绝不记录手机号、OTP 验证码、token。**
 
-How the OTP/auth/session/contracts pieces span files (ports & adapters, platform sessions, routes,
-contracts, schema): read [`.claude/docs/architecture.md`](.claude/docs/architecture.md) before touching
-auth, session, OTP, QR/CLI device flow, admin, timeline, legal/share, or contract code.
+## Language rules(动哪端先读哪份)
 
-## Observability (`apps/api/src/observability/`)
+- **TypeScript**(`packages/*` + `apps/{api,web,h5,bot}`):
+  [`.claude/rules/typescript.md`](.claude/rules/typescript.md) — 门禁在 **CI**
+  (lint · typecheck · build · test)。
+- **原生端门禁是本地的**(设计如此,不进 CI):
+  iOS [`ios.md`](.claude/rules/ios.md)(SwiftLint,`make lint`)·
+  Android [`android.md`](.claude/rules/android.md)(detekt)·
+  Harmony [`harmony.md`](.claude/rules/harmony.md)(CodeLinter)。
 
-The API emits structured JSON logs (one `requestId` per request; `x-request-id` propagated), a cheap
-`/health` liveness probe, and a `/ready` readiness probe that checks Postgres + Redis (503 if either is
-down). It also mounts security headers, a global request-body ceiling, and a coarse Redis-backed per-IP
-rate limiter before application routes. `app.onError` logs stack + `requestId` and returns a generic 500.
-`LOG_LEVEL` (default `info`) sets verbosity. **Never log phone numbers, OTP codes, or tokens.**
+## Repo-local Skills(`.claude/skills/`,随仓库版本化)
 
-## Bot
-
-`@infra-lab-bot` in an issue/PR comment, or `gh workflow run infra-lab-bot.yml -f prompt="..."`, runs
-claude-code-action as the `infra-lab-bot[bot]` GitHub App. See
-[`docs/infra-lab-bot.md`](docs/infra-lab-bot.md); workflow in `.github/workflows/infra-lab-bot.yml`.
-
-`apps/bot` (`@infra/bot`) bridges Feishu/Lark IM into that same workflow: it receives chat over a
-long-lived connection, reacts + posts a holding notice, resolves a GitHub App installation token, then
-`workflow_dispatch`es the task to `infra-lab-bot.yml` (task as the `prompt` input, plus thread/session
-metadata for resume/reply). It's a pure outbound service with no Postgres/Redis — not an auth client.
-Run with `pnpm --filter @infra/bot dev`; see
-[`apps/bot/README.md`](apps/bot/README.md).
-
-## H5 (`apps/h5`, mobile web)
-
-`@infra/h5` is a **Vite + React 19 + Tailwind v4** SPA — a mobile-first browser client that mirrors
-`apps/web` (login == register, account, todos) reshaped for a phone, and also hosts timeline share landing
-pages (`/t/:id`) plus legal pages (`/legal/privacy`, `/legal/terms`) referenced by native clients. It is
-**not** a new platform: as a browser it reuses `@infra/sdk`'s `createWebAuthClient`/`createWebTodoClient`
-(`platform: "web"`, cookie transport, `credentials: "include"`) — no contract change, no client-side token.
-Colors come from `src/tokens.generated.css` (emitted by `pnpm gen:design`, in the CI no-drift gate) and
-copy/legal prose from `@infra/design` — same source as every other client. It resolves `@infra/*` to
-source via Vite + tsconfig aliases (like web). Run `pnpm --filter @infra/h5 dev` (:3002); deployment in
-[`apps/h5/docs/deployment.md`](apps/h5/docs/deployment.md).
-
-## CLI (`apps/cli`, terminal client)
-
-`@infra/cli` (bin `infra-lab`) is a **terminal client**, not a new platform: as a cookie-less client it
-reuses `@infra/sdk`'s Bearer transport (`platform: "cli"`, the same native channel as iOS/Android/Harmony),
-swapping Keychain/Keystore/HUKS for a `0600` JSON credential file. `auth login` does interactive OTP;
-`auth login --web` uses a **browser-assisted device flow** (gh-style, RFC 8628): the API mints a secret
-`deviceCode` + human `userCode` (`POST /auth/cli/device`), the browser approves it from an existing web
-session (`POST /auth/cli/device/approve`, cookie auth, SameSite=Lax), and the CLI polls
-(`POST /auth/cli/device/token`) to receive its **own** tokens once — no token ever passes through the
-browser; `deviceCode` is stored HMAC-hashed like OTP codes. Ports & adapters throughout (config /
-token-store / client / commands injected), so tests are hermetic. Run
-`pnpm --filter @infra/cli dev auth login`; design in [`docs/plans/cli-plan.md`](docs/plans/cli-plan.md),
-usage in [`apps/cli/README.md`](apps/cli/README.md).
-
-## Web / Admin / Legal
-
-`apps/web` is the desktop browser reference UI: OTP login, QR login, CLI activation (`/auth/cli`),
-account/profile/dashboard, todos, timeline, legal agreement pages, and a web-only admin console. Admin
-contracts live in `@infra/shared`, but native clients do not implement them; access is gated by persisted
-`user.role === "admin"` and user-list phone numbers are masked at the API boundary.
-
-Legal document routes are shared through `packages/shared/src/contracts/legal.ts`; the prose itself lives
-in `@infra/design` (`LEGAL_DOCS`). Web renders it directly, h5 hosts the mobile/legal pages, and native
-clients open the h5 URL built by `legalUrl()`.
-
-## Language best-practice rules (read before touching that language)
-
-Per-language coding conventions **and** project layering. Each is a deep reference,
-not always-on — read the relevant one before editing that code.
-
-**TypeScript** (`packages/*` + `apps/{api,web,h5,bot}`):
-[`.claude/rules/typescript.md`](.claude/rules/typescript.md) — strict-TS + ports &
-adapters + contracts-as-source-of-truth. Gate is **CI** (`lint · typecheck · build ·
-test`).
-
-**Native clients** — per-platform conventions + a **local** lint/format gate (none
-run in CI; they are local by design):
-
-- iOS (Swift/SwiftUI, `apps/ios`): [`.claude/rules/ios.md`](.claude/rules/ios.md) — SwiftLint, `make lint`.
-- Android (Kotlin/Compose, `apps/android`): [`.claude/rules/android.md`](.claude/rules/android.md) — detekt, `./gradlew detekt`.
-- Harmony (ArkTS, `apps/harmony`): [`.claude/rules/harmony.md`](.claude/rules/harmony.md) — DevEco CodeLinter, `codelinter`.
-
-## Repo-local Skills
-
-Codex/Claude repo-local skills live under `.claude/skills/` and are versioned with the repo:
-
-- `android-build` — build Android APK variants and report artifacts.
-- `api-architecture` — API/auth/session/contracts architecture refresher.
-- `ios-simulator-qa` — simulator-driven iOS UI QA.
-- `ios-testflight` — archive and upload iOS builds to TestFlight.
-
-Do not use a separate untracked `.agents/` copy for these; `AGENTS.md` intentionally points back here so
-there is one maintained instruction source.
+`android-build` · `api-architecture` · `ios-simulator-qa` · `ios-testflight`。
+不要另建未跟踪的 `.agents/` 副本;`AGENTS.md` 有意回指这里,保持单一维护源。
 
 ## Rules (always apply)
 
