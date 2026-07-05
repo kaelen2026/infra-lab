@@ -1,0 +1,142 @@
+# Production-like deployment topology for the core service layer:
+# Postgres + Redis + API + Web + H5. Keep docker-compose.yml focused on local
+# infrastructure only; use this file when validating containerized app services.
+#
+# Usage:
+#   cp .env.deploy.example .env.deploy
+#   docker compose --env-file .env.deploy -f docker-compose.deploy.yml up -d --build
+#
+# Run DB migrations before starting/restarting API replicas:
+#   DATABASE_URL=... pnpm --filter @infra/db migrate
+
+name: infra-lab
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
+      POSTGRES_DB: ${POSTGRES_DB:-app}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-app} -d ${POSTGRES_DB:-app}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  api:
+    image: infra-lab-api:${IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgres://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@postgres:5432/${POSTGRES_DB:-app}
+      REDIS_URL: redis://redis:6379
+      OTP_SECRET: ${OTP_SECRET:?set OTP_SECRET in .env.deploy}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET in .env.deploy}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:?set BETTER_AUTH_URL in .env.deploy}
+      TRUSTED_ORIGINS: ${TRUSTED_ORIGINS:?set TRUSTED_ORIGINS in .env.deploy}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      TRUSTED_PROXY_COUNT: ${TRUSTED_PROXY_COUNT:-1}
+      OTP_DEBUG_RETURN_CODE: "false"
+      UPLOADS_DIR: /data/uploads
+      MAX_REQUEST_BODY_BYTES: ${MAX_REQUEST_BODY_BYTES:-10485760}
+      SLOW_REQUEST_MS: ${SLOW_REQUEST_MS:-1000}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-120}
+      RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      APNS_KEY_ID: ${APNS_KEY_ID:-}
+      APNS_TEAM_ID: ${APNS_TEAM_ID:-}
+      APNS_BUNDLE_ID: ${APNS_BUNDLE_ID:-}
+      APNS_PRIVATE_KEY: ${APNS_PRIVATE_KEY:-}
+      APNS_PRIVATE_KEY_PATH: ${APNS_PRIVATE_KEY_PATH:-}
+      APNS_PRODUCTION: ${APNS_PRODUCTION:-false}
+    ports:
+      - "${API_PORT:-3001}:3001"
+    volumes:
+      - uploads:/data/uploads
+
+  web:
+    image: infra-lab-web:${IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?set NEXT_PUBLIC_API_URL in .env.deploy}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+
+  h5:
+    image: infra-lab-h5:${IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: apps/h5/Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${H5_PORT:-3002}:80"
+
+  bot:
+    profiles: ["bot"]
+    image: infra-lab-bot:${IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: apps/bot/Dockerfile
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org}
+    restart: unless-stopped
+    environment:
+      LARK_APP_ID: ${LARK_APP_ID:-}
+      LARK_APP_SECRET: ${LARK_APP_SECRET:-}
+      LARK_DOMAIN: ${LARK_DOMAIN:-}
+      INFRA_LAB_BOT_GITHUB_REPO: ${INFRA_LAB_BOT_GITHUB_REPO:-}
+      INFRA_LAB_BOT_APP_ID: ${INFRA_LAB_BOT_APP_ID:-}
+      INFRA_LAB_BOT_INSTALLATION_ID: ${INFRA_LAB_BOT_INSTALLATION_ID:-}
+      INFRA_LAB_BOT_PRIVATE_KEY: ${INFRA_LAB_BOT_PRIVATE_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+
+volumes:
+  pgdata:
+  redisdata:
+  uploads:

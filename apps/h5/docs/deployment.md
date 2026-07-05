@@ -53,8 +53,8 @@ decide your topology:
 ### Topology A — same-origin (recommended)
 
 Serve the h5 static files and proxy the API under **one** host, e.g.
-`https://app.example.com` serves the SPA and forwards `/auth`, `/todos`,
-`/api/auth` to the API. Then:
+`https://app.example.com` serves the SPA and forwards API paths (`/auth`, `/todos`,
+`/timeline`, `/uploads`, `/admin`, `/notifications`, `/api/auth`) to the API. Then:
 
 - The cookie is first-party → `SameSite=Lax` works, no cookie changes needed.
 - **No CORS** involved (requests are same-origin).
@@ -101,7 +101,7 @@ server {
   }
 
   # API + Better Auth endpoints → upstream API (keeps everything same-origin).
-  location ~ ^/(auth|todos|api/auth)(/|$) {
+  location ~ ^/(auth|todos|timeline|uploads|admin|notifications|api/auth)(/|$) {
     proxy_pass         http://127.0.0.1:3001;
     proxy_set_header   Host $host;
     proxy_set_header   X-Real-IP $remote_addr;
@@ -149,8 +149,9 @@ docker build -f apps/h5/Dockerfile --build-arg VITE_API_URL="" -t infra-h5 .
 docker run -p 8080:80 infra-h5
 ```
 
-Terminate TLS and route `/auth|/todos|/api/auth` to the API at the ingress/edge in
-front of this container (so the browser still sees one origin).
+Terminate TLS and route API paths (`/auth`, `/todos`, `/timeline`, `/uploads`, `/admin`,
+`/notifications`, `/api/auth`) to the API at the ingress/edge in front of this container
+(so the browser still sees one origin).
 
 ---
 
@@ -174,7 +175,7 @@ In all cases keep `index.html` uncached and let the hashed `assets/*` cache long
 
 - [ ] Chose a topology and built with the matching `VITE_API_URL`
       (`""` for same-origin, absolute URL for cross-origin).
-- [ ] History fallback serves `index.html` for `/auth`, `/todos`, and refreshes.
+- [ ] History fallback serves `index.html` for browser routes; API paths are routed to the API.
 - [ ] `assets/*` cached immutably; `index.html` `no-cache`.
 - [ ] HTTPS end-to-end; API `COOKIE_SECURE=true` in production.
 - [ ] Topology B only: API CORS allows the h5 origin **and** the session cookie is

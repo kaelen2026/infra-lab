@@ -44,6 +44,10 @@ pnpm build
 pnpm --filter @infra/db migrate      # 应用版本化迁移（建全部表，含 Better Auth 所需的表）
 
 pnpm dev                             # API → :3001 + Web → :3000（单启：pnpm dev:api / pnpm dev:web / pnpm dev:h5 → :3002）
+
+# 免费/低成本部署基础层见 docs/deployment.md；本地容器化验证：
+cp .env.deploy.example .env.deploy
+docker compose --env-file .env.deploy -f docker-compose.deploy.yml up -d --build
 ```
 
 > 终端客户端：`pnpm --filter @infra/cli dev auth login`（详见 [`apps/cli/README.md`](./apps/cli/README.md)）。
@@ -97,6 +101,7 @@ apps/
             到 infra-lab-bot workflow（无 PG/Redis）
 docs/plans/phone-otp-auth-plan.md      设计方案 + 各端 SDK 接口草案
 docs/plans/cli-plan.md                 CLI 设计与 device flow 安全要点
+docs/deployment.md                     免费基础服务层 + 本地容器化验证
 .claude/docs/architecture.md           跨文件架构说明（auth/session/contracts/schema/routes）
 .claude/rules/*.md                     分语言 / 工作流 / 构建规则
 .claude/skills/*.md                    仓库本地 agent 技能（Android 构建、API 架构、iOS QA/TestFlight）
