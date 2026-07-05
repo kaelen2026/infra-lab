@@ -13,6 +13,14 @@ Codes are stored only as HMAC-SHA256 hashes (`OTP_SECRET`) and deleted immediate
 Redis key shapes live in `OTP_KEYS` (`otp:code|attempt|cooldown|lock|daily|ip`). Better Auth owns the
 identity model (Drizzle adapter + `bearer()` plugin) and session resolution.
 
+**Runtime guardrails.** Core env parsing (`packages/env/src/core.ts`) is part of the auth boundary, not
+just configuration plumbing. In production the API refuses to boot when `OTP_DEBUG_RETURN_CODE` is enabled,
+`COOKIE_SECURE` is false, `TRUSTED_PROXY_COUNT` is zero, or `BETTER_AUTH_SECRET` is unset/reused from
+`OTP_SECRET`. The same env bucket owns `MAX_REQUEST_BODY_BYTES`, `SLOW_REQUEST_MS`, and the coarse
+Redis-backed rate-limit knobs (`RATE_LIMIT_MAX`, `RATE_LIMIT_WINDOW_SECONDS`). `server.ts` mounts
+observability first, then security headers, body limit, CORS, probes, and only then rate limiting and
+application routes.
+
 **Sessions differ by platform** (see `apps/api/src/services/session-service.ts` + `auth.routes.ts`):
 - `web` → HttpOnly cookie `infra.session` (an HS256 JWT).
 - native → response body carries `accessToken` (15-min HS256 JWT) + opaque `refreshToken`
@@ -23,12 +31,12 @@ identity model (Drizzle adapter + `bearer()` plugin) and session resolution.
 
 **Routes** (`apps/api/src/routes/auth.routes.ts`): `/auth/otp/request`, `/auth/otp/verify`,
 `/auth/refresh`, `/auth/logout`, `/auth/me`, profile editing (`PATCH`+`PUT /auth/profile` for the
-display name, `POST /auth/avatar` multipart upload — the latter persists the image through the same
-`ImageStore` the timeline uses and returns the refreshed user), plus account-dashboard reads
+display name / avatar clearing, `POST /auth/avatar` multipart upload — the latter persists the image
+through the same `ImageStore` the timeline uses and returns the refreshed user), account-dashboard reads
 (`/auth/devices`, `/auth/login-events`), push-token registration (`POST /auth/devices/push-token`),
-the QR endpoints (below), and the CLI device-flow endpoints (below). Error codes map to HTTP status via `ERROR_STATUS`
-(cooldown/limits → 429, LOCKED → 423, invalid/expired/unauthorized → 401). A new phone that verifies
-successfully auto-creates `user` + `profile` in one transaction. The `Platform` enum is
+the QR endpoints (below), and the CLI device-flow endpoints (below). Error codes map to HTTP status via
+`ERROR_STATUS` (cooldown/limits → 429, LOCKED → 423, invalid/expired/unauthorized → 401). A new phone
+that verifies successfully auto-creates `user` + `profile` in one transaction. The `Platform` enum is
 `["web", "ios", "android", "harmony", "cli"]` — `cli` rides the native Bearer channel.
 
 **CLI browser-assisted login — device flow** (`apps/api/src/routes/auth.routes.ts`, gh-style / RFC 8628).
@@ -70,7 +78,23 @@ as todo one layer richer. It injects a `TimelinePostRepository` (per-user, scope
 the URL to embed; `POST /timeline` stores `{ text, images[] }`. `GET /timeline` is **keyset-paginated** on
 `(createdAt, id)` (millisecond-precision `created_at`, matching index `timeline_post_user_created_id_idx`).
 `GET /timeline/share/:id` is the one **unauthenticated** read — `getById` deliberately skips the user scope
-because the unguessable id is the capability, backing the h5 share landing. `TIMELINE_POST_NOT_FOUND` → 404.
+because the unguessable id is the capability, backing the h5 share landing. The shared contract also defines
+`timelineShareLandingPath(id)` (`/t/:id`) and `timelineAppLink(id)` (`infralab://timeline/<id>`). h5 renders
+the share landing, and iOS funnels both universal share taps and APNS `link` payloads through
+`DeepLinkRouter`. `TIMELINE_POST_NOT_FOUND` → 404.
+
+**Admin console** (`apps/api/src/routes/admin.routes.ts` + `services/admin-repository.ts`) is a web-only
+surface. It still uses the same `requireUser(headers)` guard, then checks the persisted `user.role` column
+(`USER_ROLES` in `@infra/shared` must stay in sync with `userRoleEnum` in `@infra/db`). Admin endpoints are:
+`GET /admin/access`, `GET /admin/stats`, and `GET /admin/users`. User list responses return
+`phoneMasked` only; raw phone numbers never cross this API boundary for the admin table. Native clients do
+not implement `AdminClient`, so admin changes are not automatically cross-client contract changes.
+
+**Legal documents** (`packages/shared/src/contracts/legal.ts` + `@infra/design` `LEGAL_DOCS`) are h5/web
+hosted. The shared contract owns stable paths (`/legal/privacy`, `/legal/terms`) and `legalUrl(base, kind)`
+for native clients. The prose lives in `packages/design/src/legal.ts`; web renders it directly and h5 hosts
+the mobile page that native clients open. Do not emit legal prose into native generated files unless the
+product explicitly needs offline legal rendering.
 
 **Push (APNS)** (`apps/api/src/routes/notification.routes.ts` + `services/apns-client.ts`). Native devices
 register their token via `POST /auth/devices/push-token` (stored on `device`). `POST /notifications/test` is
@@ -78,25 +102,31 @@ a **dev-only self-push** to exercise the full path (token lookup → APNS send �
 `unregistered` response clears the token) with no real business trigger yet. `server.ts` mounts it **only**
 when APNS is configured (`apnsConfigFromEnv` returns non-null) **and** `OTP_DEBUG_RETURN_CODE` is on — never in prod.
 
-**Contracts are the source of truth** (`packages/shared/src/contracts/auth.ts`, `.../todo.ts`): Zod request schemas,
-DTOs, error codes, limit constants, route paths, the `Platform` enum, and the `AuthClient` interface that
-every client SDK implements. The JS reference implementation lives in **`@infra/sdk`**
-(`packages/sdk/src/client.ts`): `createAuthClient(opts)` (web + native, pluggable `TokenStore`) and
-`createWebAuthClient(baseUrl)` (cookie transport; what `apps/web` uses). Non-2xx responses throw a typed
-`HttpAuthError` (`code`/`status`/`retryAfter`/`remainingAttempts`). `@infra/sdk` re-exports `@infra/shared`,
-so clients import contracts + client from one place. Native SDK drafts are sketched in
-`docs/plans/phone-otp-auth-plan.md`. Todo mirrors this exactly: `contracts/todo.ts` defines the schemas,
-`TodoDTO`, error codes, route paths and the `TodoClient` interface; `@infra/sdk` ships
-`createTodoClient(opts)` + `createWebTodoClient(baseUrl)` (reusing the auth transport and `HttpAuthError`).
-Timeline follows the same pattern (`contracts/timeline.ts` → `createTimelineClient` / `createWebTimelineClient`),
-and QR login ships `createWebQrLoginClient` (browser) with the native side calling `approve` directly. The
-`apps/cli` client composes `createAuthClient`/`createTodoClient` with `platform: "cli"` and a file-backed
-`TokenStore`.
+**Contracts are the source of truth** (`packages/shared/src/contracts/*`): Zod request schemas, DTOs,
+error codes, limit constants, route paths, the `Platform` enum, URL builders, and client interfaces.
+The JS reference implementation lives in **`@infra/sdk`** (`packages/sdk/src/client.ts`):
+`createAuthClient(opts)` / `createWebAuthClient(baseUrl)`; `createQrLoginClient` /
+`createWebQrLoginClient`; `createTodoClient`; `createTimelineClient`; and the web-only
+`createAdminClient`. Non-2xx responses throw a typed `HttpAuthError`
+(`code`/`status`/`retryAfter`/`remainingAttempts`). `@infra/sdk` re-exports `@infra/shared`, so TS clients
+import contracts + client from one place. The `apps/cli` client composes `createAuthClient` /
+`createTodoClient` with `platform: "cli"` and a file-backed `TokenStore`.
+
+Native clients mirror only the surfaces they implement in their own language: iOS mirrors auth/todo/timeline
+plus QR approval/deep links/APNS; Android mirrors auth/todo/timeline plus QR approval; Harmony currently mirrors
+auth/todo and intentionally uses PUT for todo/profile updates because NetworkKit has no PATCH. Any shared
+contract change must be coordinated with the relevant native mirrors in the same PR.
+
+**Design / copy generation.** `@infra/design` owns brand tokens, auth/error copy, and legal prose. `pnpm
+gen:design` emits web/h5 CSS tokens, iOS generated Swift, Android generated Kotlin/XML, and Harmony generated
+color/copy files. CI runs the generator after build and fails if generated outputs drift, so never hand-edit
+generated files (`*.generated.*`, `tokens.generated.css`, Android XML colors, Harmony color/copy output).
 
 **Schema** (`packages/db/schema/`): Drizzle/Postgres, re-exported through the `schema/index.ts` barrel
 (the drizzle client and drizzle-kit both resolve tables + relations through it). `auth.ts`: Better Auth core
 tables (`user/session/account/verification`) use Better Auth's default column names — keep them that way or
-the adapter breaks — plus product tables `profile`, `device` (platform enum + push token), `refresh_token`, `login_event`.
-`todo.ts`: the `todo` table (FK → `user`, `onDelete: cascade`, indexed by `user_id`). `timeline.ts`: the
-`timeline_post` table (FK → `user`, cascade; `images` as `jsonb`; a `(user_id, created_at desc, id desc)`
-index serving the keyset list query, `created_at` at millisecond precision so the cursor never skips rows).
+the adapter breaks — plus product tables `profile`, `device` (platform enum + push token), `refresh_token`,
+`login_event`, and the persisted `user.role` admin gate. `todo.ts`: the `todo` table (FK → `user`,
+`onDelete: cascade`, indexed by `user_id`). `timeline.ts`: the `timeline_post` table (FK → `user`, cascade;
+`images` as `jsonb`; a `(user_id, created_at desc, id desc)` index serving the keyset list query,
+`created_at` at millisecond precision so the cursor never skips rows).

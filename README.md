@@ -1,18 +1,20 @@
 # infra-lab
 
-[![CI](https://github.com/kaelen/infra-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/kaelen/infra-lab/actions/workflows/ci.yml)
+[![CI](https://github.com/kaelen2026/infra-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/kaelen2026/infra-lab/actions/workflows/ci.yml)
 
 手机号 + 验证码的注册/登录系统。**登录即注册**，认证核心使用 [Better Auth](https://www.better-auth.com/)，
 一套后端服务 **Web / iOS / Android / HarmonyOS / CLI** 五端（另有移动端 **H5**，作为浏览器客户端复用
 Web 的 Cookie 传输）。五端共享同一套 `AuthClient` 契约与 `@infra/sdk` 参考实现，仅传输与安全存储不同。
 
-在认证之上还落了几个业务/体验特性：**待办（Todo）**、**朋友圈式时间线（Timeline，含图片上传与公开分享
-链接）**、**扫码跨端登录（QR）**、**CLI 浏览器辅助登录（device flow）**、**iOS APNS 推送**。
+在认证之上还落了几个业务/体验特性：**账户资料（昵称 + 头像）**、**待办（Todo）**、
+**朋友圈式时间线（Timeline，含图片上传、公开分享页与 app deep link）**、**扫码跨端登录（QR）**、
+**CLI 浏览器辅助登录（device flow）**、**Web 管理后台**、**法律协议页**、**iOS APNS 推送**。
 
 - **Postgres 16** 存长期数据：Better Auth 核心表（`user` `session` `account` `verification`）+ 业务表
   `profile` `device` `refresh_token` `login_event` `todo` `timeline_post`
 - **Redis 7** 存短期数据：验证码哈希、错误次数、发送冷却、限流、锁定、扫码 ticket、CLI device code
 - pnpm workspace monorepo · TypeScript ESM · Hono(API) · Next.js(Web) · Vite+React(H5) · Drizzle(ORM)
+- `@infra/design` 是设计令牌 / 文案 / 法律正文的单一来源，`pnpm gen:design` 生成 Web/H5/iOS/Android/Harmony 产物，CI 校验无漂移
 
 ## 认证规则
 
@@ -52,10 +54,11 @@ pnpm dev                             # API → :3001 + Web → :3000（单启：
 ## 常用命令
 
 ```bash
-pnpm build        # 构建（tsup 各包 + next build；按依赖拓扑顺序）
+pnpm build        # 构建（tsup 各包 + next build / vite build；按依赖拓扑顺序）
 pnpm test         # vitest，纯内存测试，无需真实 Redis/Postgres
-pnpm typecheck    # 各包 tsc --noEmit
+pnpm typecheck    # turbo typecheck（依赖包先 build；各包 tsc --noEmit / next typegen）
 pnpm lint         # biome 检查（pnpm lint:fix 自动修复 + 格式化）
+pnpm gen:design   # 从 @infra/design 生成跨端颜色 / 文案产物（CI 校验无漂移）
 pnpm knip         # 本地死代码检查（未使用的文件/依赖/导出）；不进 CI，输出仅供参考
                   # 结果是启发式的：动态引用的导出可能被误报，删除前需人工确认
 
@@ -70,25 +73,33 @@ node scripts/verify-redis.mjs        # 针对运行中的 Redis 跑验收断言�
 
 ```
 packages/
-  shared/   契约单一真相：Zod schema、DTO、错误码、限值、路由常量、Platform 枚举、Auth/Todo/Timeline Client 接口
-  auth/     OTP 领域服务（定义 OtpStore 端口）、require-user、Better Auth 集成；testing 导出 FakeRedis
+  shared/   契约单一真相：Zod schema、DTO、错误码、限值、路由常量、Platform 枚举、
+            Auth/QR/Todo/Timeline/Admin/Legal Client 接口与 URL 构造
+  auth/     OTP 领域服务（定义 OtpStore 端口）、CLI device flow、require-user、Better Auth 集成；testing 导出 FakeRedis
   redis/    OtpStore 的 ioredis 适配器（依赖 @infra/auth 的类型）
   db/       Drizzle schema（schema/{auth,todo,timeline}.ts + schema/index.ts 桶）+ 客户端 + drizzle.config
-  sdk/      各端共用的 JS 参考实现：createAuthClient / createTodoClient / createTimelineClient / createWebQrLoginClient；re-export @infra/shared
-  design/   设计令牌单一来源：pnpm gen:design 生成各端颜色/文案（web/h5 CSS、iOS/Android/Harmony 代码），CI 校验无漂移
-  env/      环境变量 Zod 校验与加载（core：DB/Redis/OTP/Cookie/APNS…）
+  sdk/      各端共用的 JS 参考实现：createAuthClient / createTodoClient /
+            createTimelineClient / createWebQrLoginClient / createWebAdminClient；re-export @infra/shared
+  design/   设计令牌、认证文案、法律正文单一来源；pnpm gen:design 生成各端颜色/文案产物，CI 校验无漂移
+  env/      环境变量 Zod 校验与加载（core：DB/Redis/OTP/Cookie/APNS/限流/上传…；bot：Feishu/GitHub App）
 apps/
-  api/      Hono 路由（auth：otp/refresh/logout/me/devices/push-token/login-events/qr/cli；todo/timeline：CRUD；notifications：dev 自推）
-            + user/todo/timeline repository + session-service + APNS client + observability（结构化日志 / request-id / 健康探针）
-  web/      Next.js：登录页（app/auth）、账户面板（app/page）、待办（app/todos）、时间线（app/timeline）
+  api/      Hono 路由（auth：otp/refresh/logout/me/profile/avatar/devices/push-token/login-events/qr/cli；
+            todo/timeline/admin；notifications：dev 自推）+ repositories + session-service + APNS client
+            + observability / security headers / body limit / coarse rate limit
+  web/      Next.js：登录 / QR / CLI 激活、账户面板、待办、时间线、Admin、法律协议页
   h5/       移动端 H5（Vite + React 19 + Tailwind v4 SPA，:3002）：复用 @infra/sdk 的 Web Cookie 传输，
-            移动优先的登录 + 账户 + 待办 + 时间线；部署见 apps/h5/docs/deployment.md
-  ios/      Swift/SwiftUI；android/ Kotlin/Compose；harmony/ ArkTS：三个原生端，Bearer 通道 + 平台安全存储
+            移动优先的登录 + 账户 + 待办 + timeline 分享落地页 + 法律协议页；部署见 apps/h5/docs/deployment.md
+  ios/      Swift/SwiftUI：登录、账户/资料编辑、Todo、Timeline、QR 扫码、deep link、APNS、TestFlight 流程
+  android/  Kotlin/Compose：登录、账户、Todo、Timeline、QR 扫码；Bearer + EncryptedSharedPreferences
+  harmony/  ArkTS：登录、账户、Todo；Bearer + HUKS 加密 Preferences（PUT 兼容无 PATCH 的 NetworkKit）
   cli/      终端客户端（@infra/cli，bin: infra-lab）：手机号+OTP 登录 / 浏览器 device flow，会话持久化到本地凭据文件；见 apps/cli/README.md
-  bot/      飞书 IM 接待 bot：长连接收消息 → react → 安抚 notice → 派发到 infra-lab-bot workflow（无 PG/Redis）
+  bot/      飞书 IM 接待 bot：长连接收消息 → react → 安抚 notice → GitHub App token → workflow_dispatch
+            到 infra-lab-bot workflow（无 PG/Redis）
 docs/plans/phone-otp-auth-plan.md      设计方案 + 各端 SDK 接口草案
 docs/plans/cli-plan.md                 CLI 设计与 device flow 安全要点
-.ai/verifications/phone-otp-auth.md    验收记录（命令 + 实跑输出）
+.claude/docs/architecture.md           跨文件架构说明（auth/session/contracts/schema/routes）
+.claude/rules/*.md                     分语言 / 工作流 / 构建规则
+.claude/skills/*.md                    仓库本地 agent 技能（Android 构建、API 架构、iOS QA/TestFlight）
 ```
 
 **架构要点（端口-适配器）**：`@infra/auth` 的 OTP 领域只依赖一个最小 `OtpStore` 端口，不 import 任何
@@ -107,6 +118,8 @@ Redis 驱动；`@infra/redis` 实现该端口（因此是 redis 依赖 auth，�
 | POST | `/auth/refresh`     | 轮转刷新 token（原生端）`{ refreshToken }` |
 | POST | `/auth/logout`      | 登出 |
 | GET  | `/auth/me`          | 当前用户（Cookie 或 Bearer） |
+| PATCH / PUT | `/auth/profile` | 更新昵称 / 清除头像等资料字段（PUT 供 Harmony 兼容） |
+| POST | `/auth/avatar`      | 上传头像图片并写入 profile（复用 timeline 图片规则） |
 | GET  | `/auth/devices`     | 账户面板：本人设备列表（最近在前） |
 | POST | `/auth/devices/push-token` | 上报本机 APNS push token（供推送定向到本人 iOS 设备） |
 | GET  | `/auth/login-events`| 账户面板：本人最近登录记录（新→旧） |
@@ -148,10 +161,26 @@ Redis 驱动；`@infra/redis` 实现该端口（因此是 redis 依赖 auth，�
 | DELETE | `/timeline/:id`      | 删除本人动态 |
 | GET    | `/uploads/:name`     | 回源已上传的图片字节 |
 
+**Admin（Web-only）**——受保护，需 `user.role = admin`；用户列表只返回脱敏手机号：
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/admin/access` | 当前会话角色与是否 admin |
+| GET | `/admin/stats`  | 用户 / Todo / Timeline / 登录统计 |
+| GET | `/admin/users`  | 分页用户列表（`phoneMasked`，不返回明文手机号） |
+
+**法律协议与分享落地页（前端路由）**：
+
+| 客户端 | 路径 | 说明 |
+|--------|------|------|
+| Web / H5 | `/legal/privacy`、`/legal/terms` | 渲染 `@infra/design` 的法律正文；原生端通过 `legalUrl()` 打开 H5 托管页 |
+| H5 | `/t/:id` | Timeline 公开分享落地页，读取 `/timeline/share/:id`，并提供 `infralab://timeline/:id` app deep link |
+| iOS | `infralab://timeline/:id` | 打开分享动态；APNS payload 的 link 也走同一 DeepLinkRouter |
+
 **推送（可选，dev-only）**：`POST /notifications/test` 给本人 iOS 设备自推一条测试通知，用于端到端验证 APNS
 链路——**仅当配置了 `APNS_*` 且开启 dev 标记时才挂载**，生产不暴露。
 
-`/todos*`、`/timeline*`（除 `share`）与账户面板端点全部受保护，复用会话解析（Cookie 或 Bearer）；
+`/todos*`、`/timeline*`（除 `share`）、`/admin*` 与账户面板端点全部受保护，复用会话解析（Cookie 或 Bearer）；
 未登录 → `401 UNAUTHORIZED`，访问不存在或非本人的资源 → `404`（`TODO_NOT_FOUND` / `TIMELINE_POST_NOT_FOUND`）。
 
 错误码与状态映射：冷却/限流 → `429`，锁定 → `423`，验证码错误/过期/未授权 → `401`，
@@ -159,7 +188,8 @@ Redis 驱动；`@infra/redis` 实现该端口（因此是 redis 依赖 auth，�
 
 ## 可观测性
 
-API 输出结构化 JSON 日志（每条带 `requestId`，`x-request-id` 支持透传），并暴露两个探针：
+API 输出结构化 JSON 日志（每条带 `requestId`，`x-request-id` 支持透传），全局挂载安全响应头、
+请求体上限与粗粒度 per-IP rate limit，并暴露两个探针：
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
@@ -167,22 +197,32 @@ API 输出结构化 JSON 日志（每条带 `requestId`，`x-request-id` 支持�
 | GET | `/ready`  | 就绪探针：探测 Postgres + Redis，任一不可用 → `503`；外部 uptime 探测指向这里 |
 
 未捕获异常经集中错误处理记录（堆栈 + `requestId`），对外只返回通用 `500`，不泄露内部细节；
-日志绝不落手机号 / 验证码 / token。代码在 `apps/api/src/observability/`。
+默认和生产路径日志不落手机号 / 验证码 / token；只有显式开发调试开关（例如
+`OTP_DEBUG_RETURN_CODE=true`）才会把验证码放回响应用于本地联调。代码在
+`apps/api/src/observability/`。
 
 ## 环境变量
 
 见 [`.env.example`](./.env.example)。关键项：`DATABASE_URL`、`REDIS_URL`、`OTP_SECRET`（验证码哈希密钥）、
-`BETTER_AUTH_SECRET`（会话签名）、`COOKIE_SECURE`/`COOKIE_DOMAIN`、`OTP_DEBUG_RETURN_CODE`。
-另有可选 `LOG_LEVEL`（API 日志级别，默认 `info`）与 iOS 推送用的 `APNS_*`（`APNS_KEY_ID` / `APNS_TEAM_ID` /
+`BETTER_AUTH_SECRET`（会话签名）、`BETTER_AUTH_URL`、`TRUSTED_ORIGINS`、`COOKIE_SECURE`/`COOKIE_DOMAIN`、
+`TRUSTED_PROXY_COUNT`、`OTP_DEBUG_RETURN_CODE`、`UPLOADS_DIR`、`MAX_REQUEST_BODY_BYTES`、
+`SLOW_REQUEST_MS`、`RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW_SECONDS`。
+
+生产启动 guardrail：`OTP_DEBUG_RETURN_CODE=false`、`COOKIE_SECURE=true`、`TRUSTED_PROXY_COUNT>0`，
+且 `BETTER_AUTH_SECRET` 必须显式设置并不同于 `OTP_SECRET`；任一不满足都会拒绝启动。另有可选
+`LOG_LEVEL`（API 日志级别，默认 `info`）与 iOS 推送用的 `APNS_*`（`APNS_KEY_ID` / `APNS_TEAM_ID` /
 `APNS_BUNDLE_ID` + `APNS_PRIVATE_KEY` 或 `APNS_PRIVATE_KEY_PATH` 二选一 / `APNS_PRODUCTION`；不配置则推送不挂载）。
 CLI 侧另认 `INFRA_LAB_API_URL`（API 基址）与 `XDG_CONFIG_HOME`（凭据目录），见 [`apps/cli/README.md`](./apps/cli/README.md)。
+Bot 侧环境变量见 [`apps/bot/.env.example`](./apps/bot/.env.example) / [`apps/bot/README.md`](./apps/bot/README.md)。
 
 ## 工程约定
 
-- 构建用 **tsup**（基础 tsconfig 为 `noEmit`），**不要运行 `tsc -b`**——会把产物写进源码目录。
+- 构建用 **tsup / Next build / Vite build**（基础 tsconfig 为 `noEmit`），**不要运行 `tsc -b`**——会把产物写进源码目录。
+- CI 门禁：Biome lint、typecheck、build、`pnpm gen:design` 无漂移、Vitest、actionlint、PR commitlint。
 - 提交遵循 **Conventional Commits**：`pre-commit` 跑 lint-staged（Biome），`commit-msg` 由 commitlint 校验。
 - 原生端（iOS / Android / HarmonyOS）各有本地编码规范 + lint 门禁（SwiftLint / detekt / DevEco CodeLinter），
   改动前先读 `.claude/rules/{ios,android,harmony}.md`；这些门禁本地运行，不进 CI（详见 [`CLAUDE.md`](./CLAUDE.md)）。
+- Agent 入口：`AGENTS.md` 只指向 `CLAUDE.md`，不要复制两份说明；仓库本地技能放在 `.claude/skills/`。
 - 详尽的开发须知见 [`CLAUDE.md`](./CLAUDE.md)。
 - 仓库配有 AI 助手 **infra-lab-bot**（`@infra-lab-bot` 提及即用）——协作方式见 [`docs/infra-lab-bot.md`](./docs/infra-lab-bot.md)；
   飞书用户可经 `apps/bot` 接待 bot 触达同一 workflow。
