@@ -2,18 +2,22 @@
 
 A mobile-first browser client for the phone-number + OTP auth flow (login ==
 register). It is a **Vite + React 19 + Tailwind CSS v4** SPA that mirrors the
-`apps/web` experience, reshaped for a phone: a full-screen login, then a bottom
-tab bar over the account and todos surfaces.
+`apps/web` browser-session model, reshaped for a phone: a full-screen login,
+then a bottom tab bar over the account and todos surfaces. It also owns the
+mobile public routes that should open cleanly in a browser or WebView:
+timeline share landing pages (`/t/:id`) and legal documents (`/legal/*`).
 
 ## What it reuses
 
 h5 is a browser, so it is **not** a new platform — it authenticates exactly like
 `apps/web`:
 
-- **Transport**: `@infra/sdk`'s `createWebAuthClient` / `createWebTodoClient`
-  (`platform: "web"`, `credentials: "include"`). The session rides the HttpOnly
-  `infra.session` cookie; **no token is ever stored client-side**.
-- **Contracts**: request/response shapes come from `@infra/shared` — unchanged.
+- **Transport**: `@infra/sdk`'s `createWebAuthClient`, `createWebTodoClient`,
+  and `createWebTimelineClient` (`platform: "web"`, `credentials: "include"`).
+  The session rides the HttpOnly `infra.session` cookie; **no token is ever
+  stored client-side**.
+- **Contracts**: request/response shapes, route helpers, legal document kinds,
+  and app links come from `@infra/shared` — unchanged.
 - **Design**: colors come from `src/tokens.generated.css` and copy from
   `@infra/design`'s `COPY` / `ERROR_MESSAGES`. Both are the single source shared
   1:1 with web / ios / android / harmony. `tokens.generated.css` is emitted by

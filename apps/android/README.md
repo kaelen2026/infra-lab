@@ -1,16 +1,17 @@
 # Android client (Kotlin + Jetpack Compose)
 
-Native Android client for the phone-number + OTP auth flow. Implements the shared `AuthClient`
-contract over **Bearer tokens** (the native session model): `accessToken` is sent on every request,
-and a `401` transparently rotates the `refreshToken` and retries.
+Native Android client for the phone-number + OTP auth flow plus the signed-in account, todos,
+timeline, and QR-login approval surfaces. It implements the shared native session model over
+**Bearer tokens**: `accessToken` is sent on every authenticated request, and a `401`
+transparently rotates the `refreshToken` and retries.
 
 ## Stack
 
 | Concern        | Choice |
 |----------------|--------|
-| UI             | Jetpack Compose + Material 3 (`AuthScreen` → phone → code → done) |
-| State          | `AuthViewModel` + `StateFlow<AuthUiState>` (the Kotlin analogue of the web `useOtpLogin` hook) |
-| Networking     | Retrofit + OkHttp + `kotlinx.serialization` |
+| UI             | Jetpack Compose + Material 3 (`AuthScreen` → account / todos / timeline shell) |
+| State          | `ViewModel` + `StateFlow` per surface (`AuthViewModel`, `TodoViewModel`, `TimelineViewModel`, `QrApproveViewModel`) |
+| Networking     | Retrofit + OkHttp + `kotlinx.serialization` (`AuthApi`, `TodoApi`, `TimelineApi`) |
 | Auto-refresh   | OkHttp `Authenticator` (`TokenAuthenticator`) rotates on 401, retries once |
 | Token storage  | `EncryptedSharedPreferences` (AES-256, key in the Android Keystore) |
 | DI             | `ServiceLocator` (tiny manual container, no framework) |
@@ -18,9 +19,21 @@ and a `401` transparently rotates the `refreshToken` and retries.
 
 ## Contract parity
 
-`data/contracts/Contracts.kt` mirrors `packages/shared/src/contracts/auth.ts` (DTOs, error codes,
-limits, route paths, platform enum). **Keep the two in lock-step** — it is the source of truth shared
-by the API and all four clients (web / ios / android / harmony).
+`data/contracts/Contracts.kt`, `TodoContracts.kt`, and `TimelineContracts.kt` mirror the matching
+files in `packages/shared/src/contracts/` (DTOs, error codes, limits, route paths, platform enum).
+**Keep them in lock-step** — the TypeScript contracts are the source of truth shared by the API,
+web/h5/cli SDK, iOS, Android, and Harmony.
+
+Current Android feature scope:
+
+- Auth: phone OTP login/register, refresh, logout, current session, devices, login history.
+- Account: profile display, current session, registered devices, login history, QR approval entry.
+- Todos: list, create, toggle, delete.
+- Timeline: newest-first feed, image picker/upload, publish, delete, cursor pagination.
+- QR login: scan a web QR ticket and approve it with the current native Bearer session.
+
+Admin, browser-assisted CLI activation, and legal-document routes are web/h5 surfaces, not Android
+screens.
 
 ## Build & run
 

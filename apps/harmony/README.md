@@ -36,9 +36,10 @@ apps/harmony/
          └─ views/MainShell.ets              signed-in shell: Account + Todos tabs (mirrors h5)
 ```
 
-Feature parity with `apps/h5`: after login the client shows a bottom tab bar over an
+Feature parity with the signed-in account/todos subset of `apps/h5`: after login the client shows a bottom tab bar over an
 **Account** tab (profile, current session, registered devices, login history) and a
 **Todos** tab (per-user list with add / toggle / delete) — the same surfaces web/h5 ship.
+Timeline share landing pages, legal documents, and web QR/CLI activation remain browser surfaces.
 
 > **Update uses PUT, not PATCH.** NetworkKit's `http.RequestMethod` enum has no PATCH
 > member, so `HarmonyTodoClient` updates todos via **PUT**; the API accepts PUT as an
@@ -46,10 +47,11 @@ Feature parity with `apps/h5`: after login the client shows a bottom tab bar ove
 
 ## How it maps to the contract
 
-`common/contracts.ets` is a **hand-mirror** of `packages/shared/src/contracts/auth.ts`
+`common/contracts.ets` and `common/todo.ets` are **hand-mirrors** of
+`packages/shared/src/contracts/auth.ts` and `packages/shared/src/contracts/todo.ts`
 (HarmonyOS can't import the TS package). Field names are the JSON wire format — keep
 them byte-for-byte identical to the server DTOs. If the shared contract changes, update
-this file in the same PR.
+the matching ArkTS mirror in the same PR.
 
 | Concern        | Web                              | Harmony                                            |
 | -------------- | -------------------------------- | -------------------------------------------------- |
