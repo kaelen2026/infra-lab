@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+/* 官方证件文档感:暖纸底 + 墨字 + 公章红/证件蓝;深度靠细线,不靠投影 */
+@theme {
+  --color-paper: #f7f5ef; /* 画布:暖纸白 */
+  --color-surface: #ffffff; /* 卡片/面板:纯白,靠 1px 墨线与纸底区分 */
+  --color-ink: #2a2722; /* 主文字:暖墨近黑 */
+  --color-ink-soft: #5f594e; /* 次要文字 */
+  --color-ink-faint: #8c8576; /* 弱化文字/标签 */
+  --color-line: #e0dacb; /* 墨线/分隔/边框 */
+  --color-seal: #b5362b; /* 公章红:强调 + 红底证件 */
+  --color-seal-tint: #f4e6e3; /* 公章红浅底 */
+  --color-doc-blue: #2f4d8a; /* 证件蓝:次强调 */
+
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+
+  /* 宋体 = 中国官方文档字;拉丁在前、系统 CJK 宋体在后 */
+  --font-serif: 'Iowan Old Style', 'Songti SC', 'STSong', 'Noto Serif SC',
+    'SimSun', serif;
+  --font-mono: ui-monospace, 'SF Mono', 'SFMono-Regular', Menlo, monospace;
+}
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+button {
+  touch-action: manipulation;
+}
+
+/* 等宽数字:尺寸/像素/DPI/百分比切换时不抖动 */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* 签名动效:人脸就绪时红色印章落章(scale + 轻旋 + 淡入) */
+@keyframes seal-drop {
+  0% {
+    opacity: 0;
+    transform: scale(1.5) rotate(-9deg);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(0.96) rotate(2deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(-3deg);
+  }
+}
+.seal-stamp {
+  animation: seal-drop 0.42s cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seal-stamp {
+    animation: none;
+  }
+}
+
+/* 打印时去掉页边距,让相纸排版图占满纸张 */
+@media print {
+  @page {
+    margin: 0;
+  }
+  html,
+  body {
+    height: auto;
+    background: #fff;
+  }
+}
