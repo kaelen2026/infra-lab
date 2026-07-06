@@ -18,5 +18,9 @@ export default defineConfig({
       "@infra/design": r("../../packages/design/src/index.ts"),
     },
   },
-  server: { port: 3002 },
+  // host: true binds all interfaces so a phone on the same Wi-Fi can open the dev
+  // server (share landing /t/:id, legal pages) at http://<mac-lan-ip>:3002. Pair it
+  // with VITE_API_URL=http://<mac-lan-ip>:3001 (apps/h5/.env.local) and the API's
+  // TRUSTED_ORIGINS allowlist so cross-origin calls aren't blocked.
+  server: { host: true, port: 3002 },
 });
