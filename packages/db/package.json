@@ -11,6 +11,10 @@
     "./schema/auth": {
       "types": "./dist/schema/auth.d.ts",
       "import": "./dist/schema/auth.js"
+    },
+    "./neon": {
+      "types": "./dist/neon.d.ts",
+      "import": "./dist/neon.js"
     }
   },
   "main": "./dist/index.js",
@@ -24,6 +28,7 @@
     "push": "drizzle-kit push"
   },
   "dependencies": {
+    "@neondatabase/serverless": "1.1.0",
     "drizzle-orm": "0.45.2",
     "postgres": "3.4.9"
   },

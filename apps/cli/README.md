@@ -63,3 +63,16 @@ device flow**。`auth login --web` 会:
 token 永不经浏览器传递;`deviceCode` 在服务端仅以 HMAC 哈希存储(与 OTP 同款),
 授权端点 cookie 鉴权 + SameSite=Lax(与 `/auth/logout` 同一 CSRF 姿态)。设计与安全
 要点见 [`docs/plans/cli-plan.md`](../../docs/plans/cli-plan.md)。
+
+## 发布 / CI-CD
+
+CLI 是一个**本地构建的终端客户端**,**没有托管部署**,因此不在
+[`deploy.yml`](../../.github/workflows/deploy.yml) 里:它跑在用户机器上,而不是某个服务器。
+
+- **质量门禁**:走仓库统一 CI(`lint · typecheck · build · test`,见
+  [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml))——与其它 TS 包一致。
+- **分发**:目前从源码构建(`pnpm --filter @infra/cli build` → `dist/index.js`,带
+  shebang)。包 `private: true`,尚未发布到 npm;若日后要发布,在此新增一个门禁于
+  CI 之后的 `publish` job(`npm publish --access public` + provenance),并去掉 `private`。
+- **运行时依赖**:仅需能访问 API 的 `BETTER_AUTH_URL` / API origin(见上文「配置」);
+  API 本身的部署见 [`apps/api/README.md`](../api/README.md)。

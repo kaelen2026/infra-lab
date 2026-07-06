@@ -8,22 +8,26 @@ The practical free/near-free baseline is split by responsibility:
 | --- | --- | --- |
 | Web (`apps/web`) | [Vercel Hobby](https://vercel.com/docs/plans/hobby) | Free for personal/small projects; native Next.js support. |
 | H5 (`apps/h5`) | [Cloudflare Pages Free](https://pages.cloudflare.com/) | Static SPA hosting with free builds and CDN. |
-| API (`apps/api`) | [Render Free web service](https://render.com/docs/free) or [Koyeb Free Instance](https://www.koyeb.com/docs/reference/instances) | Both can run the existing API Dockerfile. Render sleeps after 15 minutes; Koyeb free has 512 MB RAM / 0.1 vCPU and scales to zero after idle. |
-| Postgres | [Neon Free](https://neon.com/pricing) | Serverless Postgres with 100 CU-hours/month per project and scale-to-zero for intermittent load. |
-| Redis | [Upstash Redis Free](https://upstash.com/pricing/redis) | Serverless Redis compatible with this app's short-lived OTP/rate-limit/QR/device-code state. |
-| Object storage | [Cloudflare R2 Free](https://developers.cloudflare.com/r2/pricing/) | Needed before uploads are durable on free API instances; current code still uses local API disk. |
+| API (`apps/api`) | [Cloudflare Workers Free](https://developers.cloudflare.com/workers/platform/pricing/) | The API has a Workers entry (`src/worker.ts`) that runs on the free plan with the Neon / Upstash / R2 adapters. Fallback: the same Node Dockerfile on [Render Free](https://render.com/docs/free) or [Koyeb Free](https://www.koyeb.com/docs/reference/instances). |
+| Postgres | [Neon Free](https://neon.com/pricing) | Serverless Postgres with 100 CU-hours/month per project and scale-to-zero for intermittent load. On Workers the API talks to it via the `@neondatabase/serverless` driver (`@infra/db/neon`). |
+| Redis | [Upstash Redis Free](https://upstash.com/pricing/redis) | Serverless Redis for the short-lived OTP/rate-limit/QR/device-code state. On Workers the API uses the Upstash **REST** client (`@infra/redis/upstash`), not a `redis://` connection. |
+| Object storage | [Cloudflare R2 Free](https://developers.cloudflare.com/r2/pricing/) | Backs timeline/avatar uploads on the Workers runtime (R2 `ImageStore`), where there is no local disk. The Node/Docker runtime still uses local disk. |
 
 Hard constraints:
 
-- Browser auth currently depends on `infra.session` with `SameSite=Lax`. Free platform default domains
-  (`*.vercel.app`, `*.onrender.com`, `*.pages.dev`) are different sites, so cookie auth will not be
-  reliable across them. Use subdomains under one domain you control, for example:
-  `app.example.com`, `api.example.com`, `h5.example.com`, with `COOKIE_DOMAIN=.example.com`.
-- API free instances have ephemeral local filesystems. Timeline/avatar uploads stored through the current
-  local `ImageStore` can disappear on redeploy, restart, or scale-to-zero. Treat uploads as demo-only until
-  an R2/S3-backed `ImageStore` is added.
-- Free API instances sleep. OTP login, QR polling, and CLI device flow can see cold-start latency. This is
-  acceptable for demos, not a production SLO.
+- Browser auth depends on `infra.session` with `SameSite=Lax`. Free platform default domains
+  (`*.workers.dev`, `*.vercel.app`, `*.pages.dev`, `*.onrender.com`) are different sites, so cookie auth will
+  not be reliable across them. Use subdomains under one domain you control, for example:
+  `app.example.com`, `api.example.com`, `h5.example.com`, with `COOKIE_DOMAIN=.example.com` — and attach each
+  as a custom domain on its platform.
+- On the **Workers** runtime, uploads go to an R2 bucket (durable). On the **Node/Docker** runtime the local
+  `ImageStore` writes to the container filesystem, which is ephemeral on free hosts — treat those uploads as
+  demo-only, or point that deploy at object storage too.
+- Free serverless runtimes cold-start. OTP login, QR polling, and CLI device flow can see first-request
+  latency after idle. Acceptable for demos, not a production SLO.
+- **Workers-specific**: APNS push is disabled on Workers (its `node:http2` transport is unsupported); use the
+  Node runtime if you need push. `crypto.randomInt` and Better Auth session minting over the Neon serverless
+  adapter should be confirmed on the first real deploy.
 
 Free-tier environment shape:
 
@@ -45,7 +49,37 @@ See `.env.free.example` for the full variable list. Platform-specific build sett
 | --- | --- | --- |
 | Vercel Web | `corepack pnpm --filter @infra/web build` | Root `apps/web`; set `NEXT_PUBLIC_API_URL`. |
 | Cloudflare H5 | `corepack pnpm --filter @infra/h5 build` | Output `apps/h5/dist`; set `VITE_API_URL`. |
-| Render/Koyeb API | Dockerfile `apps/api/Dockerfile` | Set all API env vars from `.env.free.example`. |
+| Cloudflare API | `corepack pnpm --filter "@infra/api..." build` then `wrangler deploy` | Entry `apps/api/src/worker.ts`, config `apps/api/wrangler.toml`; set Worker secrets + R2 binding. |
+| Render/Koyeb API (fallback) | Dockerfile `apps/api/Dockerfile` | Set all API env vars from `.env.free.example`. |
+
+## CD pipeline (`.github/workflows/deploy.yml`)
+
+Continuous deployment is a single workflow with one job per target. Every job is
+**opt-in and safe-by-default**: it runs only when its repo *variable* is set to `"true"`
+(Settings → Secrets and variables → Actions → Variables), so the workflow does nothing
+until you enable a target and add its secrets. It triggers on push to `main` and via
+`workflow_dispatch`.
+
+| Job | Target | Runs when | Secrets | Variables |
+| --- | --- | --- | --- | --- |
+| `db-migrate` | Neon (migrations) | `DEPLOY_API=true` | `DATABASE_URL` | — |
+| `deploy-api` | Cloudflare Workers | `DEPLOY_API=true` (after `db-migrate`) | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | — |
+| `deploy-h5` | Cloudflare Pages | `DEPLOY_H5=true` | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | `CF_PAGES_PROJECT`, `VITE_API_URL` |
+| `deploy-web` | Vercel | `DEPLOY_WEB=true` | `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` | — |
+
+The **Worker's own runtime secrets** are not in the workflow — set them once with
+`wrangler secret put` (or the dashboard): `DATABASE_URL`, `OTP_SECRET`,
+`BETTER_AUTH_SECRET` (≠ `OTP_SECRET`), `UPSTASH_REDIS_REST_URL`,
+`UPSTASH_REDIS_REST_TOKEN`. Non-secret Worker config lives in `apps/api/wrangler.toml`
+`[vars]`. Per-app setup steps: [`apps/api`](../apps/api/README.md),
+[`apps/web`](../apps/web/README.md), [`apps/h5`](../apps/h5/README.md).
+
+Migrations run **before** the API rolls out and never on container/worker start —
+`db-migrate` gates `deploy-api` so a bad migration blocks the deploy.
+
+Native clients (ios / android / harmony) and the cli / bot are **not** in this pipeline:
+the mobile apps release through their stores (local, signed builds — see each app's
+README), and cli/bot are not browser-facing hosted services.
 
 ## Local Container Validation
 

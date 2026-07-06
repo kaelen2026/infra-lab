@@ -44,3 +44,17 @@ pnpm lint                             # 根 biome check(全仓库)
 
 `src/lib/site.ts` 是元数据、robots、sitemap、manifest、JSON-LD 共享的站点身份;
 `NEXT_PUBLIC_SITE_URL` 可按环境覆盖域名。
+
+## 部署 / CI-CD
+
+icon 是**纯前端独立静态站点**(Next.js,无后端/认证/上传),因此它的部署与主服务层
+**解耦**,当前**未纳入** [`deploy.yml`](../../.github/workflows/deploy.yml)。
+
+- **质量门禁**:走仓库 CI(见上文「质量门禁」;component/unit test 用本应用独立 vitest,
+  CI 里 `pnpm --filter @infra/icon test` 单独跑)。
+- **托管**:它是标准 Next.js 应用(已用 `@vercel/analytics`),推荐 **Vercel**(与
+  `apps/web` 同家,免费 Hobby 层)。要接入 CD,可按 `apps/web` 的
+  [`deploy-web`](../../.github/workflows/deploy.yml) 模式新增一个 `deploy-icon` job:
+  独立的 Vercel 项目、Root Directory 设为 `apps/icon`、按环境设 `NEXT_PUBLIC_SITE_URL`,
+  用一个 `DEPLOY_ICON=true` 仓库变量门禁。
+- 因为没有后端,它**不依赖**任何 secret/域名,除了展示用的 `NEXT_PUBLIC_SITE_URL`。

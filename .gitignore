@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist-worker/
 .next/
 # next dev/build 会把 next-env.d.ts 的 routes.d.ts 引用改写成各自的目录,不提交避免工作区反复变脏;
 # CI/本地 typecheck 由 `next typegen` 重新生成(见 apps/web package.json)

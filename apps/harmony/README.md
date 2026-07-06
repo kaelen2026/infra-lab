@@ -94,3 +94,21 @@ conventions are in `.claude/rules/harmony.md`.
 > no `package.json`, so pnpm's `apps/*` workspace glob ignores it. The two binary icons
 > under `entry/src/main/resources/base/media/` are DevEco template defaults — see the
 > README there.
+
+## Build / release / CI-CD
+
+Like the lint gate, the **build and release are local** — they need DevEco Studio /
+the hvigor toolchain and a signing profile, which do not run in GitHub CI, so this
+client is **not** in [`deploy.yml`](../../.github/workflows/deploy.yml).
+
+- **Build**: DevEco Studio *Build → Build HAP(s)/APP(s)*, or `hvigorw assembleHap`
+  from the module. Signing config lives in DevEco's project settings (keystore + profile),
+  not in the repo.
+- **Distribute**: package a signed `.app` and upload via AppGallery Connect. Do this from
+  a developer machine with the toolchain and credentials.
+- **What CI does cover**: only the shared **design-token drift** check — `color.json` and
+  `sdk/copy.generated.ets` are emitted by `pnpm gen:design` from `@infra/design` and CI
+  fails if they drift. Never hand-edit them.
+- **Backend**: this client talks to the API; deploy that separately —
+  see [`apps/api/README.md`](../api/README.md). Point `config.ets`'s API base URL at your
+  deployed `api.<your-domain>`.

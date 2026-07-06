@@ -73,6 +73,19 @@ pnpm vitest run -t "locks the phone"
 node scripts/verify-redis.mjs        # 针对运行中的 Redis 跑验收断言（需先 build）
 ```
 
+## 部署 / CI-CD
+
+- **CI 质量门禁**（[`.github/workflows/ci.yml`](.github/workflows/ci.yml)）：每个 PR 与 push
+  到 `main` 都跑 `lint · typecheck · build · test`（+ 设计令牌无漂移、actionlint、commitlint）。
+- **CD**（[`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)）：免费服务层的持续部署，
+  一目标一 job，**默认全关**——只有把对应仓库变量设为 `true` 才会跑：
+  - `DEPLOY_API` → API → **Cloudflare Workers**（Neon serverless + Upstash REST + R2；先跑 Neon 迁移）
+  - `DEPLOY_H5` → H5 → **Cloudflare Pages**
+  - `DEPLOY_WEB` → Web → **Vercel**
+- 免费层选型、密钥/变量矩阵、同源 Cookie 约束与一次性平台配置见
+  [`docs/deployment.md`](docs/deployment.md);各端细节见对应 `apps/*/README.md`。
+- 原生端（ios/android/harmony）与 cli/bot 不在此 CD 流水线内(见各自 README)。
+
 ## 目录结构
 
 ```
@@ -80,8 +93,8 @@ packages/
   shared/   契约单一真相：Zod schema、DTO、错误码、限值、路由常量、Platform 枚举、
             Auth/QR/Todo/Timeline/Admin/Legal Client 接口与 URL 构造
   auth/     OTP 领域服务（定义 OtpStore 端口）、CLI device flow、require-user、Better Auth 集成；testing 导出 FakeRedis
-  redis/    OtpStore 的 ioredis 适配器（依赖 @infra/auth 的类型）
-  db/       Drizzle schema（schema/{auth,todo,timeline}.ts + schema/index.ts 桶）+ 客户端 + drizzle.config
+  redis/    OtpStore 的 ioredis 适配器（依赖 @infra/auth 的类型）；子路径 /upstash 为 Workers 的 Upstash REST 适配器
+  db/       Drizzle schema（schema/{auth,todo,timeline}.ts + schema/index.ts 桶）+ postgres-js 客户端 + drizzle.config；子路径 /neon 为 Workers 的 Neon serverless 客户端
   sdk/      各端共用的 JS 参考实现：createAuthClient / createTodoClient /
             createTimelineClient / createWebQrLoginClient / createWebAdminClient；re-export @infra/shared
   design/   设计令牌、认证文案、法律正文单一来源；pnpm gen:design 生成各端颜色/文案产物，CI 校验无漂移
@@ -90,6 +103,7 @@ apps/
   api/      Hono 路由（auth：otp/refresh/logout/me/profile/avatar/devices/push-token/login-events/qr/cli；
             todo/timeline/admin；notifications：dev 自推）+ repositories + session-service + APNS client
             + observability / security headers / body limit / coarse rate limit
+            （双运行时：Node server.ts + Cloudflare Workers worker.ts，共用 app.ts 组合根）
   web/      Next.js：登录 / QR / CLI 激活、账户面板、待办、时间线、Admin、法律协议页
   h5/       移动端 H5（Vite + React 19 + Tailwind v4 SPA，:3002）：复用 @infra/sdk 的 Web Cookie 传输，
             移动优先的登录 + 账户 + 待办 + timeline 分享落地页 + 法律协议页；部署见 apps/h5/docs/deployment.md

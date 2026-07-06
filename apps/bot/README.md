@@ -134,3 +134,18 @@ bot 回帖默认落在话题（`reply_in_thread`），用户顺着话题继续�
 
 - **回帖为纯文本卡片**：结果以 markdown 卡片回到 thread，超长会截断并附运行日志链接；
   暂不回传图片 / 文件等富媒体。
+
+## 部署 / CI-CD
+
+bot 是一个**纯出站的长连接进程**（飞书 ws → GitHub `workflow_dispatch`），不是面向
+浏览器的服务，因此**不在** [`deploy.yml`](../../.github/workflows/deploy.yml) 的免费服务层里
+（那层是 web / h5 / api）。
+
+- **质量门禁**：走仓库统一 CI（`lint · typecheck · build · test`）。
+- **运行形态**：作为常驻进程运行——本地 `pnpm --filter @infra/bot dev`，或用容器
+  （[`Dockerfile`](Dockerfile)）跑在任意能长期在线的主机上。`docker-compose.deploy.yml`
+  里以 `--profile bot` 可选带起一份，用于单机验证。
+- **它不适合 Cloudflare Workers**：Workers 是请求驱动、无常驻长连接，撑不住飞书 ws-client；
+  需要一台常开的小实例（VM / 容器）。
+- **配置**：飞书 `LARK_*`、派发用的 `INFRA_LAB_BOT_*`（GitHub App）、可选 `LLM_*` —— 见
+  [`.env.deploy.example`](../../.env.deploy.example) 与「配置」小节；**绝不提交** secret。

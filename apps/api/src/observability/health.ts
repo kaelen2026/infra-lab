@@ -25,9 +25,12 @@ export interface ReadinessReport {
 }
 
 function timeout(ms: number): Promise<never> {
-  return new Promise((_, reject) =>
-    setTimeout(() => reject(new Error(`timed out after ${ms}ms`)), ms).unref(),
-  );
+  return new Promise((_, reject) => {
+    const handle = setTimeout(() => reject(new Error(`timed out after ${ms}ms`)), ms);
+    // `.unref()` keeps a pending probe from holding the Node event loop open, but it
+    // does not exist on the Workers runtime — call it only when present.
+    (handle as { unref?: () => void }).unref?.();
+  });
 }
 
 async function probe(ms: number, fn: () => Promise<unknown>): Promise<CheckResult> {
