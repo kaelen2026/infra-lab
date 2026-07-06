@@ -18,6 +18,7 @@
       "!apps/h5/src/index.css",
       "!apps/h5/src/tokens.generated.css",
       "!apps/icon/src/app/globals.css",
+      "!apps/id-photo/src/index.css",
       "!apps/ios"
     ]
   },
