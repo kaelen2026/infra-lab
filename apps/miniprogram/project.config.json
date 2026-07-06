@@ -1,0 +1,15 @@
+{
+  "description": "infra-lab 微信小程序端(@infra/miniprogram)。miniprogramRoot 指向 tsup 产物 + 手写视图所在的 miniprogram/。",
+  "miniprogramRoot": "miniprogram/",
+  "compileType": "miniprogram",
+  "appid": "touristappid",
+  "projectname": "infra-lab-miniprogram",
+  "libVersion": "latest",
+  "setting": {
+    "urlCheck": false,
+    "es6": false,
+    "enhance": false,
+    "minified": true,
+    "postcss": false
+  }
+}

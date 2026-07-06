@@ -1,0 +1,66 @@
+.topbar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 32rpx;
+}
+.topbar .title {
+  margin-bottom: 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  margin-bottom: 8rpx;
+}
+.grow {
+  flex: 1;
+  margin-bottom: 0;
+}
+.mini {
+  flex: none;
+  min-width: 140rpx;
+}
+
+.empty {
+  color: var(--muted);
+  text-align: center;
+  padding: 80rpx 0;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+  padding: 28rpx 8rpx;
+  border-bottom: 1rpx solid var(--line);
+}
+.check {
+  width: 44rpx;
+  height: 44rpx;
+  border: 2rpx solid var(--muted);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.check.done {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.tick {
+  color: #fff;
+  font-size: 28rpx;
+}
+.label {
+  flex: 1;
+}
+.label.struck {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.del {
+  color: #e5484d;
+  font-size: 26rpx;
+}

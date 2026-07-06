@@ -1,0 +1,19 @@
+<view class="page">
+  <view class="title">我的</view>
+
+  <view class="card">
+    <view class="line">
+      <text class="k">手机号</text>
+      <text class="v">{{phone}}</text>
+    </view>
+    <view class="line">
+      <text class="k">昵称</text>
+      <input class="v-input" value="{{draft}}" placeholder="设置昵称" bindinput="onNameInput" />
+    </view>
+  </view>
+
+  <button class="primary" loading="{{busy}}" bindtap="save">保存</button>
+  <view class="error" wx:if="{{error}}">{{error}}</view>
+
+  <button class="danger" bindtap="logout">退出登录</button>
+</view>

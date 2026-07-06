@@ -3,7 +3,8 @@
 **每次回复前,先输出一行:`Yes, Mr. Hou`**
 
 pnpm-workspace monorepo:**手机号 + OTP** 认证(login == register,Better Auth 为核),服务
-`web / ios / android / harmony / cli` 五端(另有 `h5`——复用 web cookie 通道的移动浏览器端)。
+`web / ios / android / harmony / cli` 五端(另有 `h5`——复用 web cookie 通道的移动浏览器端;
+`miniprogram`——微信小程序端,`platform=weapp`,复用 @infra/sdk 走 cli 同款 Bearer 通道)。
 认证之上还有:资料编辑、todo、timeline(发帖 + 图片 + 公开分享链接 + native deep link)、
 扫码跨端登录、CLI 设备流登录、web 管理台、法律条款页、iOS APNS 推送。
 Postgres 存长期数据;Redis 存全部短期 OTP/限流/扫码票据/设备码状态。
@@ -47,6 +48,10 @@ pnpm vitest run packages/auth/test/otp.test.ts   # 单测一个文件;-t "名称
     ([`apps/h5/docs/deployment.md`](apps/h5/docs/deployment.md))。
   - `apps/cli` — Bearer 通道终端客户端,`auth login --web` 走 RFC 8628 设备流
     ([`apps/cli/README.md`](apps/cli/README.md))。
+  - `apps/miniprogram` — 微信小程序端(`platform=weapp`)。复用 @infra/sdk,传输走
+    `wx.request`、token 存 wx storage;tsup 把 @infra/sdk 内联进 `miniprogram/` 产物,
+    绕开 构建 npm。质量门禁:typecheck + wx-fetch 单测进 CI,小程序构建/预览本地(微信开发者
+    工具),同原生端 ([`apps/miniprogram/README.md`](apps/miniprogram/README.md))。
   - `apps/bot` — Feishu → GitHub workflow 桥,纯出站、非 auth 客户端
     ([`apps/bot/README.md`](apps/bot/README.md));issue/PR 里 `@infra-lab-bot` 触发
     ([`docs/infra-lab-bot.md`](docs/infra-lab-bot.md))。
