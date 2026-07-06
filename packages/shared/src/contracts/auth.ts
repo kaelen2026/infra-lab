@@ -15,7 +15,9 @@ import type { TimelineImageContentType } from "./timeline";
 // native platforms — it authenticates with Bearer + refresh tokens, persisting
 // them in a local credentials file. Adding it is additive: native clients only
 // ever send their own value and never decode this enum, so they are unaffected.
-export const PLATFORMS = ["web", "ios", "android", "harmony", "cli"] as const;
+// `weapp` is the WeChat mini-program (apps/miniprogram): also cookie-less, so it
+// rides the same Bearer + refresh channel as `cli`, storing tokens in wx storage.
+export const PLATFORMS = ["web", "ios", "android", "harmony", "cli", "weapp"] as const;
 export const platformSchema = z.enum(PLATFORMS);
 export type Platform = (typeof PLATFORMS)[number];
 

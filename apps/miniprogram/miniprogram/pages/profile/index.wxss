@@ -1,0 +1,35 @@
+.card {
+  background: #fff;
+  border: 1rpx solid var(--line);
+  border-radius: 16rpx;
+  padding: 8rpx 28rpx;
+  margin-bottom: 40rpx;
+}
+.line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 28rpx 0;
+  border-bottom: 1rpx solid var(--line);
+}
+.line:last-child {
+  border-bottom: none;
+}
+.k {
+  color: var(--muted);
+}
+.v {
+  color: var(--ink);
+}
+.v-input {
+  text-align: right;
+  flex: 1;
+  margin-left: 40rpx;
+}
+.danger {
+  margin-top: 48rpx;
+  color: #e5484d;
+  background: #fff;
+  border: 1rpx solid var(--line);
+  border-radius: 16rpx;
+}

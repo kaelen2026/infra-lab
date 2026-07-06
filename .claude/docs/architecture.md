@@ -37,7 +37,8 @@ through the same `ImageStore` the timeline uses and returns the refreshed user),
 the QR endpoints (below), and the CLI device-flow endpoints (below). Error codes map to HTTP status via
 `ERROR_STATUS` (cooldown/limits → 429, LOCKED → 423, invalid/expired/unauthorized → 401). A new phone
 that verifies successfully auto-creates `user` + `profile` in one transaction. The `Platform` enum is
-`["web", "ios", "android", "harmony", "cli"]` — `cli` rides the native Bearer channel.
+`["web", "ios", "android", "harmony", "cli", "weapp"]` — `cli` (terminal) and `weapp` (WeChat
+mini-program, `apps/miniprogram`) both ride the native Bearer channel.
 
 **CLI browser-assisted login — device flow** (`apps/api/src/routes/auth.routes.ts`, gh-style / RFC 8628).
 The terminal client (`apps/cli`) can't read a browser cookie, so instead: (1) the CLI (unauthenticated)

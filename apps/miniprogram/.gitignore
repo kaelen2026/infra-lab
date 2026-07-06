@@ -1,0 +1,6 @@
+# tsup emits the runtime JS next to the authored view files — generated, not tracked.
+miniprogram/**/*.js
+miniprogram/**/*.js.map
+
+# WeChat devtools per-developer local settings.
+project.private.config.json

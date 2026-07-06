@@ -1,8 +1,15 @@
 import { relations } from "drizzle-orm";
 import { boolean, index, pgEnum, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
-/** device.platform — the supported clients (`cli` is the terminal client, apps/cli). */
-export const platformEnum = pgEnum("platform", ["web", "ios", "android", "harmony", "cli"]);
+/** device.platform — the supported clients (`cli` = terminal client apps/cli; `weapp` = WeChat mini-program apps/miniprogram). */
+export const platformEnum = pgEnum("platform", [
+  "web",
+  "ios",
+  "android",
+  "harmony",
+  "cli",
+  "weapp",
+]);
 
 /**
  * user.role — persisted identity. `user` is every logged-in account (the default);
@@ -99,7 +106,7 @@ export const profile = pgTable("profile", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-/** A physical install of one of the four clients. */
+/** A physical install of one of the clients. */
 export const device = pgTable(
   "device",
   {
