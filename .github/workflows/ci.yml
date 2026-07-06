@@ -74,6 +74,12 @@ jobs:
       - name: Test (vitest)
         run: pnpm test
 
+      # @infra/icon is a browser-only Next app whose component tests need a DOM
+      # (happy-dom), so they run under the app's own vitest config rather than the
+      # root node-env hermetic suite.
+      - name: Test · @infra/icon (vitest, happy-dom)
+        run: pnpm --filter @infra/icon test
+
   actionlint:
     name: Workflows (actionlint)
     runs-on: ubuntu-latest
