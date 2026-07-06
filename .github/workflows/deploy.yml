@@ -1,0 +1,164 @@
+name: Deploy
+
+# Continuous deployment of the free-tier service layer. Each job is opt-in and
+# safe-by-default: it runs only when its repo *variable* is set to "true"
+# (Settings → Secrets and variables → Actions → Variables), so this workflow does
+# nothing until you explicitly enable a target and add its secrets. See
+# docs/deployment.md for the full secret/variable matrix and one-time platform setup.
+#
+#   DEPLOY_API  → API   → Cloudflare Workers (+ Neon migrate)
+#   DEPLOY_H5   → H5    → Cloudflare Pages
+#   DEPLOY_WEB  → Web   → Vercel
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Never cancel an in-flight deploy; let each finish so a half-applied rollout can't happen.
+concurrency:
+  group: deploy-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  TURBO_TELEMETRY_DISABLED: "1"
+
+permissions:
+  contents: read
+
+jobs:
+  # Apply versioned migrations against the target (Neon) BEFORE the new API rolls out.
+  # Runs on the standard Postgres connection string (sslmode=require), not the
+  # serverless driver — drizzle-kit needs a direct connection.
+  db-migrate:
+    name: DB migrate (Neon)
+    if: vars.DEPLOY_API == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: pnpm --filter @infra/db migrate
+
+  # API → Cloudflare Workers. Waits for a successful migration. The Worker's own
+  # secrets (DATABASE_URL, OTP_SECRET, BETTER_AUTH_SECRET, UPSTASH_*) are set
+  # out-of-band via `wrangler secret put` / the dashboard, not here.
+  deploy-api:
+    name: Deploy API (Cloudflare Workers)
+    if: vars.DEPLOY_API == 'true'
+    needs: db-migrate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The Worker bundle imports the built @infra/* packages via their `exports`,
+      # so build the API and its workspace deps first (topological).
+      - name: Build API + workspace deps
+        run: pnpm --filter "@infra/api..." build
+
+      - name: Deploy Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/api
+          command: deploy
+
+  # H5 (static Vite SPA) → Cloudflare Pages. VITE_API_URL is inlined at build time,
+  # so it is a build-time variable, not a runtime secret.
+  deploy-h5:
+    name: Deploy H5 (Cloudflare Pages)
+    if: vars.DEPLOY_H5 == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build H5
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+        run: pnpm --filter @infra/h5 build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy apps/h5/dist --project-name=${{ vars.CF_PAGES_PROJECT }} --branch=main
+
+  # Web (Next.js) → Vercel. NEXT_PUBLIC_API_URL is inlined into the browser bundle;
+  # set it in the Vercel project's Environment Variables, and set the project's Root
+  # Directory to apps/web so Vercel's monorepo build resolves the workspace.
+  deploy-web:
+    name: Deploy Web (Vercel)
+    if: vars.DEPLOY_WEB == 'true'
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel project settings
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build
+        run: vercel build --prod --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy
+        run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}

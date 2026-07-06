@@ -8,7 +8,9 @@
     "typecheck": "tsc --noEmit",
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
-    "clean": "rm -rf dist"
+    "deploy:worker": "wrangler deploy",
+    "build:worker:dryrun": "wrangler deploy --dry-run --outdir dist-worker",
+    "clean": "rm -rf dist dist-worker"
   },
   "dependencies": {
     "@hono/node-server": "2.0.6",
@@ -22,6 +24,8 @@
     "hono": "4.12.27"
   },
   "devDependencies": {
-    "tsx": "4.22.4"
+    "@cloudflare/workers-types": "5.20260706.1",
+    "tsx": "4.22.4",
+    "wrangler": "4.107.0"
   }
 }

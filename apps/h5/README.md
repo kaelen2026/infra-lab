@@ -40,3 +40,26 @@ pnpm --filter @infra/h5 typecheck  # tsc --noEmit
 
 Lint (`pnpm lint`) and the hermetic test suite (`pnpm test`) run repo-wide and
 cover h5 too — no per-app config.
+
+## CD: Cloudflare Pages
+
+Deployed by [`.github/workflows/deploy.yml`](../../.github/workflows/deploy.yml)
+(`deploy-h5` job) on push to `main` **when the repo variable `DEPLOY_H5=true`**. The
+job builds the static SPA and runs `wrangler pages deploy apps/h5/dist`. Because
+`VITE_API_URL` is inlined at build time, it is a **build-time repo variable**, not a
+runtime secret.
+
+One-time setup:
+
+1. Create a Cloudflare Pages project; set the repo variable `CF_PAGES_PROJECT` to its
+   name.
+2. Repo secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`. Repo variables:
+   `VITE_API_URL` (your API origin, e.g. `https://api.<your-domain>`),
+   `DEPLOY_H5=true`.
+3. **Same-site cookie constraint**: serve h5 on `h5.<your-domain>` alongside the API on
+   `api.<your-domain>` (`COOKIE_DOMAIN=.<your-domain>`). A `*.pages.dev` host is a
+   different site and breaks the cookie session — attach a custom domain.
+
+Deployment topologies (same-origin nginx proxy vs. cross-origin static host) and the
+full cookie discussion live in [`docs/deployment.md`](docs/deployment.md); the
+free-tier matrix is in [`../../docs/deployment.md`](../../docs/deployment.md).

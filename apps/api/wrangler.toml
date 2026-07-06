@@ -1,0 +1,48 @@
+# Cloudflare Workers config for the API (@infra/api). Deployed by
+# .github/workflows/deploy.yml (job: deploy-api) or `pnpm dlx wrangler deploy`.
+#
+# Prerequisites (do these once, out of band — none are committed):
+#   1. A Cloudflare account; set CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN as repo secrets.
+#   2. An R2 bucket named below: `wrangler r2 bucket create infra-lab-uploads`.
+#   3. Secrets (never in this file): `wrangler secret put <NAME>` for each of
+#        DATABASE_URL                (Neon pooled connection string, sslmode=require)
+#        OTP_SECRET                  (openssl rand -hex 32)
+#        BETTER_AUTH_SECRET          (openssl rand -hex 32; MUST differ from OTP_SECRET)
+#        UPSTASH_REDIS_REST_URL      (Upstash database REST URL)
+#        UPSTASH_REDIS_REST_TOKEN    (Upstash database REST token)
+#   4. A custom domain route so cookie auth stays same-site with web/h5 — a
+#      *.workers.dev host is a different site and breaks the session cookie. Point
+#      api.<your-domain> at this Worker (Workers → Custom Domains) and set the [vars]
+#      BETTER_AUTH_URL / TRUSTED_ORIGINS / COOKIE_DOMAIN to your real domains.
+#
+# Validate the bundle without deploying (needs `pnpm build` first so @infra/* dist exists):
+#   pnpm --filter @infra/api build:worker:dryrun   # → wrangler deploy --dry-run
+
+name = "infra-lab-api"
+main = "src/worker.ts"
+compatibility_date = "2026-07-01"
+# node:crypto (OTP HMAC + JWT), node:buffer — required by the auth/session code.
+compatibility_flags = ["nodejs_compat"]
+
+# Durable timeline/avatar uploads. Bound as `env.IMAGES` (see src/worker.ts).
+[[r2_buckets]]
+binding = "IMAGES"
+bucket_name = "infra-lab-uploads"
+
+# Non-secret runtime config. Secrets are set separately (see header). Replace the
+# example domains with your own before deploying — production guardrails in
+# @infra/env/core refuse to boot unless COOKIE_SECURE=true and TRUSTED_PROXY_COUNT>0.
+[vars]
+NODE_ENV = "production"
+BETTER_AUTH_URL = "https://app.example.com"
+TRUSTED_ORIGINS = "https://h5.example.com"
+COOKIE_DOMAIN = ".example.com"
+COOKIE_SECURE = "true"
+# Cloudflare is the single trusted proxy hop in front of the Worker.
+TRUSTED_PROXY_COUNT = "1"
+LOG_LEVEL = "info"
+RATE_LIMIT_MAX = "120"
+RATE_LIMIT_WINDOW_SECONDS = "60"
+MAX_REQUEST_BODY_BYTES = "10485760"
+SLOW_REQUEST_MS = "1000"
+OTP_DEBUG_RETURN_CODE = "false"

@@ -8,7 +8,9 @@
       "@infra/auth/testing": ["../../packages/auth/src/testing.ts"],
       "@infra/env/core": ["../../packages/env/src/core.ts"],
       "@infra/redis": ["../../packages/redis/src/index.ts"],
-      "@infra/db": ["../../packages/db/src/index.ts"]
+      "@infra/redis/upstash": ["../../packages/redis/src/upstash.ts"],
+      "@infra/db": ["../../packages/db/src/index.ts"],
+      "@infra/db/neon": ["../../packages/db/src/neon.ts"]
     }
   },
   "include": ["src/**/*.ts", "test/**/*.ts"]
