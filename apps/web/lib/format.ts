@@ -40,6 +40,7 @@ const PLATFORM_LABELS: Record<Platform, string> = {
   android: "Android",
   harmony: "HarmonyOS",
   cli: "CLI",
+  weapp: "WeChat Mini Program",
 };
 
 export function platformLabel(platform: Platform): string {
