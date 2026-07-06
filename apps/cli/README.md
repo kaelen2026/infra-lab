@@ -15,6 +15,7 @@ node apps/cli/dist/index.js auth login    # 或 pnpm --filter @infra/cli dev aut
 infra-lab auth login       # 交互式登录(输入手机号 → 收到验证码 → 输入验证码)
 infra-lab auth login --web # 浏览器登录(device flow:浏览器确认,复用现有登录态)
 infra-lab auth whoami      # 查看当前登录用户(access token 过期会自动 refresh 一次)
+infra-lab auth status      # whoami 的别名,输出同上
 infra-lab auth logout      # 退出登录并清除本地凭据
 infra-lab todo list        # 列出待办
 infra-lab todo add 买牛奶   # 新建待办

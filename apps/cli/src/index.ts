@@ -1,3 +1,5 @@
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import type { TokenStore } from "@infra/sdk";
 import { createCliClients } from "./client.js";
@@ -31,7 +33,7 @@ const HELP = `infra-lab — 终端客户端 (手机号 + OTP 登录,复用本地
 用法:
   infra-lab auth login            交互式 OTP 登录 (login == register)
   infra-lab auth login --web      浏览器登录 (device flow:浏览器确认,复用登录态)
-  infra-lab auth whoami           查看当前登录用户
+  infra-lab auth whoami           查看当前登录用户 (status 为其别名)
   infra-lab auth logout           退出登录并清除本地凭据
   infra-lab todo list             列出待办
   infra-lab todo add <标题...>     新建待办
@@ -137,6 +139,7 @@ async function dispatch(ctx: DispatchCtx): Promise<number> {
           ? runLoginWeb({ apiUrl, tokens, io, deviceId, openUrl: openBrowser })
           : runLogin(deps);
       case "whoami":
+      case "status": // alias for whoami
         return runWhoami(deps);
       case "logout":
         return runLogout(deps);
@@ -178,8 +181,20 @@ async function dispatch(ctx: DispatchCtx): Promise<number> {
   return 2;
 }
 
-// Bootstrap: only when run as the binary, not when imported by tests.
-if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
+// Bootstrap: only when run as the binary, not when imported by tests. Compare
+// real paths — the installed `bin` is a symlink, so argv[1] (the symlink) never
+// equals import.meta.url (the resolved file) without resolving both first.
+function isMainModule(): boolean {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    return realpathSync(fileURLToPath(import.meta.url)) === realpathSync(entry);
+  } catch {
+    return false;
+  }
+}
+
+if (isMainModule()) {
   run(process.argv.slice(2)).then(
     (code) => process.exit(code),
     (err: unknown) => {
