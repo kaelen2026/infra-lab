@@ -1,3 +1,5 @@
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import type { TokenStore } from "@infra/sdk";
 import { createCliClients } from "./client.js";
@@ -179,8 +181,20 @@ async function dispatch(ctx: DispatchCtx): Promise<number> {
   return 2;
 }
 
-// Bootstrap: only when run as the binary, not when imported by tests.
-if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
+// Bootstrap: only when run as the binary, not when imported by tests. Compare
+// real paths — the installed `bin` is a symlink, so argv[1] (the symlink) never
+// equals import.meta.url (the resolved file) without resolving both first.
+function isMainModule(): boolean {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    return realpathSync(fileURLToPath(import.meta.url)) === realpathSync(entry);
+  } catch {
+    return false;
+  }
+}
+
+if (isMainModule()) {
   run(process.argv.slice(2)).then(
     (code) => process.exit(code),
     (err: unknown) => {
