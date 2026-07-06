@@ -44,4 +44,17 @@ describe("run (argv dispatch)", () => {
     expect(await run(["todo", "add"], {}, io, noFetch)).toBe(2);
     expect(err.join("\n")).toContain("用法");
   });
+
+  it("auth status is an alias for whoami (reaches the network, not unknown-command)", async () => {
+    // An unknown auth subcommand exits 2 with 未知命令 before any fetch. `status`
+    // must instead route to runWhoami, which calls auth.me() — so with a throwing
+    // fetch it surfaces as a caught runtime error (exit 1), never 未知命令.
+    const unknown = fakeIO();
+    expect(await run(["auth", "bogus"], {}, unknown.io, noFetch)).toBe(2);
+    expect(unknown.err.join("\n")).toContain("未知命令");
+
+    const status = fakeIO();
+    expect(await run(["auth", "status"], {}, status.io, noFetch)).toBe(1);
+    expect(status.err.join("\n")).not.toContain("未知命令");
+  });
 });
