@@ -27,17 +27,23 @@ dist-worker
 coverage
 **/coverage
 
-# Secrets & local env — never ship into a layer; keep the checked-in examples
+# Secrets & local env — never ship into a layer; keep the checked-in examples.
+# Both root and `**/` forms: unanchored patterns only match the context root, so
+# without `**/` a physical `apps/{api,bot}/.env` would still land in a build layer.
 .env
 .env.*
+**/.env
+**/.env.*
 !.env.example
 !.env.deploy.example
 !.env.free.example
+!**/.env.example
 
 # Runtime / local artifacts
 .uploads
 .git
 .DS_Store
+**/.DS_Store
 .vscode
 
 # The images don't need these; they only bloat the context

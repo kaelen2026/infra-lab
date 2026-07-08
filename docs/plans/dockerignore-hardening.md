@@ -36,9 +36,15 @@
   (web 的 `.next/standalone` 由 build stage 内 `next build` 现产,排除宿主机的 `.next`
   正是期望行为)。
 - **排除缓存**:`.turbo`、`coverage`。
-- **排除密钥与本地 env**:`.env` + `.env.*`;用 `!.env.*.example` 保留三个已入库的示例
-  文件(`.env.example` / `.env.deploy.example` / `.env.free.example`)。示例文件构建并
-  不需要,保留只为「排 `.env.*` 时不误伤已入库文件」的稳妥,可按需精简。
+- **排除密钥与本地 env**:根级 `.env` + `.env.*`,**并成对补 `**/.env` + `**/.env.*`**。
+  关键:`.dockerignore` 与 `.gitignore` 语义不同——未带 `**/` 的模式只在构建上下文
+  **根目录**匹配、不递归,所以只写根级会漏掉子目录下的物理 `.env`
+  (如 `apps/bot/.env`、`apps/api/.env`——`apps/bot/Dockerfile` 注释里的
+  `--env-file apps/bot/.env` 正暗示其存在),仍被 `COPY . .` 带进 build 层,与本 PR 目标相悖。
+  用 `!.env.*.example` + `!**/.env.example` 保留已入库示例文件
+  (根级 `.env.example` / `.env.deploy.example` / `.env.free.example` 与子目录
+  `apps/bot/.env.example`)。示例文件构建并不需要,保留只为「排 `.env.*` 时不误伤已入库
+  文件」的稳妥,可按需精简。
 - **排除运行时/本地产物**:`.uploads`、`.git`、`.DS_Store`、`.vscode`、
   `**/test-results`、`**/playwright-report`。
 
