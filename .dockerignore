@@ -1,0 +1,51 @@
+# Repo-root Docker build context filter. All four app images
+# (apps/{api,web,h5,bot}/Dockerfile) build from the monorepo root with `COPY . .`,
+# so anything not excluded here is shipped to the daemon and lands in the build-stage
+# image layers + cache. Keep this in sync with .gitignore.
+#
+# Why this matters:
+#  - Build speed: node_modules/.git/.turbo/.next are large and useless — pnpm
+#    reinstalls from the lockfile inside the container anyway, and each app rebuilds
+#    its own dist/.next fresh in the build stage.
+#  - Secrets: a physical `.env` (gitignored but present locally, holding real
+#    OTP_SECRET / BETTER_AUTH_SECRET) must never reach a build layer or cache.
+
+# Dependencies — reinstalled from the lockfile in-container
+node_modules
+**/node_modules
+
+# Build outputs — regenerated in the build stage
+**/dist
+dist-worker
+**/dist-worker
+**/.next
+*.tsbuildinfo
+
+# Tooling caches
+.turbo
+**/.turbo
+coverage
+**/coverage
+
+# Secrets & local env — never ship into a layer; keep the checked-in examples.
+# Both root and `**/` forms: unanchored patterns only match the context root, so
+# without `**/` a physical `apps/{api,bot}/.env` would still land in a build layer.
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!.env.deploy.example
+!.env.free.example
+!**/.env.example
+
+# Runtime / local artifacts
+.uploads
+.git
+.DS_Store
+**/.DS_Store
+.vscode
+
+# The images don't need these; they only bloat the context
+**/test-results
+**/playwright-report
