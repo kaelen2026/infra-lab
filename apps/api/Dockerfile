@@ -36,8 +36,16 @@ RUN pnpm --filter=@infra/api --prod --legacy deploy /app
 FROM node:24-slim AS runtime
 ENV NODE_ENV=production
 ENV PORT=3001
+# 容器内默认把上传目录固定到 /data/uploads(可被 env 覆盖):该路径在下面预建并
+# chown 给 node,这样非 root 也能开箱即用;compose 的 uploads 卷也挂在这里。
+ENV UPLOADS_DIR=/data/uploads
 WORKDIR /app
 COPY --from=build /app ./
+# 以非特权用户运行(node:24-slim 自带 `node` 用户)。uploads 目录必须在切换用户前
+# 建好并归属 node——命名卷首次挂载会继承镜像内该路径的属主,root 建的目录会让
+# 非 root 进程写不进去。
+RUN mkdir -p /data/uploads && chown node:node /data/uploads
+USER node
 EXPOSE 3001
 # 就绪探针交给平台探 /ready（探 PG+Redis）；镜像内自带一个轻量 liveness，命中 /health。
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \

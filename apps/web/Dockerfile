@@ -27,9 +27,12 @@ ENV HOSTNAME=0.0.0.0
 WORKDIR /app
 
 # Next standalone output contains the traced server and minimal node_modules.
-COPY --from=build /repo/apps/web/.next/standalone ./
-COPY --from=build /repo/apps/web/.next/static ./apps/web/.next/static
+# node-owned so the runtime user can write .next/cache (ISR / fetch cache).
+COPY --from=build --chown=node:node /repo/apps/web/.next/standalone ./
+COPY --from=build --chown=node:node /repo/apps/web/.next/static ./apps/web/.next/static
 
+# Run as the unprivileged `node` user baked into node:24-slim.
+USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"

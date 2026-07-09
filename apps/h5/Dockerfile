@@ -19,7 +19,10 @@ ARG VITE_API_URL=""
 RUN VITE_API_URL="$VITE_API_URL" pnpm --filter @infra/h5 build
 
 # ---- serve ----
-FROM nginx:1.27-alpine
+# Unprivileged variant: runs as user nginx (101), pid/cache under /tmp, and the
+# server must therefore listen on a port > 1024 — 8080 here and in nginx.conf.
+# Host mappings choose their own public port (e.g. compose `H5_PORT:8080`).
+FROM nginxinc/nginx-unprivileged:1.27-alpine
 COPY --from=build /repo/apps/h5/dist /usr/share/nginx/html
 COPY apps/h5/docs/nginx.conf /etc/nginx/conf.d/default.conf
-EXPOSE 80
+EXPOSE 8080

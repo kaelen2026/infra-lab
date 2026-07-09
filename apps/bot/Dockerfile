@@ -35,4 +35,6 @@ FROM node:24-slim AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /app ./
+# 纯出站服务、不落盘,直接以 node:24-slim 自带的非特权 `node` 用户运行。
+USER node
 CMD ["node", "dist/index.js"]
