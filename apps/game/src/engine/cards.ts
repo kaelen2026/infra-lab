@@ -94,9 +94,9 @@ export function shuffle(deck: readonly Card[], random: () => number = Math.rando
   return out;
 }
 
-/** 按 rank 升序排列(相同 rank 再按 id 稳定),便于顺子从左到右阅读。 */
+/** 按 rank 降序排列(从大到小;相同 rank 再按 id 稳定),手牌从左到右由大到小。 */
 export function sortHand(cards: readonly Card[]): Card[] {
-  return cards.slice().sort((a, b) => a.rank - b.rank || a.id - b.id);
+  return cards.slice().sort((a, b) => b.rank - a.rank || a.id - b.id);
 }
 
 /** 统计每个 rank 出现的张数。 */

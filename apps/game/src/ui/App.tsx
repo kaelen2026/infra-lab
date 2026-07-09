@@ -1,4 +1,7 @@
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import type { BackgroundMusic } from "../audio/music.js";
+import { type Card, countByRank, rankLabel } from "../engine/cards.js";
+import { comboLabel, identify } from "../engine/combos.js";
 import { canPass, legalBids, validatePlay } from "../engine/game.js";
 import type { GameController } from "../game/controller.js";
 import { hitTest, humanCardLayout, type Viewport } from "../render/layout.js";
@@ -6,8 +9,25 @@ import { render } from "../render/renderer.js";
 
 const SEAT_NAME = ["你", "右家", "左家"] as const;
 
-export function App({ controller }: { controller: GameController }): React.JSX.Element {
+export function App({
+  controller,
+  music,
+}: {
+  controller: GameController;
+  music: BackgroundMusic;
+}): React.JSX.Element {
   const snap = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
+  const [musicOn, setMusicOn] = useState(true);
+
+  const toggleMusic = () => {
+    const next = !musicOn;
+    setMusicOn(next);
+    music.setEnabled(next);
+  };
+  const startGame = () => {
+    music.setEnabled(musicOn); // 首个用户手势:解锁 / 恢复音频
+    controller.start();
+  };
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const vpRef = useRef<Viewport>({ width: 0, height: 0 });
   const snapRef = useRef(snap);
@@ -40,13 +60,39 @@ export function App({ controller }: { controller: GameController }): React.JSX.E
     if (ctx) render(ctx, snap, vpRef.current);
   }, [snap]);
 
-  const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+  // 划动“涂选”:按下起点定方向(点未选中→选,点已选中→消),
+  // 拖过的每张牌刷成同一状态;单击即退化为切换。自动识别牌型由下方指示条实时显示。
+  const drag = useRef<{ mode: "select" | "deselect"; done: Set<number> } | null>(null);
+
+  const cardAt = (e: React.PointerEvent<HTMLCanvasElement>): Card | null => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
     const rects = humanCardLayout(snap.state.hands[0] ?? [], snap.selected, vpRef.current);
-    const card = hitTest(rects, e.clientX - rect.left, e.clientY - rect.top);
-    if (card) controller.toggleCard(card.id);
+    return hitTest(rects, e.clientX - rect.left, e.clientY - rect.top);
+  };
+
+  const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const card = cardAt(e);
+    if (!card) return;
+    const mode: "select" | "deselect" = snap.selected.has(card.id) ? "deselect" : "select";
+    drag.current = { mode, done: new Set([card.id]) };
+    canvasRef.current?.setPointerCapture(e.pointerId);
+    controller.setCardSelected(card.id, mode === "select");
+  };
+
+  const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const state = drag.current;
+    if (!state) return;
+    const card = cardAt(e);
+    if (!card || state.done.has(card.id)) return;
+    state.done.add(card.id);
+    controller.setCardSelected(card.id, state.mode === "select");
+  };
+
+  const onPointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    drag.current = null;
+    canvasRef.current?.releasePointerCapture(e.pointerId);
   };
 
   const st = snap.state;
@@ -58,22 +104,53 @@ export function App({ controller }: { controller: GameController }): React.JSX.E
   const finished = st.phase === "finished";
   const landlordWon = st.winner === st.landlord;
 
+  // 记牌器:各点数尚未打出的张数(= 仍在三家手上的牌),叫地主阶段前不显示。
+  const showCounter = snap.started && st.phase !== "bidding";
+  const remaining = countByRank([
+    ...(st.hands[0] ?? []),
+    ...(st.hands[1] ?? []),
+    ...(st.hands[2] ?? []),
+  ]);
+
+  // 自动识别当前选牌的牌型,实时反馈。
+  const selCombo = myPlayTurn && selectedCards.length > 0 ? identify(selectedCards) : null;
+  let comboText: string | null = null;
+  if (myPlayTurn && selectedCards.length > 0) {
+    if (!selCombo) comboText = "不成牌型";
+    else comboText = canPlay ? comboLabel(selCombo.type) : `${comboLabel(selCombo.type)} · 压不过`;
+  }
+
   return (
     <div className="fixed inset-0 overflow-hidden">
       <canvas
         ref={canvasRef}
         onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
         className="block h-full w-full touch-none"
       />
 
       {/* 顶部状态条 */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-3">
-        <div className="rounded-xl bg-black/35 px-3 py-2 text-white backdrop-blur-sm">
-          <div className="text-sm font-bold tracking-wide">斗地主</div>
-          {st.landlord !== null && (
-            <div className="text-xs text-emerald-200">倍数 ×{st.multiplier}</div>
-          )}
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between p-3">
+        <div className="flex items-center gap-2">
+          <div className="rounded-xl bg-black/35 px-3 py-2 text-white backdrop-blur-sm">
+            <div className="text-sm font-bold tracking-wide">斗地主</div>
+            {st.landlord !== null && (
+              <div className="text-xs text-emerald-200">倍数 ×{st.multiplier}</div>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={toggleMusic}
+            aria-label={musicOn ? "关闭背景音乐" : "开启背景音乐"}
+            className="pointer-events-auto rounded-xl bg-black/35 px-3 py-2 text-lg leading-none backdrop-blur-sm transition hover:bg-black/50"
+          >
+            {musicOn ? "🔊" : "🔇"}
+          </button>
         </div>
+
+        {showCounter ? <CardCounter remaining={remaining} /> : <div />}
         <div className="flex gap-2">
           {[0, 1, 2].map((seat) => (
             <div key={seat} className="rounded-lg bg-black/35 px-2.5 py-1.5 text-center text-white">
@@ -86,7 +163,7 @@ export function App({ controller }: { controller: GameController }): React.JSX.E
 
       {/* 消息提示 */}
       {snap.message && snap.started && (
-        <div className="pointer-events-none absolute inset-x-0 top-20 flex justify-center">
+        <div className="pointer-events-none absolute inset-x-0 top-28 flex justify-center">
           <div className="rounded-full bg-black/45 px-4 py-1.5 text-sm text-amber-200 backdrop-blur-sm">
             {snap.thinking ? "🤔 " : ""}
             {snap.message}
@@ -94,43 +171,80 @@ export function App({ controller }: { controller: GameController }): React.JSX.E
         </div>
       )}
 
-      {/* 叫地主控制 */}
-      {myBidTurn && (
-        <div className="absolute inset-x-0 bottom-44 flex justify-center gap-3">
-          <Btn tone="ghost" onClick={() => controller.bid(0)}>
-            不叫
-          </Btn>
-          {legalBids(st).map((v) => (
-            <Btn key={v} tone="gold" onClick={() => controller.bid(v)}>
-              {v} 分
-            </Btn>
-          ))}
+      {/* 指示条:实时识别的牌型 + 回合倒计时 */}
+      {(comboText || snap.countdown > 0) && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-60 flex justify-center gap-2">
+          {comboText && (
+            <div
+              className={`rounded-full px-3 py-1 text-sm font-bold ${
+                canPlay ? "bg-emerald-500/85 text-white" : "bg-black/55 text-slate-300"
+              }`}
+            >
+              {comboText}
+            </div>
+          )}
+          {snap.countdown > 0 && (
+            <div
+              className={`rounded-full px-3 py-1 text-sm font-bold tabular-nums ${
+                snap.countdown <= 5 ? "bg-red-500/85 text-white" : "bg-black/45 text-amber-200"
+              }`}
+            >
+              ⏱ {snap.countdown}s
+            </div>
+          )}
         </div>
       )}
 
-      {/* 出牌控制 */}
-      {myPlayTurn && (
-        <div className="absolute inset-x-0 bottom-44 flex justify-center gap-3">
-          <Btn tone="ghost" onClick={controller.hint}>
-            提示
-          </Btn>
-          <Btn tone="ghost" disabled={!passOk} onClick={controller.pass}>
-            不出
-          </Btn>
-          {snap.selected.size > 0 && (
-            <Btn tone="ghost" onClick={controller.clearSelection}>
-              重选
+      {/* 底部控制行:托管时只留“取消托管”,否则按回合给出叫分 / 出牌 + “托管” */}
+      {snap.started && !finished && (
+        <div className="absolute inset-x-0 bottom-44 flex flex-wrap items-center justify-center gap-3">
+          {snap.hosting ? (
+            <Btn tone="gold" onClick={controller.toggleHosting}>
+              取消托管
             </Btn>
+          ) : (
+            <>
+              {myBidTurn && (
+                <>
+                  <Btn tone="ghost" onClick={() => controller.bid(0)}>
+                    不叫
+                  </Btn>
+                  {legalBids(st).map((v) => (
+                    <Btn key={v} tone="gold" onClick={() => controller.bid(v)}>
+                      {v} 分
+                    </Btn>
+                  ))}
+                </>
+              )}
+              {myPlayTurn && (
+                <>
+                  <Btn tone="ghost" onClick={controller.hint}>
+                    提示
+                  </Btn>
+                  <Btn tone="ghost" disabled={!passOk} onClick={controller.pass}>
+                    不出
+                  </Btn>
+                  {snap.selected.size > 0 && (
+                    <Btn tone="ghost" onClick={controller.clearSelection}>
+                      重选
+                    </Btn>
+                  )}
+                  <Btn tone="gold" disabled={!canPlay} onClick={controller.play}>
+                    出牌
+                  </Btn>
+                </>
+              )}
+              <Btn tone="ghost" onClick={controller.toggleHosting}>
+                托管
+              </Btn>
+            </>
           )}
-          <Btn tone="gold" disabled={!canPlay} onClick={controller.play}>
-            出牌
-          </Btn>
         </div>
       )}
 
       {/* 开始 / 结算弹窗 */}
       {(!snap.started || finished) && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/55 backdrop-blur-sm">
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/55 backdrop-blur-sm">
           <div className="w-72 rounded-2xl bg-slate-900/90 p-6 text-center text-white shadow-2xl ring-1 ring-white/10">
             {finished ? (
               <>
@@ -155,12 +269,42 @@ export function App({ controller }: { controller: GameController }): React.JSX.E
                 </div>
               </>
             )}
-            <Btn tone="gold" className="mt-6 w-full" onClick={controller.start}>
+            <Btn tone="gold" className="mt-6 w-full" onClick={startGame}>
               {finished ? "再来一局" : "开始游戏"}
             </Btn>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+const COUNTER_RANKS = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17] as const;
+
+function counterLabel(rank: number): string {
+  if (rank === 16) return "小";
+  if (rank === 17) return "大";
+  return rankLabel(rank);
+}
+
+function CardCounter({ remaining }: { remaining: Map<number, number> }): React.JSX.Element {
+  return (
+    <div className="pointer-events-none rounded-xl bg-black/40 px-2 py-1.5 backdrop-blur-sm">
+      <div className="flex items-end gap-[3px]">
+        {COUNTER_RANKS.map((r) => {
+          const n = remaining.get(r) ?? 0;
+          return (
+            <div key={r} className="flex w-5 flex-col items-center leading-none">
+              <span className="text-[10px] font-semibold text-amber-200">{counterLabel(r)}</span>
+              <span
+                className={`text-xs font-bold tabular-nums ${n === 0 ? "text-slate-600" : "text-white"}`}
+              >
+                {n}
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
