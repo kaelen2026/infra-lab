@@ -18,6 +18,8 @@ import {
 
 export const HUMAN_SEAT: Seat = 0;
 const AI_DELAY_MS = 850;
+/** 人类每个回合(叫地主 / 出牌)的思考时限,秒。 */
+export const TURN_SECS = 15;
 
 /** 每个座位本轮最近一次动作,用于在桌面呈现出牌堆 / "不出"。 */
 export interface SeatAction {
@@ -33,6 +35,10 @@ export interface Snapshot {
   readonly thinking: boolean;
   readonly actions: readonly (SeatAction | null)[];
   readonly message: string;
+  /** 轮到人类决策时的剩余秒数;非人类回合 / 托管中为 0(UI 据此决定是否显示)。 */
+  readonly countdown: number;
+  /** 是否已托管(自动代打人类回合)。 */
+  readonly hosting: boolean;
 }
 
 type Listener = () => void;
@@ -42,6 +48,9 @@ const SEAT_NAME = ["你", "右家", "左家"] as const;
 export class GameController {
   private listeners = new Set<Listener>();
   private timer: ReturnType<typeof setTimeout> | undefined;
+  private tickTimer: ReturnType<typeof setInterval> | undefined;
+  private remaining = TURN_SECS;
+  private hosting = false;
   private hintIndex = 0;
 
   private started = false;
@@ -69,9 +78,12 @@ export class GameController {
     this.actions = [null, null, null];
     this.hintIndex = 0;
     this.started = true;
+    this.remaining = TURN_SECS;
+    this.hosting = false;
     this.message = `${SEAT_NAME[this.firstBidder]}先叫地主`;
     this.emit();
     this.scheduleAi();
+    this.startTicking();
   };
 
   toggleCard = (id: number): void => {
@@ -131,8 +143,19 @@ export class GameController {
     this.emit();
   };
 
+  /** 切换托管:开启后自动代打人类的每个回合,直到取消。 */
+  toggleHosting = (): void => {
+    if (!this.started || this.state.phase === "finished") return;
+    this.hosting = !this.hosting;
+    if (this.hosting) this.selected.clear();
+    this.message = this.hosting ? "已托管,自动出牌中" : "已取消托管";
+    this.emit();
+    this.scheduleAi();
+  };
+
   dispose = (): void => {
     this.clearTimer();
+    this.stopTicking();
     this.listeners.clear();
   };
 
@@ -140,6 +163,68 @@ export class GameController {
 
   private isHumanPlayTurn(): boolean {
     return this.started && this.state.phase === "playing" && this.state.current === HUMAN_SEAT;
+  }
+
+  /** 是否轮到人类做决策(叫地主或出牌)——倒计时只在这些回合走。 */
+  private isHumanDecisionTurn(): boolean {
+    return (
+      this.started &&
+      this.state.current === HUMAN_SEAT &&
+      (this.state.phase === "bidding" || this.state.phase === "playing")
+    );
+  }
+
+  private startTicking(): void {
+    this.stopTicking();
+    this.tickTimer = setInterval(() => this.tick(), 1000);
+  }
+
+  private stopTicking(): void {
+    if (this.tickTimer !== undefined) {
+      clearInterval(this.tickTimer);
+      this.tickTimer = undefined;
+    }
+  }
+
+  /** 每秒一跳:仅在人类回合倒数;归零则代打(不叫 / 不出 / 领出最省的一手)。 */
+  private tick(): void {
+    if (!this.started || this.state.phase === "finished") return;
+    if (!this.isHumanDecisionTurn() || this.hosting) {
+      // 非人类回合 / 托管中:把计时复位,好让下一次轮到人类时从满格开始。
+      if (this.remaining !== TURN_SECS) {
+        this.remaining = TURN_SECS;
+        this.emit();
+      }
+      return;
+    }
+    this.remaining -= 1;
+    if (this.remaining <= 0) {
+      this.remaining = TURN_SECS;
+      this.autoAct();
+      return;
+    }
+    this.emit();
+  }
+
+  /** 超时代打:叫牌超时=不叫;出牌能不出则不出,否则领出提示里最省的一手。 */
+  private autoAct(): void {
+    if (this.state.phase === "bidding") {
+      this.message = "你超时,自动不叫";
+      this.bid(0);
+      return;
+    }
+    if (this.state.phase !== "playing") return;
+    if (canPass(this.state)) {
+      this.message = "你超时,自动不出";
+      this.pass();
+      return;
+    }
+    const first = hintPlays(this.state, HUMAN_SEAT)[0];
+    if (first) {
+      this.message = "你超时,自动出牌";
+      this.selected = new Set(first.map((c) => c.id));
+      this.play();
+    }
   }
 
   private selectedCards(): Card[] {
@@ -184,12 +269,14 @@ export class GameController {
   private scheduleAi(): void {
     this.clearTimer();
     if (this.state.phase === "finished") return;
-    if (this.state.current === HUMAN_SEAT) return;
+    // 人类回合:未托管则等待手动操作;托管中则同 AI 一样自动代打。
+    if (this.state.current === HUMAN_SEAT && !this.hosting) return;
     this.timer = setTimeout(() => this.aiStep(), AI_DELAY_MS);
   }
 
   private aiStep(): void {
     const seat = this.state.current;
+    if (seat === HUMAN_SEAT) this.selected.clear();
     if (this.state.phase === "bidding") {
       const hand = this.state.hands[seat] ?? [];
       const value = chooseBid(hand, this.state.highestBid);
@@ -226,6 +313,8 @@ export class GameController {
         this.started && this.state.current !== HUMAN_SEAT && this.state.phase !== "finished",
       actions: this.actions.slice(),
       message: this.message,
+      countdown: this.isHumanDecisionTurn() && !this.hosting ? this.remaining : 0,
+      hosting: this.hosting,
     };
   }
 
