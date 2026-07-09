@@ -1,10 +1,12 @@
 {
   "pages": ["pages/login/index", "pages/todo/index", "pages/profile/index"],
+  "darkmode": true,
+  "themeLocation": "theme.json",
   "window": {
     "navigationBarTitleText": "infra-lab",
-    "navigationBarBackgroundColor": "#ffffff",
-    "navigationBarTextStyle": "black",
-    "backgroundColor": "#f5f5f7"
+    "navigationBarBackgroundColor": "@navBgColor",
+    "navigationBarTextStyle": "@navTxtStyle",
+    "backgroundColor": "@bgColor"
   },
   "sitemapLocation": "sitemap.json"
 }

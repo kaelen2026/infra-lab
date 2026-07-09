@@ -1,7 +1,7 @@
 .card {
-  background: #fff;
-  border: 1rpx solid var(--line);
-  border-radius: 16rpx;
+  background: var(--card);
+  border: 1rpx solid var(--border);
+  border-radius: var(--radius);
   padding: 8rpx 28rpx;
   margin-bottom: 40rpx;
 }
@@ -10,16 +10,16 @@
   align-items: center;
   justify-content: space-between;
   padding: 28rpx 0;
-  border-bottom: 1rpx solid var(--line);
+  border-bottom: 1rpx solid var(--border);
 }
 .line:last-child {
   border-bottom: none;
 }
 .k {
-  color: var(--muted);
+  color: var(--muted-foreground);
 }
 .v {
-  color: var(--ink);
+  color: var(--foreground);
 }
 .v-input {
   text-align: right;
@@ -28,8 +28,8 @@
 }
 .danger {
   margin-top: 48rpx;
-  color: #e5484d;
-  background: #fff;
-  border: 1rpx solid var(--line);
-  border-radius: 16rpx;
+  color: var(--destructive);
+  background: var(--card);
+  border: 1rpx solid var(--border);
+  border-radius: var(--radius);
 }

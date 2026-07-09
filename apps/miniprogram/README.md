@@ -20,6 +20,7 @@ src/                      # 所有 TS(tsc 按源码别名 typecheck,可进 CI)
 └─ sdk/                   # 平台胶水:wx-fetch / wx-token-store / device / with-refresh / index
 miniprogram/              # 小程序根(miniprogramRoot)
 ├─ app.json  app.wxss  sitemap.json
+├─ tokens.generated.wxss  theme.json   # ← @infra/design 发射(pnpm gen:design,禁手改)
 ├─ app.js  pages/*/index.js   # ← tsup 产物(.gitignore,不提交)
 └─ pages/*/index.{wxml,wxss,json}   # 手写视图
 ```

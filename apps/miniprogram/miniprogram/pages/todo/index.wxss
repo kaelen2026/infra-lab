@@ -24,7 +24,7 @@
 }
 
 .empty {
-  color: var(--muted);
+  color: var(--muted-foreground);
   text-align: center;
   padding: 80rpx 0;
 }
@@ -34,33 +34,33 @@
   align-items: center;
   gap: 24rpx;
   padding: 28rpx 8rpx;
-  border-bottom: 1rpx solid var(--line);
+  border-bottom: 1rpx solid var(--border);
 }
 .check {
   width: 44rpx;
   height: 44rpx;
-  border: 2rpx solid var(--muted);
+  border: 2rpx solid var(--muted-foreground);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 .check.done {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--primary);
+  border-color: var(--primary);
 }
 .tick {
-  color: #fff;
+  color: var(--primary-foreground);
   font-size: 28rpx;
 }
 .label {
   flex: 1;
 }
 .label.struck {
-  color: var(--muted);
+  color: var(--muted-foreground);
   text-decoration: line-through;
 }
 .del {
-  color: #e5484d;
+  color: var(--destructive);
   font-size: 26rpx;
 }

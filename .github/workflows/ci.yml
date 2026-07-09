@@ -69,7 +69,9 @@ jobs:
             apps/android/app/src/main/res/values/colors.generated.xml \
             apps/android/app/src/main/res/values-night/colors.generated.xml \
             apps/harmony/entry/src/main/resources/base/element/color.json \
-            apps/harmony/entry/src/main/ets/sdk/copy.generated.ets
+            apps/harmony/entry/src/main/ets/sdk/copy.generated.ets \
+            apps/miniprogram/miniprogram/tokens.generated.wxss \
+            apps/miniprogram/miniprogram/theme.json
 
       - name: Test (vitest)
         run: pnpm test
