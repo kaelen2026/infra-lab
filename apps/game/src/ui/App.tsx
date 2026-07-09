@@ -150,7 +150,14 @@ export function App({
           </button>
         </div>
 
-        {showCounter ? <CardCounter remaining={remaining} /> : <div />}
+        {showCounter ? (
+          <div className="flex items-start gap-2">
+            <CardCounter remaining={remaining} />
+            <LandlordPlays landlord={st.landlord} plays={snap.landlordPlays} />
+          </div>
+        ) : (
+          <div />
+        )}
         <div className="flex gap-2">
           {[0, 1, 2].map((seat) => (
             <div key={seat} className="rounded-lg bg-black/35 px-2.5 py-1.5 text-center text-white">
@@ -305,6 +312,37 @@ function CardCounter({ remaining }: { remaining: Map<number, number> }): React.J
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function LandlordPlays({
+  landlord,
+  plays,
+}: {
+  landlord: number | null;
+  plays: readonly (readonly Card[])[];
+}): React.JSX.Element {
+  const name = landlord === null ? "" : SEAT_NAME[landlord];
+  return (
+    <div className="pointer-events-auto w-56 rounded-xl bg-black/40 px-2 py-1 backdrop-blur-sm">
+      <div className="text-[10px] font-semibold text-amber-200">
+        地主出牌{name ? ` · ${name}` : ""}
+      </div>
+      {plays.length === 0 ? (
+        <div className="text-[11px] text-slate-500">暂无</div>
+      ) : (
+        <div className="flex gap-1 overflow-x-auto whitespace-nowrap pb-0.5">
+          {plays.map((play) => (
+            <span
+              key={play.map((c) => c.id).join(",")}
+              className="shrink-0 rounded bg-white/10 px-1 text-[11px] font-semibold text-white"
+            >
+              {play.map((c) => counterLabel(c.rank)).join(" ")}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

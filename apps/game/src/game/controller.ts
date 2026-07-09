@@ -34,6 +34,8 @@ export interface Snapshot {
   readonly selected: ReadonlySet<number>;
   readonly thinking: boolean;
   readonly actions: readonly (SeatAction | null)[];
+  /** 地主历次出牌(每项为一手牌),按顺序累计。 */
+  readonly landlordPlays: readonly (readonly Card[])[];
   readonly message: string;
   /** 轮到人类决策时的剩余秒数;非人类回合 / 托管中为 0(UI 据此决定是否显示)。 */
   readonly countdown: number;
@@ -57,6 +59,8 @@ export class GameController {
   private state: GameState = deal(HUMAN_SEAT);
   private selected = new Set<number>();
   private actions: (SeatAction | null)[] = [null, null, null];
+  /** 地主(叫牌者)历次打出的牌,累计供记牌器旁展示。 */
+  private landlordPlays: Card[][] = [];
   private message = "";
   private firstBidder: Seat = HUMAN_SEAT;
   private snap: Snapshot = this.buildSnapshot();
@@ -76,6 +80,7 @@ export class GameController {
     this.state = deal(this.firstBidder, this.state.scores);
     this.selected.clear();
     this.actions = [null, null, null];
+    this.landlordPlays = [];
     this.hintIndex = 0;
     this.started = true;
     this.remaining = TURN_SECS;
@@ -262,6 +267,7 @@ export class GameController {
     if (!combo) return;
     this.state = applyPlay(this.state, cards);
     this.actions[seat] = { kind: "play", cards: cards.slice(), combo };
+    if (seat === this.state.landlord) this.landlordPlays.push(cards.slice());
     this.hintIndex = 0;
     if (this.state.phase === "finished") {
       const won = this.state.winner === this.state.landlord;
@@ -324,6 +330,7 @@ export class GameController {
       thinking:
         this.started && this.state.current !== HUMAN_SEAT && this.state.phase !== "finished",
       actions: this.actions.slice(),
+      landlordPlays: this.landlordPlays,
       message: this.message,
       countdown: this.isHumanDecisionTurn() && !this.hosting ? this.remaining : 0,
       hosting: this.hosting,

@@ -274,13 +274,13 @@ export function render(ctx: CanvasRenderingContext2D, snap: Snapshot, vp: Viewpo
   drawAction(ctx, snap.actions[1] ?? null, vp.width * 0.74, vp.height * 0.4);
   drawAction(ctx, snap.actions[0] ?? null, vp.width * 0.5, vp.height * 0.56);
 
-  // 地主底牌(叫牌后亮出);下移到顶部记牌器之下、居中。
+  // 地主底牌(叫牌后亮出);下移到顶部记牌器 / 地主出牌面板之下、居中。
   if (state.landlord !== null && state.bottom.length > 0) {
-    const bw = 30;
+    const bw = 28;
     const bh = Math.round(bw * 1.4);
     const startX = vp.width / 2 - (bw * 3 + 12) / 2;
     state.bottom.forEach((card, i) => {
-      drawFaceCard(ctx, startX + i * (bw + 6), 54, bw, bh, card, false);
+      drawFaceCard(ctx, startX + i * (bw + 6), 66, bw, bh, card, false);
     });
   }
 
