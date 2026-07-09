@@ -12,6 +12,12 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Least privilege: the quality gate only reads the repo. Without this the jobs run
+# PR-authored build scripts while holding the repo's default (possibly writable)
+# GITHUB_TOKEN (issue #129 M1).
+permissions:
+  contents: read
+
 env:
   # Keep turbo output uncoloured and CI-friendly.
   TURBO_TELEMETRY_DISABLED: "1"
@@ -26,7 +32,7 @@ jobs:
 
       # pnpm version is read from the root package.json "packageManager" field.
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
 
       - name: Setup Node
         uses: actions/setup-node@v6
@@ -90,7 +96,7 @@ jobs:
       # Lints every .github/workflows/*.yml; the image bundles shellcheck, which
       # actionlint runs on `run:` steps too. Pinned to match local tooling.
       - name: Lint workflows
-        uses: docker://rhysd/actionlint:1.7.12
+        uses: docker://rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
         with:
           args: -color
 
@@ -107,7 +113,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
 
       - name: Setup Node
         uses: actions/setup-node@v6
