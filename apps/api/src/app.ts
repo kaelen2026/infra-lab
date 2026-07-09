@@ -28,6 +28,7 @@ import {
   type SessionService,
   type UserRepository,
 } from "./routes/auth.routes.js";
+import { createMcpRoutes } from "./routes/mcp.routes.js";
 import { createNotificationRoutes } from "./routes/notification.routes.js";
 import { createQrRoutes, type QrTicketStore } from "./routes/qr.routes.js";
 import {
@@ -165,6 +166,16 @@ export function createApp(deps: AppDeps): Hono<ObsEnv> {
   app.route(
     "/",
     createTodoRoutes({ todos: deps.todos, requireUser: (h) => deps.sessions.requireUser(h) }),
+  );
+  // Remote MCP endpoint for AI clients. Streamable HTTP is represented as one
+  // POST-only JSON-RPC endpoint here; tools are authenticated via Cookie/Bearer.
+  app.route(
+    "/",
+    createMcpRoutes({
+      todos: deps.todos,
+      trustedOrigins: env.TRUSTED_ORIGINS,
+      requireUser: (h) => deps.sessions.requireUser(h),
+    }),
   );
   // Admin console (web-only): read-only cross-user aggregates gated on the persisted
   // `user.role` (admin). Same session resolver as everything else, so the gate rides
