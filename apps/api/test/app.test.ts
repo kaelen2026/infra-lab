@@ -78,6 +78,25 @@ describe("createApp wiring", () => {
     expect(await res.json()).toEqual({ ok: false, draining: true });
   });
 
+  it("collapses unmatched 404 paths into one bounded wildcard series", async () => {
+    // Load-bearing cardinality invariant: metrics label with the matched route
+    // pattern, so arbitrary unmatched URLs must all fold into a single wildcard
+    // series — if a Hono upgrade ever changed routePath semantics for 404s to the
+    // raw path, this is the test that catches the silent cardinality explosion.
+    const app = buildApp();
+    await app.request("/no-such-route");
+    await app.request("/another/1f7d9a2e-63cd-4f4e-9f4e-2b8b6f0c9d11");
+    const text = await (await app.request("/metrics")).text();
+    const notFound = text
+      .split("\n")
+      .filter((l) => l.startsWith("http_requests_total") && l.includes('status="404"'));
+    expect(notFound).toHaveLength(1);
+    expect(notFound[0]).toContain('path="/*"');
+    expect(notFound[0]).toContain("} 2");
+    // The raw request URLs must never surface as label values.
+    expect(text).not.toContain("no-such-route");
+  });
+
   it("/metrics exposes request series labelled by matched route pattern", async () => {
     const app = buildApp();
     await app.request("/health");
