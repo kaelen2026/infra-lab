@@ -2,5 +2,9 @@
 miniprogram/**/*.js
 miniprogram/**/*.js.map
 
+# WeChat devtools rewrites a project.config.json inside miniprogramRoot on open — generated.
+# The authored config is apps/miniprogram/project.config.json (tracked); this inner copy is not.
+miniprogram/project.config.json
+
 # WeChat devtools per-developer local settings.
 project.private.config.json
