@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Context, MiddlewareHandler } from "hono";
 import type { Logger } from "./logger.js";
+import type { Metrics } from "./metrics.js";
 
 // Context variables published by the observability middleware. The top-level
 // app is typed with this so handlers / onError can read the per-request logger.
@@ -22,10 +23,10 @@ function inboundRequestId(c: Context): string {
   return randomUUID();
 }
 
-function clientIp(c: Context): string {
-  const forwarded = c.req.header("x-forwarded-for")?.split(",")[0]?.trim();
-  if (forwarded) return forwarded;
-  return c.req.header("x-real-ip") ?? "0.0.0.0";
+// Safe default when no resolver is injected: never trust X-Forwarded-For here —
+// its leftmost entry is client-controlled. `x-real-ip` is proxy-injected or absent.
+function defaultClientIp(headers: Headers): string {
+  return headers.get("x-real-ip") ?? "0.0.0.0";
 }
 
 export interface ObservabilityOptions {
@@ -35,6 +36,15 @@ export interface ObservabilityOptions {
    * the access log without a metrics backend. 0 (default) disables the escalation.
    */
   slowRequestMs?: number;
+  /**
+   * Resolves the client IP for the access log's `ip` field. Inject the same
+   * trusted-proxy-aware resolver the rate limiter / OTP quotas use (`clientIp` in
+   * auth.routes.ts) so the logged IP can't be spoofed via a client-set header and
+   * always matches the IP that security decisions were made against.
+   */
+  clientIp?: (headers: Headers) => string;
+  /** When present, every request is recorded into the metrics registry. */
+  metrics?: Metrics;
 }
 
 /**
@@ -49,6 +59,8 @@ export function observability(
   options: ObservabilityOptions = {},
 ): MiddlewareHandler<ObsEnv> {
   const slowRequestMs = options.slowRequestMs ?? 0;
+  const resolveIp = options.clientIp ?? defaultClientIp;
+  const metrics = options.metrics;
   return async (c, next) => {
     const requestId = inboundRequestId(c);
     const log = logger.child({ requestId });
@@ -60,14 +72,19 @@ export function observability(
     const startedAt = Date.now();
     const { method } = c.req;
     const path = new URL(c.req.url).pathname;
+    metrics?.onRequestStart();
 
     try {
       await next();
     } finally {
       const durationMs = Date.now() - startedAt;
       const status = c.res.status;
+      // Metrics label with the matched ROUTE PATTERN (`/todos/:id`), not the raw
+      // path, so per-id URLs can't explode the series cardinality.
+      metrics?.onRequestEnd({ method, path: c.req.routePath, status, durationMs });
       const slow = slowRequestMs > 0 && durationMs >= slowRequestMs;
-      const fields = { method, path, status, durationMs, ip: clientIp(c), ...(slow && { slow }) };
+      const ip = resolveIp(c.req.raw.headers);
+      const fields = { method, path, status, durationMs, ip, ...(slow && { slow }) };
       if (status >= 500) log.error("request failed", fields);
       else if (status >= 400) log.warn("request rejected", fields);
       else if (slow) log.warn("slow request", fields);

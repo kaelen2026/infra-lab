@@ -81,6 +81,9 @@ services:
       SLOW_REQUEST_MS: ${SLOW_REQUEST_MS:-1000}
       RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-120}
       RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
+      # Keep under the compose stop grace period (default 10s) so the drain's
+      # force-exit fires before docker's SIGKILL would.
+      SHUTDOWN_TIMEOUT_MS: ${SHUTDOWN_TIMEOUT_MS:-8000}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       APNS_KEY_ID: ${APNS_KEY_ID:-}
       APNS_TEAM_ID: ${APNS_TEAM_ID:-}

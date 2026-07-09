@@ -62,4 +62,20 @@ describe("observability access log", () => {
     expect(access?.level).toBe("info");
     expect(access?.fields).not.toHaveProperty("slow");
   });
+
+  it("logs the ip from the injected trusted resolver, not the request headers", async () => {
+    const { logger, lines } = captureLogger();
+    const app = new Hono<ObsEnv>();
+    app.use("*", observability(logger, { clientIp: () => "203.0.113.9" }));
+    app.get("/fast", (c) => c.json({ ok: true }));
+    // A spoofed XFF must not override what the injected resolver decides.
+    await app.request("/fast", { headers: { "x-forwarded-for": "6.6.6.6" } });
+    expect(lines.find((l) => l.msg === "request")?.fields).toMatchObject({ ip: "203.0.113.9" });
+  });
+
+  it("never trusts x-forwarded-for by default (client-controlled leftmost entry)", async () => {
+    const { logger, lines } = captureLogger();
+    await appWith(logger, 0).request("/fast", { headers: { "x-forwarded-for": "6.6.6.6" } });
+    expect(lines.find((l) => l.msg === "request")?.fields).toMatchObject({ ip: "0.0.0.0" });
+  });
 });

@@ -19,6 +19,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { checkReadiness, type Pingable } from "./observability/health.js";
 import type { Logger } from "./observability/logger.js";
+import { createMetrics } from "./observability/metrics.js";
 import { type ObsEnv, observability } from "./observability/middleware.js";
 import { createRateLimiter, type RateLimitStore } from "./rate-limit.js";
 import { type AdminRepository, createAdminRoutes } from "./routes/admin.routes.js";
@@ -72,6 +73,13 @@ export interface AppDeps {
   apns?: ApnsClient;
   /** APNS host flag, surfaced only in the "configured" log line. */
   apnsProduction?: boolean;
+  /**
+   * Reports whether the process is draining (shutdown signal received). When it
+   * returns true, `/ready` answers 503 so load balancers stop routing new traffic
+   * to this replica while in-flight requests finish. Omitted on Workers (no
+   * process lifecycle to drain).
+   */
+  isShuttingDown?: () => boolean;
 }
 
 /**
@@ -85,7 +93,18 @@ export function createApp(deps: AppDeps): Hono<ObsEnv> {
 
   // First middleware: assign a request id, attach a request-scoped logger, and
   // emit one structured access-log line per request (escalating slow ones to warn).
-  app.use("*", observability(log, { slowRequestMs: env.SLOW_REQUEST_MS }));
+  // The access log's `ip` uses the SAME trusted-proxy resolution as the rate
+  // limiter / OTP quotas — never the spoofable leftmost X-Forwarded-For entry —
+  // so the logged IP always matches the one security decisions were made against.
+  const metrics = createMetrics();
+  app.use(
+    "*",
+    observability(log, {
+      slowRequestMs: env.SLOW_REQUEST_MS,
+      clientIp: (headers) => clientIp(headers, env.TRUSTED_PROXY_COUNT),
+      metrics,
+    }),
+  );
   // Baseline security response headers on every response (nosniff, frame-options,
   // referrer-policy, HSTS, …). See ./security.ts for the cross-origin-resource-policy note.
   app.use("*", securityHeaders());
@@ -100,12 +119,24 @@ export function createApp(deps: AppDeps): Hono<ObsEnv> {
   // Liveness: process is up. Cheap, no dependency calls — safe for a tight probe.
   app.get("/health", (c) => c.json({ ok: true }));
   // Readiness: can we actually serve? Probes Postgres + Redis; 503 when a dep is
-  // down. Point your external uptime check here.
+  // down. Point your external uptime check here. While draining (shutdown signal
+  // received) it answers 503 WITHOUT probing, so load balancers pull this replica
+  // out of rotation instead of routing new traffic into a closing server.
   app.get("/ready", async (c) => {
+    if (deps.isShuttingDown?.()) {
+      return c.json({ ok: false, draining: true }, 503);
+    }
     const report = await checkReadiness({ db: deps.db, redis: deps.redis });
     if (!report.ok) c.get("log").warn("readiness check failed", { checks: report.checks });
     return c.json(report, report.ok ? 200 : 503);
   });
+  // Prometheus scrape target (text exposition, no metrics SDK). Registered before
+  // the rate limiter so scrapes stay exempt, like the health probes. Carries only
+  // method/route-pattern/status series — no PII, no secrets — but treat it as an
+  // internal endpoint: scrape it from inside the network / firewall it at ingress.
+  app.get("/metrics", (c) =>
+    c.text(metrics.render(), 200, { "content-type": "text/plain; version=0.0.4; charset=utf-8" }),
+  );
 
   // Coarse per-IP request throttle (transport-level). Registered AFTER /health and
   // /ready so those probes stay exempt, and BEFORE every real route so it wraps the

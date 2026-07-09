@@ -72,6 +72,10 @@ const sessions = createSessionService({
 const apnsConfig = apnsConfigFromEnv(env);
 const apns = apnsConfig ? createApnsClient(apnsConfig) : undefined;
 
+// Declared before createApp so `/ready` can observe the draining state and flip
+// to 503 the moment a shutdown signal lands (see the `shutdown` block below).
+let shuttingDown = false;
+
 const app = createApp({
   env,
   log,
@@ -93,6 +97,7 @@ const app = createApp({
   sms,
   apns,
   apnsProduction: apnsConfig?.production,
+  isShuttingDown: () => shuttingDown,
 });
 
 const port = env.PORT;
@@ -103,11 +108,23 @@ log.info("api listening", { port });
 // deploy / scale-down with SIGTERM: stop accepting new connections, let in-flight
 // requests finish, then release the Postgres + Redis pools. Without this the
 // process is killed mid-request and leaks connections on every deploy.
-let shuttingDown = false;
-const shutdown = (signal: NodeJS.Signals): void => {
+// `/ready` flips to 503 the moment `shuttingDown` is set (declared above createApp),
+// so load balancers stop routing new traffic while the drain runs.
+const shutdown = (reason: string, exitCode = 0): void => {
   if (shuttingDown) return; // ignore a second signal while already draining
   shuttingDown = true;
-  log.info("shutdown signal received, draining", { signal });
+  log.info("shutdown initiated, draining", { reason });
+  // Force-exit backstop: one hung in-flight request would keep server.close()'s
+  // callback from ever firing, leaving the process alive until the orchestrator
+  // SIGKILLs it (no pool release, no structured trace). unref() so this timer
+  // never holds an otherwise-finished process open.
+  const force = setTimeout(() => {
+    log.error("graceful shutdown timed out, forcing exit", {
+      timeoutMs: env.SHUTDOWN_TIMEOUT_MS,
+    });
+    process.exit(1);
+  }, env.SHUTDOWN_TIMEOUT_MS);
+  force.unref();
   // close() stops accepting new connections and fires the callback once all
   // in-flight requests have completed.
   server.close(async (err) => {
@@ -120,8 +137,24 @@ const shutdown = (signal: NodeJS.Signals): void => {
     if (dbClose.status === "rejected")
       log.error("db close failed", { error: String(dbClose.reason) });
     log.info("shutdown complete");
-    process.exit(err ? 1 : 0);
+    process.exit(err ? 1 : exitCode);
   });
 };
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
+
+// Global last-resort handlers: an async throw outside a request (timer, socket,
+// fire-and-forget) would otherwise kill the process with no structured context and
+// no pool release. Log with stack, then run the SAME graceful path — the process
+// still exits non-zero (state after an uncaught throw is suspect; restart, don't
+// limp on), but it drains and releases connections on the way out, with the
+// force-exit backstop bounding how long that can take.
+process.on("uncaughtException", (err) => {
+  log.error("uncaught exception", { error: err.message, stack: err.stack });
+  shutdown("uncaughtException", 1);
+});
+process.on("unhandledRejection", (reason) => {
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  log.error("unhandled rejection", { error: err.message, stack: err.stack });
+  shutdown("unhandledRejection", 1);
+});

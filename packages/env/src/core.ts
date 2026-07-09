@@ -98,6 +98,12 @@ const CoreEnvSchema = z
     // a proxy or the bucket collapses to one global counter. RATE_LIMIT_MAX=0 disables it.
     RATE_LIMIT_MAX: z.coerce.number().int().min(0).default(120),
     RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
+    // Graceful-shutdown ceiling (ms). On SIGTERM/SIGINT the server drains in-flight
+    // requests; if the drain hasn't finished within this window (e.g. one hung
+    // request), the process force-exits(1) instead of hanging until the
+    // orchestrator's SIGKILL. Keep it under the orchestrator's kill grace period
+    // (K8s terminationGracePeriodSeconds defaults to 30s; Compose stop_grace_period 10s).
+    SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
   })
   .superRefine((e, ctx) => {
     // Hard production guardrail: OTP_DEBUG_RETURN_CODE echoes the code into responses
