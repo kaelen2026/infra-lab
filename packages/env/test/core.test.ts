@@ -7,6 +7,18 @@ const base = {
   OTP_SECRET: "s".repeat(32),
 };
 
+// A production-valid bag: every NODE_ENV=production guardrail satisfied (TLS DSN,
+// secure cookies, declared proxy hops, distinct auth secret). Tests that exercise
+// one guardrail start from this and knock out just the field under test.
+const prodBase = {
+  ...base,
+  DATABASE_URL: "postgres://app:app@db.example.com:5432/app?sslmode=require",
+  NODE_ENV: "production",
+  BETTER_AUTH_SECRET: "b".repeat(32),
+  COOKIE_SECURE: "true",
+  TRUSTED_PROXY_COUNT: "1",
+};
+
 describe("parseCoreEnv", () => {
   it("parses a minimal valid bag and applies defaults", () => {
     const env = parseCoreEnv(base);
@@ -109,17 +121,9 @@ describe("parseCoreEnv", () => {
       parseCoreEnv({ ...base, NODE_ENV: "development", OTP_DEBUG_RETURN_CODE: "true" })
         .OTP_DEBUG_RETURN_CODE,
     ).toBe(true);
-    // Production is fine as long as the debug flag is off (with a distinct auth secret
-    // and secure cookies, both required in production).
-    expect(
-      parseCoreEnv({
-        ...base,
-        NODE_ENV: "production",
-        BETTER_AUTH_SECRET: "b".repeat(32),
-        COOKIE_SECURE: "true",
-        TRUSTED_PROXY_COUNT: "1",
-      }).OTP_DEBUG_RETURN_CODE,
-    ).toBe(false);
+    // Production is fine as long as the debug flag is off (with the other production
+    // guardrails satisfied).
+    expect(parseCoreEnv(prodBase).OTP_DEBUG_RETURN_CODE).toBe(false);
   });
 
   it("M1 — requires COOKIE_SECURE=true in production, but allows it off otherwise", () => {
@@ -135,15 +139,7 @@ describe("parseCoreEnv", () => {
     expect(message).not.toContain(base.OTP_SECRET);
 
     // Production with COOKIE_SECURE=true and a distinct auth secret is accepted.
-    expect(
-      parseCoreEnv({
-        ...base,
-        NODE_ENV: "production",
-        BETTER_AUTH_SECRET: "b".repeat(32),
-        COOKIE_SECURE: "true",
-        TRUSTED_PROXY_COUNT: "1",
-      }).COOKIE_SECURE,
-    ).toBe(true);
+    expect(parseCoreEnv(prodBase).COOKIE_SECURE).toBe(true);
 
     // Non-production keeps the insecure-cookie default usable for local dev.
     expect(parseCoreEnv({ ...base, NODE_ENV: "development" }).COOKIE_SECURE).toBe(false);
@@ -165,15 +161,7 @@ describe("parseCoreEnv", () => {
     ).toThrow(/BETTER_AUTH_SECRET/);
 
     // Set and distinct in production: accepted, no fallback applied.
-    expect(
-      parseCoreEnv({
-        ...base,
-        NODE_ENV: "production",
-        BETTER_AUTH_SECRET: "b".repeat(32),
-        COOKIE_SECURE: "true",
-        TRUSTED_PROXY_COUNT: "1",
-      }).BETTER_AUTH_SECRET,
-    ).toBe("b".repeat(32));
+    expect(parseCoreEnv(prodBase).BETTER_AUTH_SECRET).toBe("b".repeat(32));
 
     // Non-production still allows the dev fallback (BETTER_AUTH_SECRET ?? OTP_SECRET).
     expect(parseCoreEnv({ ...base, NODE_ENV: "development" }).BETTER_AUTH_SECRET).toBe(
@@ -208,18 +196,55 @@ describe("parseCoreEnv", () => {
     expect(message).not.toContain(base.OTP_SECRET);
 
     // Production with a declared proxy hop count is accepted.
-    expect(
-      parseCoreEnv({
-        ...base,
-        NODE_ENV: "production",
-        BETTER_AUTH_SECRET: "b".repeat(32),
-        COOKIE_SECURE: "true",
-        TRUSTED_PROXY_COUNT: "1",
-      }).TRUSTED_PROXY_COUNT,
-    ).toBe(1);
+    expect(parseCoreEnv(prodBase).TRUSTED_PROXY_COUNT).toBe(1);
 
     // Non-production keeps the safe default (XFF untrusted) usable for local dev.
     expect(parseCoreEnv({ ...base, NODE_ENV: "development" }).TRUSTED_PROXY_COUNT).toBe(0);
+  });
+
+  it("requires a TLS DSN in production unless DATABASE_ALLOW_PLAINTEXT is set", () => {
+    // Plaintext DSN in production → refuse to boot.
+    let message = "";
+    try {
+      parseCoreEnv({ ...prodBase, DATABASE_URL: base.DATABASE_URL });
+    } catch (e) {
+      message = e instanceof Error ? e.message : String(e);
+    }
+    expect(message).toContain("DATABASE_URL");
+    // The guardrail error must never echo the DSN (it embeds credentials).
+    expect(message).not.toContain("app:app@");
+
+    // Encrypting sslmodes and ssl=true are accepted; `prefer` can downgrade — rejected.
+    expect(parseCoreEnv(prodBase).DATABASE_URL).toContain("sslmode=require");
+    for (const qs of ["sslmode=verify-full", "ssl=true", "sslmode=verify-ca&application_name=x"]) {
+      const url = `postgres://app:app@db.example.com:5432/app?${qs}`;
+      expect(parseCoreEnv({ ...prodBase, DATABASE_URL: url }).DATABASE_URL).toBe(url);
+    }
+    expect(() =>
+      parseCoreEnv({
+        ...prodBase,
+        DATABASE_URL: "postgres://app:app@db.example.com:5432/app?sslmode=prefer",
+      }),
+    ).toThrow(/DATABASE_URL/);
+
+    // Explicit private-network opt-out is honoured (deploy compose topology).
+    expect(
+      parseCoreEnv({
+        ...prodBase,
+        DATABASE_URL: base.DATABASE_URL,
+        DATABASE_ALLOW_PLAINTEXT: "true",
+      }).DATABASE_ALLOW_PLAINTEXT,
+    ).toBe(true);
+
+    // Non-production keeps plaintext local DSNs usable for dev.
+    expect(parseCoreEnv(base).DATABASE_ALLOW_PLAINTEXT).toBe(false);
+  });
+
+  it("parses DATABASE_POOL_MAX (default 10, coerced positive int)", () => {
+    expect(parseCoreEnv(base).DATABASE_POOL_MAX).toBe(10);
+    expect(parseCoreEnv({ ...base, DATABASE_POOL_MAX: "4" }).DATABASE_POOL_MAX).toBe(4);
+    expect(() => parseCoreEnv({ ...base, DATABASE_POOL_MAX: "0" })).toThrow(/DATABASE_POOL_MAX/);
+    expect(() => parseCoreEnv({ ...base, DATABASE_POOL_MAX: "ten" })).toThrow(/DATABASE_POOL_MAX/);
   });
 });
 

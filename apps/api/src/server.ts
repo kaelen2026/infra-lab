@@ -28,8 +28,14 @@ const DAY = 60 * 60 * 24;
 const env = loadCoreEnv();
 const baseURL = env.BETTER_AUTH_URL;
 
-const db = createDb(env.DATABASE_URL);
-const redis = createRedis(env.REDIS_URL);
+const log = createLogger({ base: { service: "api" } });
+
+const db = createDb(env.DATABASE_URL, { max: env.DATABASE_POOL_MAX });
+// Client-level errors (connection drops, DNS failures) must land in the structured
+// log, not crash the process as an unhandled `error` event. No payloads are logged.
+const redis = createRedis(env.REDIS_URL, {
+  onError: (err) => log.error("redis client error", { error: err.message }),
+});
 const auth = createAuth({
   db,
   schema,
@@ -44,8 +50,6 @@ const auth = createAuth({
 const otpStore = createRedisOtpStore(redis);
 const otp = createOtpService({ store: otpStore, secret: env.OTP_SECRET });
 const cliDeviceFlow = createCliDeviceFlowService({ store: otpStore, secret: env.OTP_SECRET });
-
-const log = createLogger({ base: { service: "api" } });
 
 // Delivery channel standing in for a real SMS provider; the plaintext code is never
 // persisted. The phone/code are surfaced only under the same dev flag that already

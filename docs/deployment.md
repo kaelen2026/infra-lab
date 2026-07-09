@@ -43,6 +43,19 @@ DATABASE_URL=<Neon pooled Postgres URL, sslmode=require>
 REDIS_URL=<Upstash Redis URL, preferably rediss://...>
 ```
 
+Two database knobs are enforced/consumed by the API at boot:
+
+- **TLS guardrail** — with `NODE_ENV=production` the API refuses to start unless `DATABASE_URL`
+  carries `sslmode=require` (or `verify-ca`/`verify-full`, or `ssl=true`). For a database on a
+  genuinely private network (like the deploy compose's internal bridge) set
+  `DATABASE_ALLOW_PLAINTEXT=true` explicitly instead.
+- **Pool sizing** — `DATABASE_POOL_MAX` (default 10) is the postgres-js pool ceiling **per API
+  replica**. Size it so `replicas × DATABASE_POOL_MAX ≤` the database's connection limit, leaving
+  headroom for migrations/psql: self-hosted `postgres:16-alpine` defaults to `max_connections=100`
+  (so e.g. 4 replicas × 10 = 40 is comfortable); on Neon connect through the **pooled** URL
+  (PgBouncer) and keep per-replica pools small — the free tier's direct connection limit is much
+  lower than 100.
+
 See `.env.free.example` for the full variable list. Platform-specific build settings:
 
 | Target | Build command | Output / Docker |
@@ -75,7 +88,10 @@ The **Worker's own runtime secrets** are not in the workflow — set them once w
 [`apps/web`](../apps/web/README.md), [`apps/h5`](../apps/h5/README.md).
 
 Migrations run **before** the API rolls out and never on container/worker start —
-`db-migrate` gates `deploy-api` so a bad migration blocks the deploy.
+`db-migrate` gates `deploy-api` so a bad migration blocks the deploy. The migrate step
+(`pnpm --filter @infra/db migrate`) takes a Postgres **advisory lock**, so a CI deploy
+racing a manual run serialises instead of interleaving DDL; migrations remain
+forward-only (no down migrations — rollback is a hand-written SQL exercise).
 
 Native clients (ios / android / harmony) and the cli / bot are **not** in this pipeline:
 the mobile apps release through their stores (local, signed builds — see each app's

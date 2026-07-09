@@ -3,15 +3,43 @@ import { Redis, type RedisOptions } from "ioredis";
 
 export type { OtpStore };
 
-/** Create a shared ioredis connection from REDIS_URL. */
-export function createRedis(url: string, options: RedisOptions = {}): Redis {
-  return new Redis(url, {
+export interface CreateRedisOptions extends RedisOptions {
+  /**
+   * Called on every client-level `error` event (connection drops, DNS failures, …).
+   * Wire this to the app's structured logger; the error message only carries
+   * transport details, never key or value payloads.
+   */
+  onError?: (err: Error) => void;
+}
+
+/**
+ * Create a shared ioredis connection from REDIS_URL.
+ *
+ * An `error` listener is always registered: ioredis emits `error` on transport
+ * failures, and an EventEmitter `error` with no listener crashes the process — a
+ * Redis blip must degrade to failed commands (per-command rejections + `/ready`
+ * flipping), not take the API down. Callers pass `onError` to route the event into
+ * their structured logger; the fallback writes one minimal JSON line to stderr
+ * (error message only — never a payload).
+ */
+export function createRedis(url: string, options: CreateRedisOptions = {}): Redis {
+  const { onError, ...redisOptions } = options;
+  const redis = new Redis(url, {
     // OTP traffic is latency-sensitive and idempotent; fail fast rather than queue.
     maxRetriesPerRequest: 2,
     enableReadyCheck: true,
     lazyConnect: false,
-    ...options,
+    ...redisOptions,
   });
+  const report =
+    onError ??
+    ((err: Error): void => {
+      process.stderr.write(
+        `${JSON.stringify({ level: "error", msg: "redis client error", error: err.message })}\n`,
+      );
+    });
+  redis.on("error", report);
+  return redis;
 }
 
 /**

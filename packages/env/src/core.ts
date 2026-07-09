@@ -27,6 +27,16 @@ const envFlag = z.preprocess((v) => v === "true", z.boolean());
 const CoreEnvSchema = z
   .object({
     DATABASE_URL: z.string().min(1),
+    // Postgres pool ceiling **per process** (postgres-js `max`). N API replicas hold
+    // up to N × DATABASE_POOL_MAX connections — size it so that product stays under
+    // the database's connection limit (see docs/deployment.md for the arithmetic;
+    // Neon free tier and small instances cap out fast).
+    DATABASE_POOL_MAX: z.coerce.number().int().positive().default(10),
+    // Escape hatch for the TLS guardrail below: opt out of requiring an encrypted
+    // DSN in production when Postgres is reached over a genuinely private network
+    // (e.g. the deploy compose's internal bridge). Never set this for a database
+    // that traverses a network you don't own.
+    DATABASE_ALLOW_PLAINTEXT: envFlag.default(false),
     REDIS_URL: z.string().min(1),
     OTP_SECRET: z.string().min(1),
     // Falls back to OTP_SECRET when unset (see the object-level transform below).
@@ -109,6 +119,24 @@ const CoreEnvSchema = z
         code: z.ZodIssueCode.custom,
         path: ["COOKIE_SECURE"],
         message: "must be true when NODE_ENV=production (session cookies require Secure)",
+      });
+    }
+    // TLS guardrail: production traffic to the database must be encrypted. TLS used
+    // to rest entirely on the operator remembering `?sslmode=require` in the DSN —
+    // a plaintext production DSN was accepted silently. Refuse to boot unless the
+    // DSN pins an encrypting sslmode (require / verify-ca / verify-full — weaker
+    // modes like `prefer` can silently downgrade) or ssl=true, or the operator
+    // explicitly declares the link private via DATABASE_ALLOW_PLAINTEXT.
+    if (
+      e.NODE_ENV === "production" &&
+      !e.DATABASE_ALLOW_PLAINTEXT &&
+      !/[?&](?:sslmode=(?:require|verify-ca|verify-full)|ssl=true)(?:&|$)/.test(e.DATABASE_URL)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["DATABASE_URL"],
+        message:
+          "must require TLS when NODE_ENV=production (add ?sslmode=require to the DSN, or set DATABASE_ALLOW_PLAINTEXT=true only for a private-network database)",
       });
     }
     // L1 — per-IP rate-limit guardrail: with TRUSTED_PROXY_COUNT === 0 the client IP
