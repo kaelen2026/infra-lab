@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { BackgroundMusic } from "../audio/music.js";
+import { type Card, countByRank, rankLabel } from "../engine/cards.js";
+import { comboLabel, identify } from "../engine/combos.js";
 import { canPass, legalBids, validatePlay } from "../engine/game.js";
 import type { GameController } from "../game/controller.js";
 import { hitTest, humanCardLayout, type Viewport } from "../render/layout.js";
@@ -58,13 +60,39 @@ export function App({
     if (ctx) render(ctx, snap, vpRef.current);
   }, [snap]);
 
-  const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+  // 划动“涂选”:按下起点定方向(点未选中→选,点已选中→消),
+  // 拖过的每张牌刷成同一状态;单击即退化为切换。自动识别牌型由下方指示条实时显示。
+  const drag = useRef<{ mode: "select" | "deselect"; done: Set<number> } | null>(null);
+
+  const cardAt = (e: React.PointerEvent<HTMLCanvasElement>): Card | null => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
     const rects = humanCardLayout(snap.state.hands[0] ?? [], snap.selected, vpRef.current);
-    const card = hitTest(rects, e.clientX - rect.left, e.clientY - rect.top);
-    if (card) controller.toggleCard(card.id);
+    return hitTest(rects, e.clientX - rect.left, e.clientY - rect.top);
+  };
+
+  const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const card = cardAt(e);
+    if (!card) return;
+    const mode: "select" | "deselect" = snap.selected.has(card.id) ? "deselect" : "select";
+    drag.current = { mode, done: new Set([card.id]) };
+    canvasRef.current?.setPointerCapture(e.pointerId);
+    controller.setCardSelected(card.id, mode === "select");
+  };
+
+  const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const state = drag.current;
+    if (!state) return;
+    const card = cardAt(e);
+    if (!card || state.done.has(card.id)) return;
+    state.done.add(card.id);
+    controller.setCardSelected(card.id, state.mode === "select");
+  };
+
+  const onPointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    drag.current = null;
+    canvasRef.current?.releasePointerCapture(e.pointerId);
   };
 
   const st = snap.state;
@@ -76,11 +104,30 @@ export function App({
   const finished = st.phase === "finished";
   const landlordWon = st.winner === st.landlord;
 
+  // 记牌器:各点数尚未打出的张数(= 仍在三家手上的牌),叫地主阶段前不显示。
+  const showCounter = snap.started && st.phase !== "bidding";
+  const remaining = countByRank([
+    ...(st.hands[0] ?? []),
+    ...(st.hands[1] ?? []),
+    ...(st.hands[2] ?? []),
+  ]);
+
+  // 自动识别当前选牌的牌型,实时反馈。
+  const selCombo = myPlayTurn && selectedCards.length > 0 ? identify(selectedCards) : null;
+  let comboText: string | null = null;
+  if (myPlayTurn && selectedCards.length > 0) {
+    if (!selCombo) comboText = "不成牌型";
+    else comboText = canPlay ? comboLabel(selCombo.type) : `${comboLabel(selCombo.type)} · 压不过`;
+  }
+
   return (
     <div className="fixed inset-0 overflow-hidden">
       <canvas
         ref={canvasRef}
         onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
         className="block h-full w-full touch-none"
       />
 
@@ -102,6 +149,8 @@ export function App({
             {musicOn ? "🔊" : "🔇"}
           </button>
         </div>
+
+        {showCounter ? <CardCounter remaining={remaining} /> : <div />}
         <div className="flex gap-2">
           {[0, 1, 2].map((seat) => (
             <div key={seat} className="rounded-lg bg-black/35 px-2.5 py-1.5 text-center text-white">
@@ -114,7 +163,7 @@ export function App({
 
       {/* 消息提示 */}
       {snap.message && snap.started && (
-        <div className="pointer-events-none absolute inset-x-0 top-20 flex justify-center">
+        <div className="pointer-events-none absolute inset-x-0 top-28 flex justify-center">
           <div className="rounded-full bg-black/45 px-4 py-1.5 text-sm text-amber-200 backdrop-blur-sm">
             {snap.thinking ? "🤔 " : ""}
             {snap.message}
@@ -122,16 +171,27 @@ export function App({
         </div>
       )}
 
-      {/* 回合倒计时 */}
-      {snap.countdown > 0 && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-60 flex justify-center">
-          <div
-            className={`rounded-full px-3 py-1 text-sm font-bold tabular-nums ${
-              snap.countdown <= 5 ? "bg-red-500/85 text-white" : "bg-black/45 text-amber-200"
-            }`}
-          >
-            ⏱ {snap.countdown}s
-          </div>
+      {/* 指示条:实时识别的牌型 + 回合倒计时 */}
+      {(comboText || snap.countdown > 0) && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-60 flex justify-center gap-2">
+          {comboText && (
+            <div
+              className={`rounded-full px-3 py-1 text-sm font-bold ${
+                canPlay ? "bg-emerald-500/85 text-white" : "bg-black/55 text-slate-300"
+              }`}
+            >
+              {comboText}
+            </div>
+          )}
+          {snap.countdown > 0 && (
+            <div
+              className={`rounded-full px-3 py-1 text-sm font-bold tabular-nums ${
+                snap.countdown <= 5 ? "bg-red-500/85 text-white" : "bg-black/45 text-amber-200"
+              }`}
+            >
+              ⏱ {snap.countdown}s
+            </div>
+          )}
         </div>
       )}
 
@@ -215,6 +275,36 @@ export function App({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+const COUNTER_RANKS = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17] as const;
+
+function counterLabel(rank: number): string {
+  if (rank === 16) return "小";
+  if (rank === 17) return "大";
+  return rankLabel(rank);
+}
+
+function CardCounter({ remaining }: { remaining: Map<number, number> }): React.JSX.Element {
+  return (
+    <div className="pointer-events-none rounded-xl bg-black/40 px-2 py-1.5 backdrop-blur-sm">
+      <div className="flex items-end gap-[3px]">
+        {COUNTER_RANKS.map((r) => {
+          const n = remaining.get(r) ?? 0;
+          return (
+            <div key={r} className="flex w-5 flex-col items-center leading-none">
+              <span className="text-[10px] font-semibold text-amber-200">{counterLabel(r)}</span>
+              <span
+                className={`text-xs font-bold tabular-nums ${n === 0 ? "text-slate-600" : "text-white"}`}
+              >
+                {n}
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

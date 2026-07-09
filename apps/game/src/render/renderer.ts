@@ -41,6 +41,89 @@ function drawFelt(ctx: CanvasRenderingContext2D, vp: Viewport): void {
   ctx.fillRect(0, 0, vp.width, vp.height);
 }
 
+// 喜庆装饰:金色光芒 + 边缘暖红晕影 + 中央“福”水印 + 顶部悬挂灯笼 + 角落点缀。
+// 全部画在绒面之上、牌之下,不影响牌面可读性。
+const DECOR: readonly [string, number, number][] = [
+  ["🧧", 0.08, 0.44],
+  ["✨", 0.14, 0.28],
+  ["🎉", 0.1, 0.62],
+  ["🪙", 0.17, 0.52],
+  ["🧧", 0.92, 0.44],
+  ["✨", 0.86, 0.28],
+  ["🎊", 0.9, 0.62],
+  ["🪙", 0.83, 0.52],
+];
+
+function drawFestive(ctx: CanvasRenderingContext2D, vp: Viewport): void {
+  const cx = vp.width / 2;
+  const cy = vp.height * 0.46;
+
+  // 金色光芒(细长三角从中心放射,极低透明度)
+  ctx.save();
+  ctx.translate(cx, cy);
+  const rays = 24;
+  const reach = Math.max(vp.width, vp.height);
+  for (let i = 0; i < rays; i++) {
+    ctx.rotate((Math.PI * 2) / rays);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(reach, -reach * 0.03);
+    ctx.lineTo(reach, reach * 0.03);
+    ctx.closePath();
+    ctx.fillStyle = i % 2 === 0 ? "rgba(255,214,90,0.05)" : "rgba(255,180,60,0.03)";
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // 边缘暖红晕影,聚焦中心、烘托喜庆
+  const vg = ctx.createRadialGradient(
+    cx,
+    vp.height / 2,
+    Math.min(vp.width, vp.height) * 0.28,
+    cx,
+    vp.height / 2,
+    Math.max(vp.width, vp.height) * 0.72,
+  );
+  vg.addColorStop(0, "rgba(0,0,0,0)");
+  vg.addColorStop(1, "rgba(150,20,20,0.55)");
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, vp.width, vp.height);
+
+  // 中央金色“福”水印
+  ctx.save();
+  ctx.globalAlpha = 0.08;
+  ctx.fillStyle = "#ffd24a";
+  ctx.font = `bold ${Math.round(Math.min(vp.width, vp.height) * 0.5)}px serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("福", cx, cy);
+  ctx.restore();
+
+  // 顶部悬挂灯笼
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = "30px sans-serif";
+  for (const f of [0.28, 0.42, 0.58, 0.72]) {
+    const x = vp.width * f;
+    const y = 128;
+    ctx.strokeStyle = "rgba(255,210,74,0.45)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, y - 15);
+    ctx.stroke();
+    ctx.fillText("🏮", x, y);
+  }
+  // 角落点缀
+  ctx.font = "26px sans-serif";
+  ctx.globalAlpha = 0.9;
+  for (const [emoji, fx, fy] of DECOR) {
+    ctx.fillText(emoji, vp.width * fx, vp.height * fy);
+  }
+  ctx.restore();
+}
+
 function drawFaceCard(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -180,6 +263,7 @@ function drawAction(
 export function render(ctx: CanvasRenderingContext2D, snap: Snapshot, vp: Viewport): void {
   const { state } = snap;
   drawFelt(ctx, vp);
+  drawFestive(ctx, vp);
 
   // AI 面板:右家(seat1)右侧、左家(seat2)左侧,置于 DOM 顶栏(标题/比分)之下避免重叠。
   drawOpponent(ctx, state, 1, vp.width - 148, 96);
@@ -190,13 +274,13 @@ export function render(ctx: CanvasRenderingContext2D, snap: Snapshot, vp: Viewpo
   drawAction(ctx, snap.actions[1] ?? null, vp.width * 0.74, vp.height * 0.4);
   drawAction(ctx, snap.actions[0] ?? null, vp.width * 0.5, vp.height * 0.56);
 
-  // 地主底牌(叫牌后亮出,置于顶部中央)。
+  // 地主底牌(叫牌后亮出);下移到顶部记牌器之下、居中。
   if (state.landlord !== null && state.bottom.length > 0) {
-    const bw = 34;
+    const bw = 30;
     const bh = Math.round(bw * 1.4);
     const startX = vp.width / 2 - (bw * 3 + 12) / 2;
     state.bottom.forEach((card, i) => {
-      drawFaceCard(ctx, startX + i * (bw + 6), 20, bw, bh, card, false);
+      drawFaceCard(ctx, startX + i * (bw + 6), 54, bw, bh, card, false);
     });
   }
 

@@ -94,6 +94,16 @@ export class GameController {
     this.emit();
   };
 
+  /** 明确设定某张牌的选中状态(供划动“涂选 / 涂消”使用,幂等)。 */
+  setCardSelected = (id: number, selected: boolean): void => {
+    if (!this.isHumanPlayTurn()) return;
+    if (selected === this.selected.has(id)) return;
+    if (selected) this.selected.add(id);
+    else this.selected.delete(id);
+    this.hintIndex = 0;
+    this.emit();
+  };
+
   clearSelection = (): void => {
     this.selected.clear();
     this.emit();
@@ -137,9 +147,11 @@ export class GameController {
       this.emit();
       return;
     }
-    const play = plays[this.hintIndex % plays.length];
+    const idx = this.hintIndex % plays.length;
+    const play = plays[idx];
     this.hintIndex++;
     this.selected = new Set(play?.map((c) => c.id));
+    this.message = `提示 ${idx + 1}/${plays.length}`;
     this.emit();
   };
 
