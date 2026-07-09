@@ -60,6 +60,13 @@ services:
       NODE_ENV: production
       PORT: 3001
       DATABASE_URL: postgres://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@postgres:5432/${POSTGRES_DB:-app}
+      # Postgres lives on the compose-internal bridge only (no TLS on that hop), so
+      # explicitly opt out of the production plaintext-DSN guardrail. Never copy this
+      # to a topology where the database crosses a network you don't own.
+      DATABASE_ALLOW_PLAINTEXT: "true"
+      # Per-replica pool ceiling: replicas × DATABASE_POOL_MAX must stay under the
+      # database's max_connections (see docs/deployment.md).
+      DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
       REDIS_URL: redis://redis:6379
       OTP_SECRET: ${OTP_SECRET:?set OTP_SECRET in .env.deploy}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET in .env.deploy}

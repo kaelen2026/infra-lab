@@ -14,6 +14,9 @@ pnpm --filter @infra/db migrate
 ```
 
 - 迁移状态记录在目标库的 `drizzle.__drizzle_migrations` 表。
+- `migrate` 由 `scripts/migrate.mjs` 执行(drizzle-orm migrator,journal 兼容
+  drizzle-kit):先取 Postgres advisory lock 再应用,两个操作者(或 CI 部署撞上手动
+  执行)会串行排队而不是交错 DDL;后到者拿到锁时 journal 已最新,自然空跑。
 - `pnpm --filter @infra/db push` 仅用于本地一次性实验:它绕过迁移历史,会让库偏离
   迁移轨道。正式改动一律走 generate → migrate。
 - 全新环境直接 `migrate` 即可建出全部表(含 Better Auth 所需的表)。
