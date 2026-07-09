@@ -104,11 +104,18 @@ jobs:
     # which may echo "@infra-lab-bot" — would otherwise re-trigger this workflow in an
     # endless loop, each iteration now a full-permission run. `workflow_dispatch`
     # (Feishu bridge / manual) is a separate branch and intentionally not filtered.
+    #
+    # Trust gate: comment triggers additionally require the commenter to be
+    # OWNER/MEMBER/COLLABORATOR. Today the repo is private, so anyone who can comment
+    # is a collaborator anyway — but a mention drives an agent that holds write tokens
+    # and runs with --dangerously-skip-permissions, so keep prompt-injection-by-comment
+    # closed if the repo ever goes public (issue #129 M3). Label intake needs no extra
+    # gate: applying a label already requires triage access.
     if: |
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'issues' && github.event.label.name == 'bot' && github.event.sender.login != 'infra-lab-bot[bot]' && !github.event.issue.pull_request) ||
-      (github.event_name == 'issue_comment' && github.event.sender.login != 'infra-lab-bot[bot]' && contains(github.event.comment.body, '@infra-lab-bot')) ||
-      (github.event_name == 'pull_request_review_comment' && github.event.sender.login != 'infra-lab-bot[bot]' && contains(github.event.comment.body, '@infra-lab-bot'))
+      (github.event_name == 'issue_comment' && github.event.sender.login != 'infra-lab-bot[bot]' && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) && contains(github.event.comment.body, '@infra-lab-bot')) ||
+      (github.event_name == 'pull_request_review_comment' && github.event.sender.login != 'infra-lab-bot[bot]' && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) && contains(github.event.comment.body, '@infra-lab-bot'))
     runs-on: ubuntu-latest
     permissions:
       # Job-token perms still apply to steps that use it (e.g. checkout fallback);
@@ -221,7 +228,7 @@ jobs:
 
       - name: Run Claude Code
         id: claude
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@37b464ce72700f7b2c5ff8d2db7fa7b15df792f5 # v1.0.169
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # Act as the custom infra-lab-bot GitHub App instead of the default claude[bot].
