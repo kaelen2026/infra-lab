@@ -442,11 +442,68 @@ export function invalidCodeRemaining(base: string, remaining: number): string {
   );
 }
 
+// ── miniprogram (weapp): WXSS custom properties + window theme ────────────────
+function emitWeapp(): void {
+  // Same semantic roles (and var names) as the web/h5 CSS, but on `page` (the
+  // weapp root element) and as sRGB hex — the WeChat renderer has no oklch().
+  // The design grid is authored at 375pt and weapp rpx is 750 per screen width,
+  // so px → rpx doubles. `primaryDeep` is included like the native emitters:
+  // weapp buttons express the pressed state via hover-class, not `:active`.
+  const block = (indent: string, p: Palette) => {
+    const lines = [
+      `${indent}--radius: ${shape.radiusPx * 2}rpx;`,
+      `${indent}--primary-deep: ${oklchToHex(p.primaryDeep)};`,
+    ];
+    for (const [role, name] of CSS_ROLES) lines.push(`${indent}--${name}: ${oklchToHex(p[role])};`);
+    return lines.join("\n");
+  };
+  write(
+    "apps/miniprogram/miniprogram/tokens.generated.wxss",
+    `/* ${GEN} */
+
+page {
+${block("  ", light)}
+}
+
+/* Follows the system scheme because app.json sets \`"darkmode": true\`. */
+@media (prefers-color-scheme: dark) {
+  page {
+${block("    ", dark)}
+  }
+}
+`,
+  );
+
+  // Native window chrome (nav bar / page background) for both themes. WXSS
+  // variables can't reach it, so app.json points `"themeLocation"` here and
+  // references these keys as `@navBgColor` etc.
+  write(
+    "apps/miniprogram/miniprogram/theme.json",
+    `${JSON.stringify(
+      {
+        light: {
+          navBgColor: oklchToHex(light.card),
+          navTxtStyle: "black",
+          bgColor: oklchToHex(light.background),
+        },
+        dark: {
+          navBgColor: oklchToHex(dark.card),
+          navTxtStyle: "white",
+          bgColor: oklchToHex(dark.background),
+        },
+      },
+      null,
+      2,
+    )}\n`,
+  );
+}
+
 emitWeb();
 emitH5();
 emitIos();
 emitAndroid();
 emitHarmony();
+emitWeapp();
 
 console.log(`@infra/design: generated ${written.length} files`);
 for (const f of written) console.log(`  ${f}`);

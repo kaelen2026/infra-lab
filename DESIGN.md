@@ -21,7 +21,8 @@ web 端页面级细节(登录页、仪表盘、导航)另见 [`apps/web/DESIGN.m
 
 ## 2. 调色板与角色
 
-OKLCH 为权威格式(web/h5 直接消费);native 端消费由 `oklchToHex` 转换的 sRGB hex。
+OKLCH 为权威格式(web/h5 直接消费);native 端与 miniprogram 消费由 `oklchToHex` 转换的
+sRGB hex(miniprogram 的 CSS 变量名与 web 相同,见 `tokens.generated.wxss`)。
 下表即 `tokens.ts` 全量语义角色(hex 为生成器实际输出):
 
 | 角色 | light | dark | 用途 |
@@ -31,7 +32,7 @@ OKLCH 为权威格式(web/h5 直接消费);native 端消费由 `oklchToHex` 转�
 | card | `oklch(0.998 0.004 90)` `#FFFEFB` | `oklch(0.215 0.007 70)` `#1C1916` | 抬升表面 |
 | popover | `oklch(1 0 0)` `#FFFFFF` | 同 card | 浮层 |
 | primary | `oklch(0.56 0.15 45)` `#B95115` | `oklch(0.70 0.13 48)` `#DF8352` | 黏土强调:主按钮、焦点环、品牌 |
-| primaryDeep | `oklch(0.44 0.16 42)` `#952400` | `oklch(0.56 0.15 45)` `#B95115` | 按压/渐变深位(**仅 native**,web 无此 CSS 变量) |
+| primaryDeep | `oklch(0.44 0.16 42)` `#952400` | `oklch(0.56 0.15 45)` `#B95115` | 按压/渐变深位(native + weapp,web 无此 CSS 变量) |
 | primary-foreground | `oklch(0.99 0.005 90)` `#FDFCF8` | `oklch(0.20 0.02 50)` `#1E130E` | 强调面上的文字 |
 | secondary / muted | `oklch(0.95 0.008 85)` `#F1EEE9` | `oklch(0.27 0.008 70)` `#292622` | 次级填充、静默背景 |
 | muted-foreground | `oklch(0.52 0.012 60)` `#6E6762` | `oklch(0.71 0.01 75)` `#A5A19B` | 次要文字 |
@@ -105,8 +106,7 @@ OKLCH 为权威格式(web/h5 直接消费);native 端消费由 `oklchToHex` 转�
 - DO 默认暗色主题;暗色下用 `foreground`,不用纯 `#fff`。
 - DO 空态给有意义的文案(如"还没有原生设备登录"),不画假数据。
 - DON'T 手改任何 `*.generated.*` / `tokens.generated.css` / `color.json`(CI drift gate 直接挂)。
-- DON'T 引入第二个强调色家族;蓝紫渐变是本项目的反面清单
-  (miniprogram 现存 `#0b6cff` 是历史欠账,见 §8,不要模仿扩散)。
+- DON'T 引入第二个强调色家族;蓝紫渐变是本项目的反面清单。
 - DON'T 居中 hero + 双 CTA + 三张同款卡片的 AI 套路。
 - DON'T 在任何界面、日志、错误提示里回显手机号明文之外多余的敏感数据(admin 边界脱敏)。
 - DON'T 任何输出用英文破折号。
@@ -117,10 +117,11 @@ OKLCH 为权威格式(web/h5 直接消费);native 端消费由 `oklchToHex` 转�
   各验证一次,重点查中文串与长手机号(`+8613800138000`)溢出。
 - 触控目标下限:web ≥40px,iOS ≥44pt,Android ≥48dp,Harmony 遵 ArkUI 默认。
 - 明暗切换:web/h5 用 `.dark` class(next-themes);iOS trait collection;Android
-  values-night;Harmony base/dark 资源目录。各端切换必须同时翻转全部语义角色,禁止半套。
-- **已知欠账**:`apps/miniprogram` 尚未接入 `@infra/design`(自带 `#0b6cff` 蓝 + 冷灰,
-  `generate.ts` 无 weapp 发射器)。收敛路径:为 wxss 增加发射器(CSS 变量 + rpx 适配),
-  替换 `app.wxss` 手写色板。在此之前,小程序新页面颜色请直接抄本文档 §2 的 hex 值。
+  values-night;Harmony base/dark 资源目录;miniprogram `darkmode: true` 跟随系统
+  (`tokens.generated.wxss` 的 `prefers-color-scheme` 块 + `theme.json` 翻转导航栏)。
+  各端切换必须同时翻转全部语义角色,禁止半套。
+- miniprogram 尺寸单位是 rpx(750 = 屏宽,设计稿按 375pt,故 px 值 ×2):`--radius` 发射为
+  `20rpx`。页面新颜色一律 `var(--*)`,不写裸 hex。
 - `apps/cli` 是终端 UI,不消费色板;但提示文案语气与 §4 文案规范保持一致。
 
 ## 9. Agent Prompt 指南

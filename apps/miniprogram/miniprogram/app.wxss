@@ -1,10 +1,8 @@
+@import "tokens.generated.wxss";
+
 page {
-  --accent: #0b6cff;
-  --ink: #1a1a1f;
-  --muted: #8a8a92;
-  --line: #e5e5ea;
-  background: #f5f5f7;
-  color: var(--ink);
+  background: var(--background);
+  color: var(--foreground);
   font-size: 30rpx;
 }
 
@@ -21,26 +19,32 @@ page {
 .field {
   height: 92rpx;
   padding: 0 28rpx;
-  background: #fff;
-  border: 1rpx solid var(--line);
-  border-radius: 16rpx;
+  background: var(--card);
+  border: 1rpx solid var(--input);
+  border-radius: var(--radius);
   margin-bottom: 24rpx;
 }
 
 .primary {
-  background: var(--accent);
-  color: #fff;
-  border-radius: 16rpx;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-radius: var(--radius);
+}
+
+/* <button> applies `button-hover` while pressed; mirror the native pressed state. */
+.primary.button-hover {
+  background: var(--primary-deep);
+  color: var(--primary-foreground);
 }
 
 .link {
-  color: var(--accent);
+  color: var(--primary);
   background: transparent;
   font-size: 28rpx;
 }
 
 .error {
-  color: #e5484d;
+  color: var(--destructive);
   font-size: 26rpx;
   margin-top: 20rpx;
 }
