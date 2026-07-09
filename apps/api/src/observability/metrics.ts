@@ -1,0 +1,116 @@
+// Minimal Prometheus metrics — hand-rolled text exposition, no client library.
+//
+// The point is a quantitative surface (RPS, error rate, latency percentiles,
+// saturation) that an off-the-shelf Prometheus/VictoriaMetrics/Grafana-agent
+// scrape can consume, without pulling a metrics SDK into the API. The series
+// space is deliberately tiny and bounded:
+//   - http_requests_total{method,path,status}   — counter; `path` is the matched
+//     ROUTE PATTERN (`/todos/:id`), never the raw URL, so ids can't explode
+//     cardinality.
+//   - http_request_duration_seconds             — one global histogram (fixed
+//     buckets) for p50/p95/p99 via histogram_quantile.
+//   - http_requests_in_flight                   — gauge; saturation signal.
+//   - process_start_time_seconds                — lets dashboards derive uptime
+//     and spot restarts.
+//
+// Nothing here ever carries a header, body, phone, code, or token — labels are
+// method / route pattern / status only.
+
+export interface HttpSample {
+  method: string;
+  /** The matched route pattern (bounded), not the raw request path. */
+  path: string;
+  status: number;
+  durationMs: number;
+}
+
+export interface Metrics {
+  /** Count a request into the in-flight gauge (call on entry). */
+  onRequestStart(): void;
+  /** Record a finished request (call in `finally`; also decrements in-flight). */
+  onRequestEnd(sample: HttpSample): void;
+  /** Render the Prometheus text exposition format (v0.0.4). */
+  render(): string;
+}
+
+// Standard latency buckets (seconds): 5ms → 10s. `+Inf` is implicit in render().
+const BUCKETS = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10] as const;
+
+// Prometheus label values must escape backslash, double quote, and newline.
+function escapeLabel(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
+}
+
+export function createMetrics(now: () => number = Date.now): Metrics {
+  const startTimeSeconds = now() / 1000;
+  let inFlight = 0;
+
+  // key = `${method}|${path}|${status}` -> count. The separator can't
+  // appear in a method/route/status, so keys are unambiguous.
+  const requestCounts = new Map<string, number>();
+  const bucketCounts = new Array<number>(BUCKETS.length).fill(0);
+  let durationSum = 0;
+  let durationCount = 0;
+
+  return {
+    onRequestStart() {
+      inFlight += 1;
+    },
+    onRequestEnd(sample) {
+      inFlight = Math.max(0, inFlight - 1);
+      const key = `${sample.method}|${sample.path}|${sample.status}`;
+      requestCounts.set(key, (requestCounts.get(key) ?? 0) + 1);
+      const seconds = sample.durationMs / 1000;
+      durationSum += seconds;
+      durationCount += 1;
+      for (let i = 0; i < BUCKETS.length; i += 1) {
+        // Non-cumulative per-bucket counts here; render() accumulates (`le` semantics).
+        const bucket = BUCKETS[i];
+        if (bucket !== undefined && seconds <= bucket) {
+          bucketCounts[i] = (bucketCounts[i] ?? 0) + 1;
+          break;
+        }
+      }
+    },
+    render() {
+      const lines: string[] = [];
+
+      lines.push(
+        "# HELP http_requests_total Total HTTP requests by method, matched route and status.",
+        "# TYPE http_requests_total counter",
+      );
+      for (const [key, count] of requestCounts) {
+        const [method = "", path = "", status = ""] = key.split("|");
+        lines.push(
+          `http_requests_total{method="${escapeLabel(method)}",path="${escapeLabel(path)}",status="${escapeLabel(status)}"} ${count}`,
+        );
+      }
+
+      lines.push(
+        "# HELP http_request_duration_seconds HTTP request latency.",
+        "# TYPE http_request_duration_seconds histogram",
+      );
+      let cumulative = 0;
+      for (let i = 0; i < BUCKETS.length; i += 1) {
+        cumulative += bucketCounts[i] ?? 0;
+        lines.push(`http_request_duration_seconds_bucket{le="${BUCKETS[i]}"} ${cumulative}`);
+      }
+      lines.push(
+        `http_request_duration_seconds_bucket{le="+Inf"} ${durationCount}`,
+        `http_request_duration_seconds_sum ${durationSum}`,
+        `http_request_duration_seconds_count ${durationCount}`,
+      );
+
+      lines.push(
+        "# HELP http_requests_in_flight Requests currently being handled.",
+        "# TYPE http_requests_in_flight gauge",
+        `http_requests_in_flight ${inFlight}`,
+        "# HELP process_start_time_seconds Unix time the process started.",
+        "# TYPE process_start_time_seconds gauge",
+        `process_start_time_seconds ${startTimeSeconds}`,
+      );
+
+      return `${lines.join("\n")}\n`;
+    },
+  };
+}

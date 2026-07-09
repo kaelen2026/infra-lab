@@ -56,7 +56,9 @@ pnpm vitest run packages/auth/test/otp.test.ts   # 单测一个文件;-t "名称
     ([`apps/bot/README.md`](apps/bot/README.md));issue/PR 里 `@infra-lab-bot` 触发
     ([`docs/infra-lab-bot.md`](docs/infra-lab-bot.md))。
 - **Observability**(`apps/api/src/observability/`):结构化 JSON 日志(每请求一个
-  `requestId`)、`/health`、`/ready`(查 PG+Redis)、安全头 + 请求体上限 + per-IP 限流。
+  `requestId`)、`/health`、`/ready`(查 PG+Redis;排水时 503)、`/metrics`(Prometheus
+  文本格式,按 method/路由模式/status 计数 + 延迟直方图)、安全头 + 请求体上限 +
+  per-IP 限流、优雅关闭(超时强退兜底 + 全局异常处理)。
   **绝不记录手机号、OTP 验证码、token。**
 
 ## Language rules(动哪端先读哪份)

@@ -81,6 +81,13 @@ describe("parseCoreEnv", () => {
     expect(parseCoreEnv({ ...base, SLOW_REQUEST_MS: "0" }).SLOW_REQUEST_MS).toBe(0);
     expect(() => parseCoreEnv({ ...base, MAX_REQUEST_BODY_BYTES: "0" })).toThrow();
     expect(() => parseCoreEnv({ ...base, SLOW_REQUEST_MS: "-1" })).toThrow();
+    // Graceful-shutdown ceiling: defaulted, coerced, must be positive (there is no
+    // "disabled" — a drain without a backstop can hang until SIGKILL).
+    expect(env.SHUTDOWN_TIMEOUT_MS).toBe(10_000);
+    expect(parseCoreEnv({ ...base, SHUTDOWN_TIMEOUT_MS: "5000" }).SHUTDOWN_TIMEOUT_MS).toBe(5000);
+    expect(() => parseCoreEnv({ ...base, SHUTDOWN_TIMEOUT_MS: "0" })).toThrow(
+      /SHUTDOWN_TIMEOUT_MS/,
+    );
   });
 
   it("coerces PORT to a number", () => {

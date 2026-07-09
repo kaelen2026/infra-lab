@@ -149,8 +149,14 @@ For a real production database, run migrations from CI/CD or a one-off release j
 - Uploaded timeline/avatar files live in the API container at `/data/uploads`; the compose layer maps
   that path to the `uploads` volume. Replace this with object storage before horizontal API scaling.
 
-### Health
+### Health & Metrics
 
-- API: `/health` is liveness; `/ready` checks Postgres and Redis.
+- API: `/health` is liveness; `/ready` checks Postgres and Redis, and answers 503 while the
+  process drains after a shutdown signal (point the load balancer's readiness probe here).
+  The drain force-exits after `SHUTDOWN_TIMEOUT_MS` (default 10s) — keep that under the
+  orchestrator's kill grace period.
+- API: `/metrics` is a Prometheus text scrape target (request counts by method/route/status,
+  a latency histogram, in-flight gauge, process start time). No PII in the series, but treat
+  it as internal: scrape from inside the network or firewall it at ingress.
 - Web: container health checks the Next server root path.
 - H5: nginx serves static assets; external health can probe `/`.
