@@ -7,6 +7,7 @@ import type { Logger } from "../src/observability/logger.js";
 import type { AdminRepository } from "../src/routes/admin.routes.js";
 import type { SessionService, UserRepository } from "../src/routes/auth.routes.js";
 import type { QrTicketStore } from "../src/routes/qr.routes.js";
+import type { SocialAuthService } from "../src/routes/social.routes.js";
 import type { ImageStore, TimelinePostRepository } from "../src/routes/timeline.routes.js";
 import type { TodoRepository } from "../src/routes/todo.routes.js";
 
@@ -47,6 +48,7 @@ function buildApp(overrides: Partial<AppDeps> = {}) {
     admin: {} as AdminRepository,
     images: {} as ImageStore,
     sessions: { requireUser: async () => null } as unknown as SessionService,
+    social: { isEnabled: () => false } as unknown as SocialAuthService,
     qrTickets: {} as QrTicketStore,
     rateLimitStore: { incr: async () => 1, expire: async () => true },
     sms: async () => {},

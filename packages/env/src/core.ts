@@ -76,6 +76,17 @@ const CoreEnvSchema = z
     APNS_PRIVATE_KEY_PATH: optionalNonEmpty,
     // Which APNS host to hit: true → api.push.apple.com, false (default) → sandbox.
     APNS_PRODUCTION: envFlag.default(false),
+    // ── Google sign-in (OAuth / OIDC), all optional ──────────────────────────────
+    // Enables the Google login entry point (web redirect + native ID-token flows).
+    // Both optional so the API boots without Google configured (`googleConfigFromEnv`
+    // returns null → the provider is simply disabled and its routes answer
+    // SOCIAL_PROVIDER_DISABLED). When ONE is set the superRefine below requires the
+    // other, so a half-configured provider fails fast at boot instead of at sign-in.
+    // GOOGLE_CLIENT_SECRET is only needed for the web redirect (authorization-code)
+    // flow; the native ID-token flow verifies against the client id (audience) alone.
+    // Never logged. See packages/auth/src/better-auth.ts + routes/social.routes.ts.
+    GOOGLE_CLIENT_ID: optionalNonEmpty,
+    GOOGLE_CLIENT_SECRET: optionalNonEmpty,
     // Global request-body ceiling (bytes). A body larger than this is rejected with a
     // 413 before the handler runs, bounding the memory one request can force the API to
     // buffer. Must stay above the largest legitimate body — a timeline image upload
@@ -213,6 +224,17 @@ const CoreEnvSchema = z
             "set exactly one of APNS_PRIVATE_KEY (inline .p8) or APNS_PRIVATE_KEY_PATH (file)",
         });
     }
+    // Google sign-in both-or-neither: the web redirect flow needs BOTH the client id
+    // and secret, so a half-set pair is a deployment mistake — the id alone would let
+    // the native ID-token flow work while the web flow fails only at the callback. Fail
+    // fast at boot instead. All-unset simply leaves Google disabled.
+    if ((e.GOOGLE_CLIENT_ID === undefined) !== (e.GOOGLE_CLIENT_SECRET === undefined)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [e.GOOGLE_CLIENT_ID === undefined ? "GOOGLE_CLIENT_ID" : "GOOGLE_CLIENT_SECRET"],
+        message: "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set together (or both unset)",
+      });
+    }
   })
   .transform((e) => {
     // Allowlist for both hono CORS and Better Auth: BETTER_AUTH_URL (the web/auth origin,
@@ -294,6 +316,23 @@ export function apnsConfigFromEnv(env: CoreEnv): ApnsEnvConfig | null {
     privateKey,
     production: env.APNS_PRODUCTION,
   };
+}
+
+/** Resolved Google OAuth credentials. */
+export interface GoogleEnvConfig {
+  clientId: string;
+  /** Never logged. Required for the web authorization-code flow. */
+  clientSecret: string;
+}
+
+/**
+ * Build Google sign-in config from validated env, or `null` when it is not
+ * configured (neither var set). The schema's superRefine guarantees a non-null
+ * result has both fields present (both-or-neither), so callers get all-or-nothing.
+ */
+export function googleConfigFromEnv(env: CoreEnv): GoogleEnvConfig | null {
+  if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) return null;
+  return { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET };
 }
 
 let cached: CoreEnv | undefined;

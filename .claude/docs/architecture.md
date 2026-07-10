@@ -40,12 +40,16 @@ that verifies successfully auto-creates `user` + `profile` in one transaction. T
 `["web", "ios", "android", "harmony", "cli", "weapp"]` — `cli` (terminal) and `weapp` (WeChat
 mini-program, `apps/miniprogram`) both ride the native Bearer channel.
 
-**Google sign-in (planned)** — a second login entry alongside phone-OTP, keyed by a Google
+**Google sign-in** — a second login entry alongside phone-OTP, keyed by a Google
 `account` (Better Auth OAuth), for `web/h5` (redirect) and `ios/android/harmony/cli` (native ID
 token). `miniprogram` (`weapp`) is intentionally excluded. Google users have no phone (`user.phone`
-nullable, so `AuthUser.phone` becomes `string | null` — a cross-client contract change). Sessions
+nullable, so `AuthUser.phone` is `string | null` — a cross-client contract change). Sessions
 are still minted by our own `SessionService` (not Better Auth's session), so Google sessions are
-indistinguishable downstream from OTP ones. **Account linking** is in scope: a logged-in user can add
+indistinguishable downstream from OTP ones. **Status:** the **native ID-token flow**
+(`POST /auth/social/:provider/token` → `auth.api.signInSocial` verify + find-or-create → our
+`SessionService`; contract in `packages/shared/src/contracts/social.ts`, route in
+`apps/api/src/routes/social.routes.ts`) has shipped; the **web redirect flow + Better Auth
+callback→cookie bridge** is the next phase (design §8 stage 2b). **Account linking** is in scope: a logged-in user can add
 the other credential (phone↔Google) onto one `user` — conflicts (target already owned by another
 account) are rejected, not auto-merged; a `user` must keep ≥1 login credential. Full design + phased
 rollout: [`docs/plans/google-login.md`](../../docs/plans/google-login.md).

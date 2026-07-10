@@ -27,6 +27,9 @@ export const ERROR_MESSAGES: Record<AuthErrorCode, string> = {
   QR_NOT_FOUND: "二维码无效或已过期，请刷新后重试。",
   QR_ALREADY_USED: "该二维码已被使用，请刷新后重试。",
   QR_NOT_APPROVED: "尚未在手机上确认登录。",
+  SOCIAL_PROVIDER_DISABLED: "暂不支持该登录方式。",
+  SOCIAL_TOKEN_INVALID: "第三方账号验证失败，请重试。",
+  SOCIAL_ACCOUNT_ERROR: "第三方登录失败，请稍后再试。",
 };
 
 export const COPY = {

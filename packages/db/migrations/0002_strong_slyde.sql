@@ -1,0 +1,1 @@
+ALTER TABLE "login_event" ALTER COLUMN "phone" DROP NOT NULL;

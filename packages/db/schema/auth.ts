@@ -159,7 +159,9 @@ export const loginEvent = pgTable(
   {
     id: text("id").primaryKey(),
     userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
-    phone: text("phone").notNull(),
+    // Nullable: a social sign-in (Google) has no phone credential, so its audited
+    // login events carry `null` here. Phone-OTP events still record the phone.
+    phone: text("phone"),
     platform: platformEnum("platform").notNull(),
     ip: text("ip"),
     userAgent: text("user_agent"),

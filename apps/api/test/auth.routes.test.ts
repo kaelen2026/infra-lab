@@ -23,10 +23,11 @@ const readJson = (res: Response): Promise<any> => res.json() as Promise<any>;
 // ── In-memory user repository ──────────────────────────────────────────────────
 class FakeUserRepository implements UserRepository {
   users = new Map<string, UserRecord>();
+  profiles = new Set<string>();
   devices: Array<{ userId: string; device: DeviceInfo }> = [];
   events: Array<{
     userId: string | null;
-    phone: string;
+    phone: string | null;
     platform: Platform;
     success: boolean;
     reason?: string;
@@ -50,7 +51,24 @@ class FakeUserRepository implements UserRepository {
       createdAt: new Date("2026-06-30T00:00:00Z"),
     };
     this.users.set(id, rec);
+    this.profiles.add(id);
     return rec;
+  }
+  async ensureProfile(
+    userId: string,
+    hints: { displayName?: string | null; avatarUrl?: string | null },
+  ): Promise<boolean> {
+    if (this.profiles.has(userId)) return false;
+    this.profiles.add(userId);
+    const rec = this.users.get(userId);
+    if (rec) {
+      this.users.set(userId, {
+        ...rec,
+        displayName: hints.displayName ?? rec.displayName,
+        avatarUrl: hints.avatarUrl ?? rec.avatarUrl,
+      });
+    }
+    return true;
   }
   async updateProfile(
     userId: string,
@@ -71,7 +89,7 @@ class FakeUserRepository implements UserRepository {
   }
   async recordLoginEvent(e: {
     userId: string | null;
-    phone: string;
+    phone: string | null;
     platform: Platform;
     ip: string;
     deviceId?: string;

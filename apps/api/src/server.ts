@@ -9,7 +9,7 @@
 import { serve } from "@hono/node-server";
 import { createAuth, createCliDeviceFlowService, createOtpService } from "@infra/auth";
 import { createDb, schema } from "@infra/db";
-import { apnsConfigFromEnv, loadCoreEnv } from "@infra/env/core";
+import { apnsConfigFromEnv, googleConfigFromEnv, loadCoreEnv } from "@infra/env/core";
 import { createRedis, createRedisOtpStore, createRedisRateLimitStore } from "@infra/redis";
 import { createApp } from "./app.js";
 import { createLogger } from "./observability/logger.js";
@@ -18,6 +18,7 @@ import { createApnsClient } from "./services/apns-client.js";
 import { createLocalImageStore } from "./services/image-store.js";
 import { createRedisQrTicketStore } from "./services/qr-ticket-store.js";
 import { createSessionService } from "./services/session-service.js";
+import { createSocialAuthService } from "./services/social-auth-service.js";
 import { createTimelineRepository } from "./services/timeline-repository.js";
 import { createTodoRepository } from "./services/todo-repository.js";
 import { createUserRepository } from "./services/user-repository.js";
@@ -36,6 +37,8 @@ const db = createDb(env.DATABASE_URL, { max: env.DATABASE_POOL_MAX });
 const redis = createRedis(env.REDIS_URL, {
   onError: (err) => log.error("redis client error", { error: err.message }),
 });
+// Google sign-in is opt-in: enabled only when both GOOGLE_CLIENT_ID/SECRET are set.
+const googleConfig = googleConfigFromEnv(env);
 const auth = createAuth({
   db,
   schema,
@@ -43,6 +46,11 @@ const auth = createAuth({
   baseURL,
   trustedOrigins: env.TRUSTED_ORIGINS,
   cookie: { secure: env.COOKIE_SECURE, domain: env.COOKIE_DOMAIN },
+  ...(googleConfig ? { google: googleConfig } : {}),
+});
+const social = createSocialAuthService({
+  auth,
+  enabledProviders: new Set(googleConfig ? (["google"] as const) : []),
 });
 
 // The OTP + CLI device-flow services and QR ticket store share the one Redis
@@ -92,6 +100,7 @@ const app = createApp({
   // from GET /uploads/:name. UPLOADS_DIR resolves against the API cwd (apps/api).
   images: createLocalImageStore({ dir: env.UPLOADS_DIR }),
   sessions,
+  social,
   qrTickets: createRedisQrTicketStore(otpStore),
   rateLimitStore: createRedisRateLimitStore(redis),
   sms,

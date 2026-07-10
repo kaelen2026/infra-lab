@@ -36,7 +36,8 @@ import type { ImageStore } from "./timeline.routes.js";
 // ── Ports the routes depend on (implemented in src/services with db + better-auth) ──
 export interface UserRecord {
   id: string;
-  phone: string;
+  /** `null` for a social-only account (Google) that has never linked a phone. */
+  phone: string | null;
   displayName: string | null;
   avatarUrl: string | null;
   /** Persisted identity role; gates the admin console. */
@@ -51,6 +52,19 @@ export interface UserRepository {
   /** Creates the user row AND its profile row in one transaction. */
   createWithProfile(phone: string): Promise<UserRecord>;
   /**
+   * Idempotently ensure a profile row exists for a user provisioned OUTSIDE the OTP
+   * flow — i.e. one Better Auth created for a social sign-in, which writes the `user`
+   * row but not our product-side `profile` row. On first insert the Google-supplied
+   * hints seed the profile; if a profile already exists this is a no-op (a returning
+   * social user, or one who later linked a phone). Never overwrites existing fields.
+   * Returns `true` when it inserted a fresh profile — i.e. the user's first sign-in
+   * (a new account), which the caller reports as `AuthUser.isNew`.
+   */
+  ensureProfile(
+    userId: string,
+    hints: { displayName?: string | null; avatarUrl?: string | null },
+  ): Promise<boolean>;
+  /**
    * Update this user's profile row (display name / avatar). Only the keys present
    * in `patch` change; `null` clears a field. Returns the refreshed user, or
    * `null` when the user no longer exists.
@@ -63,7 +77,8 @@ export interface UserRepository {
   recordLoginEvent(event: {
     /** `null` for failed attempts on a phone with no existing account. */
     userId: string | null;
-    phone: string;
+    /** `null` for a social sign-in event (Google), which has no phone. */
+    phone: string | null;
     platform: Platform;
     ip: string;
     deviceId?: string;
@@ -158,6 +173,10 @@ const ERROR_STATUS: Record<AuthErrorCode, ContentfulStatusCode> = {
   QR_NOT_FOUND: 404,
   QR_ALREADY_USED: 409,
   QR_NOT_APPROVED: 409,
+  // Social sign-in (emitted by social.routes.ts, mapped here for a complete table).
+  SOCIAL_PROVIDER_DISABLED: 400,
+  SOCIAL_TOKEN_INVALID: 401,
+  SOCIAL_ACCOUNT_ERROR: 401,
 };
 
 /**

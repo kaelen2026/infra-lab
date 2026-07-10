@@ -215,11 +215,17 @@ CI——各端改动需本地过门禁,并保证 `phone` 可空后无强解包(`
 ## 8. 分阶段实施(建议 PR 拆分)
 
 1. **本 PR:设计文档**(此文件)+ 在 `.claude/docs/architecture.md` 增一节指针。
-2. **契约 + 后端**:`social.ts` 契约、`AuthUser.phone` 可空、`createAuth` 注入
-   `socialProviders`、`/auth/social/*` 路由 + 会话桥接、env、**hermetic 集成测试**。
-   全部走 CI 门禁(lint/typecheck/build/test)。TS 客户端(sdk/web/h5/cli)同 PR 跟上
-   `phone` 可空。
-3. **web/h5 UI**:Google 登录按钮 + 回跳落地。
+2. **契约 + 后端**(落地时按风险一分为二):
+   - **2a(已实现)**:`social.ts` 契约、`AuthUser.phone` 可空、`createAuth` 注入
+     `socialProviders`、**原生 idToken 流** `POST /auth/social/:provider/token` + 会话桥接
+     (复用 `SessionService`)、env(`GOOGLE_CLIENT_ID/SECRET` both-or-neither 守卫)、
+     `login_event.phone` 可空迁移、**hermetic 测试**(路由端口 fake + 适配器 APIError 映射)。
+     TS 客户端(web/h5/cli/miniprogram)同 PR 跟上 `phone` 可空。全部走 CI 门禁。
+   - **2b(待做)**:**web/h5 重定向流** `GET /auth/social/:provider/start` + BA 回调
+     桥接(§5.2,本设计**技术风险最高**的一环:BA `hooks.after` 读 `newSession.user.id`
+     → 下发 `infra.session` cookie + 清 BA cookie),需带 mock Google 码交换的集成测试。
+     单独 PR 聚焦。
+3. **web/h5 UI**:Google 登录按钮 + 回跳落地(依赖 2b)。
 4. **账号绑定(§2.3)**:`/auth/identities`、`/auth/link/*`、`/auth/unlink` 端点 + 冲突/
    守恒规则 + 审计 + hermetic 测试(走 CI);web/h5 "账号安全"页展示与绑定/解绑入口。
 5. **原生镜像**(可并行、各自 PR):iOS / Android / Harmony 契约镜像 + idToken 流 +

@@ -15,6 +15,13 @@
       "when": 1783314798435,
       "tag": "0001_graceful_norman_osborn",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783666464138,
+      "tag": "0002_strong_slyde",
+      "breakpoints": true
     }
   ]
 }

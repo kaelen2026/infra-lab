@@ -63,6 +63,10 @@ export const AUTH_ERROR_CODES = [
   "QR_NOT_FOUND", // scan/approve/consume against an unknown or expired login ticket
   "QR_ALREADY_USED", // the ticket was already approved (or consumed) — can't reuse it
   "QR_NOT_APPROVED", // consume attempted before a native client approved the ticket
+  // Social sign-in (Google). See contracts/social.ts and docs/plans/google-login.md.
+  "SOCIAL_PROVIDER_DISABLED", // provider not configured on the server (no clientId/secret)
+  "SOCIAL_TOKEN_INVALID", // the presented OAuth id token failed verification
+  "SOCIAL_ACCOUNT_ERROR", // provider verified but the account could not be established
 ] as const;
 export type AuthErrorCode = (typeof AUTH_ERROR_CODES)[number];
 
@@ -130,7 +134,13 @@ export interface UpdatePushTokenResponse {
 
 export interface AuthUser {
   id: string;
-  phone: string;
+  /**
+   * `null` for accounts with no phone credential — a user who signed in with a
+   * social provider (Google) and never linked a phone. Cross-client contract:
+   * every decoder (TS SDK + native mirrors) must tolerate a null and fall back to
+   * `displayName` for presentation. See `docs/plans/google-login.md`.
+   */
+  phone: string | null;
   displayName: string | null;
   avatarUrl: string | null;
   createdAt: string; // ISO 8601
