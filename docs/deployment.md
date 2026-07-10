@@ -141,6 +141,16 @@ All four runtime images run as a **non-root user** (`node` for api/web/bot, `ngi
 The API image pre-creates `/data/uploads` owned by `node`, so the compose `uploads` volume
 inherits writable ownership on first mount — mount custom upload paths accordingly.
 
+> **Upgrading an existing deployment:** ownership seeding only applies to an **empty** volume —
+> Docker never re-chowns a non-empty one on re-mount. An `uploads` volume populated by the old
+> root-running image stays root-owned, and the now-non-root API fails image uploads with EACCES.
+> One-time fix before rolling the new api image:
+>
+> ```bash
+> docker compose --env-file .env.deploy -f docker-compose.deploy.yml \
+>   run --rm --user root api chown -R node:node /data/uploads
+> ```
+
 ### Published images (GHCR)
 
 Pushing a version tag (`git tag v0.3.0 && git push origin v0.3.0`) runs
