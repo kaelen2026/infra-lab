@@ -138,15 +138,17 @@ ARG VITE_API_URL=""
 RUN VITE_API_URL="$VITE_API_URL" pnpm --filter @infra/h5 build
 
 # ---- serve ----
-FROM nginx:1.27-alpine
+# Unprivileged nginx: runs as the nginx user (non-root), so it listens on 8080
+# (can't bind < 1024). nginx.conf matches.
+FROM nginxinc/nginx-unprivileged:1.27-alpine
 COPY --from=build /repo/apps/h5/dist /usr/share/nginx/html
 COPY apps/h5/docs/nginx.conf /etc/nginx/conf.d/default.conf   # static + SPA fallback
-EXPOSE 80
+EXPOSE 8080
 ```
 
 ```bash
 docker build -f apps/h5/Dockerfile --build-arg VITE_API_URL="" -t infra-h5 .
-docker run -p 8080:80 infra-h5
+docker run -p 8080:8080 infra-h5
 ```
 
 Terminate TLS and route API paths (`/auth`, `/todos`, `/timeline`, `/uploads`, `/admin`,

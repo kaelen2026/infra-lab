@@ -65,6 +65,18 @@ jobs:
             type=ref,event=branch
             type=sha
 
+      # Fail fast instead of silently publishing a web image with the Dockerfile's
+      # localhost default baked into the browser bundle (same strictness as the
+      # deploy compose's `:?` expansion). h5 is exempt: an empty VITE_API_URL is a
+      # legitimate same-origin build.
+      - name: Preflight browser-bundle origin
+        if: matrix.app == 'web' && vars.NEXT_PUBLIC_API_URL == ''
+        run: >-
+          echo "::error::repo Variable NEXT_PUBLIC_API_URL is not set — the published web
+          image would call http://localhost:3001 from every browser. Set it under
+          Settings → Secrets and variables → Actions → Variables, then re-tag."
+          && exit 1
+
       # Build args beyond what an app's Dockerfile declares are ignored with a
       # warning, so the browser-bundle origins can be passed uniformly here.
       - name: Build and push
@@ -76,5 +88,5 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL || 'http://localhost:3001' }}
-            VITE_API_URL=${{ vars.VITE_API_URL || '' }}
+            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
+            VITE_API_URL=${{ vars.VITE_API_URL }}
