@@ -1,5 +1,6 @@
 import { useSession } from "@/features/session";
 import { DevicesCard } from "./components/devices-card";
+import { IdentitiesCard } from "./components/identities-card";
 import { LoginEventsCard } from "./components/login-events-card";
 import { ProfileCard } from "./components/profile-card";
 import { SessionCard } from "./components/session-card";
@@ -22,6 +23,7 @@ export function AccountPage() {
 
       <ProfileCard user={user} />
       <SessionCard />
+      <IdentitiesCard />
       <DevicesCard devices={devices} loading={loading} />
       <LoginEventsCard events={events} loading={loading} />
 

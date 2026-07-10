@@ -80,6 +80,33 @@ export function createUserRepository(db: Db): UserRepository {
       return inserted.length > 0;
     },
 
+    async attachPhone(userId, phone) {
+      const current = await loadById(userId);
+      // The session resolved a live user; a null here means it vanished mid-request.
+      if (!current) return { ok: false, error: "ALREADY_HAS_PHONE" };
+      if (current.phone) return { ok: false, error: "ALREADY_HAS_PHONE" };
+      const owner = await loadByPhone(phone);
+      if (owner && owner.id !== userId) return { ok: false, error: "PHONE_ALREADY_LINKED" };
+      try {
+        await db
+          .update(user)
+          .set({ phone, phoneVerified: true, updatedAt: new Date() })
+          .where(eq(user.id, userId));
+      } catch {
+        // Unique-violation race — the phone was claimed between the check and the write.
+        return { ok: false, error: "PHONE_ALREADY_LINKED" };
+      }
+      const updated = await loadById(userId);
+      return { ok: true, user: updated ?? { ...current, phone } };
+    },
+
+    async detachPhone(userId) {
+      await db
+        .update(user)
+        .set({ phone: null, phoneVerified: false, updatedAt: new Date() })
+        .where(eq(user.id, userId));
+    },
+
     async updateProfile(userId, patch) {
       const set: { displayName?: string | null; avatarUrl?: string | null; updatedAt: Date } = {
         updatedAt: new Date(),

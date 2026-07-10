@@ -169,6 +169,19 @@ export function createAuth(options: CreateAuthOptions) {
               clientSecret: options.google.clientSecret,
             },
           },
+          // Account linking (§2.3). `allowDifferentEmails` is load-bearing: our OTP
+          // users have no email, so the link guards would otherwise reject (or NPE on)
+          // the email comparison. Trusting `google` links unconditionally on a verified
+          // Google token. We add our own cross-user + last-credential rules on top (see
+          // account-link.routes.ts) — Better Auth's own guards don't model our phone
+          // credential (which is `user.phone`, not an `account` row).
+          account: {
+            accountLinking: {
+              enabled: true,
+              trustedProviders: ["google" as const],
+              allowDifferentEmails: true,
+            },
+          },
         }
       : {}),
     // Web-redirect bridge: on the Google OAuth callback, swap Better Auth's session

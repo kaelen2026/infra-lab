@@ -22,6 +22,7 @@ import type { Logger } from "./observability/logger.js";
 import { createMetrics } from "./observability/metrics.js";
 import { type ObsEnv, observability } from "./observability/middleware.js";
 import { createRateLimiter, type RateLimitStore } from "./rate-limit.js";
+import { type AccountLinkService, createAccountLinkRoutes } from "./routes/account-link.routes.js";
 import { type AdminRepository, createAdminRoutes } from "./routes/admin.routes.js";
 import {
   clientIp,
@@ -70,6 +71,8 @@ export interface AppDeps {
    * SOCIAL_PROVIDER_DISABLED rather than 404.
    */
   social: SocialAuthService;
+  /** Account linking (identities / link phone / link+unlink social). Always present. */
+  accountLink: AccountLinkService;
   qrTickets: QrTicketStore;
   /** Counter store backing the transport-level rate limiter. */
   rateLimitStore: RateLimitStore;
@@ -193,6 +196,19 @@ export function createApp(deps: AppDeps): Hono<ObsEnv> {
       social: deps.social,
       users: deps.users,
       sessions: deps.sessions,
+      config: { trustedProxyCount: env.TRUSTED_PROXY_COUNT, webBaseUrl: env.BETTER_AUTH_URL },
+    }),
+  );
+  // Account linking (§2.3): identities + link phone + link/unlink social, all session-
+  // scoped. The web social LINK reuses Better Auth's callback; the hooks.after bridge
+  // no-ops on it (a link mints no new session), so the logged-in user is preserved.
+  app.route(
+    "/",
+    createAccountLinkRoutes({
+      link: deps.accountLink,
+      users: deps.users,
+      sessions: { requireUser: (h) => deps.sessions.requireUser(h) },
+      otp: deps.otp,
       config: { trustedProxyCount: env.TRUSTED_PROXY_COUNT, webBaseUrl: env.BETTER_AUTH_URL },
     }),
   );

@@ -67,6 +67,10 @@ export const AUTH_ERROR_CODES = [
   "SOCIAL_PROVIDER_DISABLED", // provider not configured on the server (no clientId/secret)
   "SOCIAL_TOKEN_INVALID", // the presented OAuth id token failed verification
   "SOCIAL_ACCOUNT_ERROR", // provider verified but the account could not be established
+  // Account linking (§2.3). Conflicts are rejected, never auto-merged.
+  "SOCIAL_ALREADY_LINKED", // the social account is already linked (to this or another user)
+  "PHONE_ALREADY_LINKED", // the phone already belongs to another account
+  "LAST_CREDENTIAL", // unlinking would leave the account with no way to sign in
 ] as const;
 export type AuthErrorCode = (typeof AUTH_ERROR_CODES)[number];
 

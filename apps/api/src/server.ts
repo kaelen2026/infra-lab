@@ -18,6 +18,7 @@ import { apnsConfigFromEnv, googleConfigFromEnv, loadCoreEnv } from "@infra/env/
 import { createRedis, createRedisOtpStore, createRedisRateLimitStore } from "@infra/redis";
 import { createApp } from "./app.js";
 import { createLogger } from "./observability/logger.js";
+import { createAccountLinkService } from "./services/account-link-service.js";
 import { createAdminRepository } from "./services/admin-repository.js";
 import { createApnsClient } from "./services/apns-client.js";
 import { createLocalImageStore } from "./services/image-store.js";
@@ -65,10 +66,9 @@ const auth = createAuth({
       }
     : {}),
 });
-const social = createSocialAuthService({
-  auth,
-  enabledProviders: new Set(googleConfig ? (["google"] as const) : []),
-});
+const enabledSocialProviders = new Set(googleConfig ? (["google"] as const) : []);
+const social = createSocialAuthService({ auth, enabledProviders: enabledSocialProviders });
+const accountLink = createAccountLinkService({ auth, enabledProviders: enabledSocialProviders });
 // The OTP + CLI device-flow services and QR ticket store share the one Redis
 // connection; their keys live in disjoint namespaces (otp:* / qr:* / rl:*).
 const otpStore = createRedisOtpStore(redis);
@@ -138,6 +138,7 @@ const app = createApp({
   images: createLocalImageStore({ dir: env.UPLOADS_DIR }),
   sessions,
   social,
+  accountLink,
   qrTickets: createRedisQrTicketStore(otpStore),
   rateLimitStore: createRedisRateLimitStore(redis),
   sms,
