@@ -36,9 +36,14 @@ jobs:
     name: AI code review
     runs-on: ubuntu-latest
     # 跳过草稿 PR,以及来自 fork 的 PR(后者拿不到 secrets)。
+    # 同样跳过 dependabot PR:dependabot 触发的运行读的是 Dependabot 专属 secret 池
+    # (没有 INFRA_LAB_BOT_PRIVATE_KEY / CLAUDE_CODE_OAUTH_TOKEN),铸 App token 一步
+    # 就会报错挂红;而依赖升级 diff 只有 manifest+lockfile,AI 审查价值也低——
+    # 质量门禁交给 CI(lint/typecheck/build/test)+ pnpm audit。
     if: |
       github.event.pull_request.draft == false &&
-      github.event.pull_request.head.repo.full_name == github.repository
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]'
     steps:
       # 用 infra-lab-bot App 铸一个短期 installation token,让审查评论归属到 infra-lab-bot[bot]。
       - name: Generate infra-lab-bot app token
