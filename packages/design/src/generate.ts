@@ -162,7 +162,7 @@ enum AuthCopy {
     }
 
     enum Social {
-        static let orDivider = ${q(COPY.social.orDivider)}
+        static let orDivider = ${q(COPY.social.divider)}
     }
 
     enum Code {

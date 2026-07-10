@@ -3,7 +3,7 @@
 // OTP issuance/verification already enforce fine-grained per-phone / per-IP quotas
 // inside the Redis OTP domain (see @infra/auth otp.ts). This is the complementary
 // *transport-level* guardrail for every other endpoint (refresh, todos, timeline,
-// uploads, the Better-Auth handler): a fixed-window counter per client IP that caps
+// uploads): a fixed-window counter per client IP that caps
 // raw request volume, so a single caller can't hammer a route hard enough to exhaust
 // the process or the database. The fine-grained OTP quotas still apply on top.
 //

@@ -12,7 +12,7 @@
 // pipeline — keep the order intact (see the security constraints in
 // `.claude/skills/api-architecture`).
 
-import type { Auth, CliDeviceFlowService, OtpService } from "@infra/auth";
+import type { CliDeviceFlowService, OtpService } from "@infra/auth";
 import type { Db } from "@infra/db";
 import type { CoreEnv } from "@infra/env/core";
 import { Hono } from "hono";
@@ -56,8 +56,6 @@ export interface AppDeps {
   db: Db;
   /** Only used by `/ready` (`PING`). ioredis or the Upstash REST client both satisfy it. */
   redis: Pingable;
-  /** Better Auth instance; owns `/api/auth/*` and backs `requireUser`. */
-  auth: Auth;
   otp: OtpService;
   cliDeviceFlow: CliDeviceFlowService;
   users: UserRepository;
@@ -147,8 +145,7 @@ export function createApp(deps: AppDeps): Hono<ObsEnv> {
   );
 
   // Coarse per-IP request throttle (transport-level). Registered AFTER /health and
-  // /ready so those probes stay exempt, and BEFORE every real route so it wraps the
-  // Better-Auth handler and all business routes. The fine-grained per-phone/per-IP OTP
+  // /ready so those probes stay exempt, and BEFORE every product route. The fine-grained per-phone/per-IP OTP
   // quotas still apply on top. Uses the same trusted-client-IP resolution as OTP.
   // Disabled when RATE_LIMIT_MAX is 0.
   if (env.RATE_LIMIT_MAX > 0) {
@@ -169,8 +166,6 @@ export function createApp(deps: AppDeps): Hono<ObsEnv> {
     log.warn("rate limit disabled (RATE_LIMIT_MAX=0)");
   }
 
-  // Better Auth's own endpoints (used by its client + bearer-token resolution).
-  app.on(["GET", "POST"], "/api/auth/*", (c) => deps.auth.handler(c.req.raw));
   // Our phone-OTP routes.
   app.route(
     "/",
@@ -198,7 +193,7 @@ export function createApp(deps: AppDeps): Hono<ObsEnv> {
       social: deps.social,
       users: deps.users,
       sessions: deps.sessions,
-      config: { trustedProxyCount: env.TRUSTED_PROXY_COUNT },
+      config: { trustedProxyCount: env.TRUSTED_PROXY_COUNT, webBaseUrl: env.BETTER_AUTH_URL },
     }),
   );
   // QR cross-device login: an already-authenticated native client (Cookie or Bearer)

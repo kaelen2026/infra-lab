@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import type { Auth } from "@infra/auth";
 import { type Db, profile, refreshToken, user } from "@infra/db";
 import type { AuthTokens } from "@infra/shared";
 import { and, eq, gt, isNull } from "drizzle-orm";
@@ -13,8 +12,6 @@ import {
 
 export interface SessionServiceConfig {
   db: Db;
-  /** Better Auth instance — its `getSession` resolves cookie + bearer for native flows. */
-  auth: Auth;
   secret: string;
   cookie: { name: string; secure: boolean; domain?: string };
   ttl: {
@@ -45,7 +42,7 @@ function serializeCookie(
 }
 
 export function createSessionService(config: SessionServiceConfig): SessionService {
-  const { db, auth, secret, cookie, ttl } = config;
+  const { db, secret, cookie, ttl } = config;
 
   async function loadUser(userId: string): Promise<UserRecord | null> {
     const rows = await db
@@ -67,13 +64,9 @@ export function createSessionService(config: SessionServiceConfig): SessionServi
   }
 
   async function requireUser(headers: Headers): Promise<UserRecord | null> {
-    // 1) Better Auth (handles its own cookie + bearer-plugin tokens).
-    const session = await auth.api.getSession({ headers });
-    if (session?.user?.id) {
-      const fromDb = await loadUser(session.user.id);
-      if (fromDb) return fromDb;
-    }
-    // 2) OTP-issued access token, via Bearer header or the web session cookie.
+    // Application-issued token, supplied as a Bearer header or web session cookie.
+    // SessionService is the sole product-session authority: never fall back to
+    // Better Auth's session API, whose credentials are not accepted by product routes.
     const bearer = headers.get("authorization");
     const cookieHeader = headers.get("cookie");
     const token =
@@ -118,6 +111,14 @@ export function createSessionService(config: SessionServiceConfig): SessionServi
   return {
     async issueWebSession(user) {
       return { cookies: webSessionCookies(user.id) };
+    },
+
+    mintWebSessionCookie(userId) {
+      // Same signed HS256 JWT cookie issueWebSession emits — a Google web sign-in is
+      // indistinguishable from an OTP one downstream. `webSessionCookies` returns a
+      // single-element array (one Set-Cookie); take it.
+      const [cookie] = webSessionCookies(userId);
+      return cookie ?? "";
     },
 
     async issueWebSessionForUser(userId) {

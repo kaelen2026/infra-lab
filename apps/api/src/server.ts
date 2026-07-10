@@ -7,7 +7,12 @@
 // @infra/env/core (COOKIE_SECURE / TRUSTED_PROXY_COUNT / BETTER_AUTH_SECRET, …).
 
 import { serve } from "@hono/node-server";
-import { createAuth, createCliDeviceFlowService, createOtpService } from "@infra/auth";
+import {
+  createAuth,
+  createCliDeviceFlowService,
+  createOtpService,
+  type OAuthCallbackUser,
+} from "@infra/auth";
 import { createDb, schema } from "@infra/db";
 import {
   apnsConfigFromEnv,
@@ -42,10 +47,17 @@ const db = createDb(env.DATABASE_URL, { max: env.DATABASE_POOL_MAX });
 const redis = createRedis(env.REDIS_URL, {
   onError: (err) => log.error("redis client error", { error: err.message }),
 });
+const users = createUserRepository(db);
+
 // Social sign-in is opt-in per provider: Google when GOOGLE_CLIENT_ID/SECRET are set,
 // Apple (native ID-token) when APPLE_CLIENT_ID is set.
 const googleConfig = googleConfigFromEnv(env);
 const appleConfig = appleConfigFromEnv(env);
+// Late-bound: the Google web-redirect bridge (hooks.after in createAuth) provisions the
+// profile + audits + mints our session cookie via `users`/`sessions`, and `sessions` is
+// constructed AFTER `auth` (it depends on it). A mutable holder breaks the cycle; the
+// hook only fires during a request, long after this is assigned below.
+let bridgeWebSession: ((info: OAuthCallbackUser) => Promise<string | null>) | null = null;
 const auth = createAuth({
   db,
   schema,
@@ -53,7 +65,12 @@ const auth = createAuth({
   baseURL,
   trustedOrigins: env.TRUSTED_ORIGINS,
   cookie: { secure: env.COOKIE_SECURE, domain: env.COOKIE_DOMAIN },
-  ...(googleConfig ? { google: googleConfig } : {}),
+  ...(googleConfig
+    ? {
+        google: googleConfig,
+        onOAuthCallbackSession: async (info) => (bridgeWebSession ? bridgeWebSession(info) : null),
+      }
+    : {}),
   ...(appleConfig
     ? { apple: { clientId: appleConfig.clientId, appBundleIdentifier: appleConfig.clientId } }
     : {}),
@@ -65,7 +82,6 @@ const social = createSocialAuthService({
     ...(appleConfig ? (["apple"] as const) : []),
   ]),
 });
-
 // The OTP + CLI device-flow services and QR ticket store share the one Redis
 // connection; their keys live in disjoint namespaces (otp:* / qr:* / rl:*).
 const otpStore = createRedisOtpStore(redis);
@@ -83,11 +99,33 @@ const sms = async (phone: string, code: string): Promise<void> => {
 
 const sessions = createSessionService({
   db,
-  auth,
   secret: env.BETTER_AUTH_SECRET,
   cookie: { name: "infra.session", secure: env.COOKIE_SECURE, domain: env.COOKIE_DOMAIN },
   ttl: { webSeconds: 30 * DAY, accessSeconds: 15 * 60, refreshSeconds: 30 * DAY },
 });
+// Bind the OAuth-callback bridge now that users + sessions exist (see above). It
+// mirrors the native social route: provision the profile row from Google's name/avatar,
+// audit the sign-in, then mint our session cookie. Profile/audit are best-effort — a
+// transient DB hiccup must not block the login (the cookie is still issued).
+bridgeWebSession = async ({ userId, name, image }) => {
+  try {
+    await users.ensureProfile(userId, { displayName: name, avatarUrl: image });
+    // No source IP at the OAuth-callback hook (it isn't the client's request); record
+    // the audited fields we do have. platform=web, no phone for a Google account.
+    await users.recordLoginEvent({
+      userId,
+      phone: null,
+      platform: "web",
+      ip: null,
+      success: true,
+    });
+  } catch (err) {
+    log.warn("google web sign-in: profile/audit side-effect failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+  return sessions.mintWebSessionCookie(userId);
+};
 
 // APNS is optional: enabled only when the full APNS_* set is present.
 const apnsConfig = apnsConfigFromEnv(env);
@@ -102,10 +140,9 @@ const app = createApp({
   log,
   db,
   redis,
-  auth,
   otp,
   cliDeviceFlow,
-  users: createUserRepository(db),
+  users,
   todos: createTodoRepository(db),
   timeline: createTimelineRepository(db),
   admin: createAdminRepository(db),

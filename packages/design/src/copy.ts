@@ -46,12 +46,6 @@ export const COPY = {
     submitBusy: "发送中…",
   },
 
-  /** Social sign-in chrome. The provider buttons themselves render system labels
-   *  (e.g. Sign in with Apple); only the "or" separator is our own copy. */
-  social: {
-    orDivider: "或",
-  },
-
   code: {
     title: "输入验证码",
     /** `{phone}` and `{minutes}` interpolated at runtime. */
@@ -99,6 +93,20 @@ export const COPY = {
     and: "和",
     termsLabel: "《用户服务协议》",
     privacyLabel: "《隐私协议》",
+  },
+
+  /**
+   * Social sign-in entry. `googleButton` is a web/h5-only surface — the browser
+   * redirect flow has no native counterpart (native uses on-device ID tokens) — so
+   * like `timelineShare`/`legal` it is NOT emitted to the native clients. `divider`
+   * IS emitted to iOS (the `AuthCopy.Social.orDivider` under the native Sign in with
+   * Apple button); see `generate.ts`.
+   */
+  social: {
+    /** Label on the "sign in with Google" button. */
+    googleButton: "使用 Google 登录",
+    /** Separator between the phone form and the social button (e.g. "— 或 —"). */
+    divider: "或",
   },
 
   errors: {

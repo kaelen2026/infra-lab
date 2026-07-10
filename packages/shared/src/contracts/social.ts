@@ -91,6 +91,21 @@ export function socialTokenPath(provider: SocialProvider): string {
   return `/auth/social/${provider}/token`;
 }
 
+/**
+ * Full URL a browser client (web/h5) navigates to (full page) to begin the redirect
+ * flow: `<apiBaseUrl>/auth/social/<provider>/start?redirect=<path>`. `apiBaseUrl` must
+ * have no trailing slash (web's `env.ts` strips it). `redirect` is the same-origin app
+ * path to land on after the callback bridges the session (defaults to the app root; the
+ * server re-validates it against {@link socialStartQuerySchema}).
+ */
+export function socialStartUrl(
+  apiBaseUrl: string,
+  provider: SocialProvider,
+  redirect = "/",
+): string {
+  return `${apiBaseUrl}${socialStartPath(provider)}?${new URLSearchParams({ redirect })}`;
+}
+
 // ── SDK interface draft (implemented per platform in a later phase) ─────────────
 /**
  * Native clients (ios/android/harmony/cli) implement this alongside `AuthClient`.

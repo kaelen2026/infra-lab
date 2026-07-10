@@ -1,4 +1,4 @@
-import type { Auth, CliDeviceFlowService, OtpService } from "@infra/auth";
+import type { CliDeviceFlowService, OtpService } from "@infra/auth";
 import type { Db } from "@infra/db";
 import { parseCoreEnv } from "@infra/env/core";
 import { describe, expect, it } from "vitest";
@@ -39,7 +39,6 @@ function buildApp(overrides: Partial<AppDeps> = {}) {
     log: noopLogger(),
     db: { execute: async () => [{ one: 1 }] } as unknown as Db,
     redis: { ping: async () => "PONG" },
-    auth: { handler: async () => new Response(null, { status: 404 }) } as unknown as Auth,
     otp: {} as OtpService,
     cliDeviceFlow: {} as CliDeviceFlowService,
     users: {} as UserRepository,
@@ -58,6 +57,11 @@ function buildApp(overrides: Partial<AppDeps> = {}) {
 }
 
 describe("createApp wiring", () => {
+  it("does not mount Better Auth's parallel HTTP surface", async () => {
+    const res = await buildApp().request("/api/auth/session");
+    expect(res.status).toBe(404);
+  });
+
   it("/ready reports 200 with dependency checks when healthy", async () => {
     const res = await buildApp().request("/ready");
     expect(res.status).toBe(200);

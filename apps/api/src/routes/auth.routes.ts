@@ -80,7 +80,8 @@ export interface UserRepository {
     /** `null` for a social sign-in event (Google), which has no phone. */
     phone: string | null;
     platform: Platform;
-    ip: string;
+    /** `null` when the source IP isn't available (e.g. the web OAuth-callback bridge). */
+    ip: string | null;
     deviceId?: string;
     success: boolean;
     /** Auth error code for failed attempts (INVALID_CODE / LOCKED / CODE_EXPIRED). */
@@ -123,6 +124,13 @@ export interface SessionService {
    * browser's behalf. Returns null if the user no longer exists.
    */
   issueWebSessionForUser(userId: string): Promise<{ user: UserRecord; cookies: string[] } | null>;
+  /**
+   * Mint the raw `Set-Cookie` value for a web session, given an already-resolved
+   * user id — no DB read. Used by the Google web-redirect bridge, which runs inside
+   * Better Auth's OAuth-callback response (where the user was just created/loaded) and
+   * needs to swap Better Auth's own session cookie for ours synchronously.
+   */
+  mintWebSessionCookie(userId: string): string;
   /** Native: returns Bearer accessToken + opaque refreshToken. */
   issueTokens(user: UserRecord, ctx: SessionContext): Promise<AuthTokens>;
   /** Rotate a refresh token, or null if it is unknown/expired/revoked. */

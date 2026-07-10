@@ -10,8 +10,8 @@ arguments, which is what makes the route/OTP tests hermetic.
 **Auth flow.** Our Redis OTP service is the **sole authority** for code issuance/verification and all
 limits (TTL 300s, 60s resend cooldown, 10/day per phone, 30/hour per IP, lockout after 5 wrong for 600s).
 Codes are stored only as HMAC-SHA256 hashes (`OTP_SECRET`) and deleted immediately on success (single-use).
-Redis key shapes live in `OTP_KEYS` (`otp:code|attempt|cooldown|lock|daily|ip`). Better Auth owns the
-identity model (Drizzle adapter + `bearer()` plugin) and session resolution.
+Redis key shapes live in `OTP_KEYS` (`otp:code|attempt|cooldown|lock|daily|ip`). Better Auth verifies social
+identities and owns compatible core tables; `SessionService` is the sole authority for product sessions.
 
 **Runtime guardrails.** Core env parsing (`packages/env/src/core.ts`) is part of the auth boundary, not
 just configuration plumbing. In production the API refuses to boot when `OTP_DEBUG_RETURN_CODE` is enabled,
@@ -26,8 +26,9 @@ application routes.
 - native → response body carries `accessToken` (15-min HS256 JWT) + opaque `refreshToken`
   (30-day, stored **hashed** in the `refresh_token` table, **rotated** on each `/auth/refresh` — the old
   token is revoked via `revoked_at`/`replaced_by`).
-- `requireUser(headers)` tries Better Auth `auth.api.getSession` first, then falls back to verifying our
-  JWT from the Bearer header or the cookie — so **both Cookie and Bearer resolve through one guard**.
+- `requireUser(headers)` verifies the application JWT from the Bearer header or the `infra.session` cookie —
+  so **both Cookie and Bearer resolve through one guard**. Product routes never fall back to Better Auth
+  sessions and `/api/auth/*` is not mounted.
 
 **Routes** (`apps/api/src/routes/auth.routes.ts`): `/auth/otp/request`, `/auth/otp/verify`,
 `/auth/refresh`, `/auth/logout`, `/auth/me`, profile editing (`PATCH`+`PUT /auth/profile` for the
@@ -45,14 +46,18 @@ mini-program, `apps/miniprogram`) both ride the native Bearer channel.
 token). `miniprogram` (`weapp`) is intentionally excluded. Google users have no phone (`user.phone`
 nullable, so `AuthUser.phone` is `string | null` — a cross-client contract change). Sessions
 are still minted by our own `SessionService` (not Better Auth's session), so Google sessions are
-indistinguishable downstream from OTP ones. **Status:** the **native ID-token flow**
-(`POST /auth/social/:provider/token` → `auth.api.signInSocial` verify + find-or-create → our
-`SessionService`; contract in `packages/shared/src/contracts/social.ts`, route in
-`apps/api/src/routes/social.routes.ts`) has shipped; the **web redirect flow + Better Auth
-callback→cookie bridge** is the next phase (design §8 stage 2b). **Account linking** is in scope: a logged-in user can add
-the other credential (phone↔Google) onto one `user` — conflicts (target already owned by another
-account) are rejected, not auto-merged; a `user` must keep ≥1 login credential. Full design + phased
-rollout: [`docs/plans/google-login.md`](../../docs/plans/google-login.md).
+indistinguishable downstream from OTP ones. **Status:** both transports have shipped —
+the **native ID-token flow** (`POST /auth/social/:provider/token` → `auth.api.signInSocial`
+verify + find-or-create → our `SessionService`) and the **web redirect flow**
+(`GET /auth/social/:provider/start` → Google → Better Auth's `/api/auth/callback/google`,
+where a `hooks.after` bridge in `createAuth` — `bridgeOAuthCallbackSession` — swaps Better
+Auth's session cookie for our `infra.session` so logout stays authoritative). Contract in
+`packages/shared/src/contracts/social.ts`, routes in `apps/api/src/routes/social.routes.ts`,
+bridge in `packages/auth/src/better-auth.ts`. **Account linking** (design §2.3) is the next
+phase (not yet built): a logged-in user adds the other credential (phone↔Google) onto one
+`user` — conflicts (target already owned by another account) are rejected, not auto-merged; a
+`user` must keep ≥1 login credential. Full design + phased rollout:
+[`docs/plans/google-login.md`](../../docs/plans/google-login.md).
 
 **CLI browser-assisted login — device flow** (`apps/api/src/routes/auth.routes.ts`, gh-style / RFC 8628).
 The terminal client (`apps/cli`) can't read a browser cookie, so instead: (1) the CLI (unauthenticated)
