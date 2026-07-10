@@ -9,7 +9,7 @@
 | --- | --- | --- | --- |
 | API (`apps/api`) | https://api.w3ctech.dev | Cloudflare Workers Free | ✅ 已上线(`/health`、`/ready` 200) |
 | Web (`apps/web`) | https://w3ctech.dev | Vercel(项目 `w3ctech-web`,apex) | ✅ 已上线 |
-| H5 (`apps/h5`) | https://h5.w3ctech.dev | Cloudflare Pages Free(项目 `w3ctech-h5`) | ✅ 已部署(https://w3ctech-h5.pages.dev);自定义域待补一条 DNS CNAME + 证书签发 |
+| H5 (`apps/h5`) | https://h5.w3ctech.dev | Cloudflare Pages Free(项目 `w3ctech-h5`) | ✅ 已上线(自定义域证书 active;别名 https://w3ctech-h5.pages.dev) |
 | Postgres | — | Neon Free | serverless driver,**pooled** 连接串 |
 | Redis | — | Upstash Free | REST 客户端(非 `redis://`) |
 | 对象存储 | — | Cloudflare R2 | 桶 `infra-lab-uploads`(bound as `env.IMAGES`) |
