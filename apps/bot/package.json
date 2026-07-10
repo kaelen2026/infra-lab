@@ -16,7 +16,7 @@
     "@ai-sdk/openai-compatible": "1.0.42",
     "@infra/env": "workspace:*",
     "@larksuiteoapi/node-sdk": "1.70.0",
-    "ai": "5.0.209",
+    "ai": "7.0.19",
     "zod": "4.4.3"
   },
   "devDependencies": {
