@@ -36,6 +36,11 @@ Deployed by [`.github/workflows/deploy.yml`](../../.github/workflows/deploy.yml)
 The job runs migrations first (`db-migrate`), builds the workspace, then
 `wrangler deploy`. Config is [`wrangler.toml`](wrangler.toml).
 
+> **已上线**:生产实例运行在 **https://api.w3ctech.dev**(Cloudflare Workers 免费层),后端为
+> Neon Free(pooled)+ Upstash Free(REST)+ R2 桶 `infra-lab-uploads`。`wrangler.toml` 的
+> `[vars]` 与 `[[routes]]` 已填入真实域名。完整线上拓扑见
+> [`docs/deployment.md`](../../docs/deployment.md#当前线上部署w3ctechdev)。
+
 One-time setup (nothing below is committed):
 
 1. **Managed data**: create a [Neon](https://neon.com) project and an
@@ -48,10 +53,12 @@ One-time setup (nothing below is committed):
    `UPSTASH_REDIS_REST_TOKEN`.
 4. **Repo secrets** for the workflow: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`,
    `DATABASE_URL` (the migrate job); set the repo variable `DEPLOY_API=true`.
-5. **Custom domain**: route `api.<your-domain>` at this Worker and set the
-   `wrangler.toml` `[vars]` (`BETTER_AUTH_URL`, `TRUSTED_ORIGINS`, `COOKIE_DOMAIN`)
-   to your real domains. A `*.workers.dev` host is a *different site* and breaks the
-   `infra.session` cookie shared with web/h5.
+5. **Custom domain**: declared in `wrangler.toml` as a `[[routes]]` entry with
+   `custom_domain = true` (this repo uses `api.w3ctech.dev`); `wrangler deploy` creates
+   the hostname and issues its certificate automatically, provided that domain's zone
+   lives in the same Cloudflare account. Set the `[vars]` (`BETTER_AUTH_URL`,
+   `TRUSTED_ORIGINS`, `COOKIE_DOMAIN`) to your real domains too. A `*.workers.dev` host
+   is a *different site* and breaks the `infra.session` cookie shared with web/h5.
 
 Validate the bundle locally without deploying (needs `pnpm build` first so the
 `@infra/*` dist exists):
@@ -66,9 +73,12 @@ pnpm --filter @infra/api build:worker:dryrun   # wrangler deploy --dry-run
 - **APNS is disabled on Workers** — its `node:http2` transport is unsupported there,
   and push is opt-in. Use the Node runtime if you need push.
 - Requires the `nodejs_compat` flag (`node:crypto` backs OTP HMAC + JWT signing).
-- Two items to confirm at runtime after the first deploy: `crypto.randomInt`
-  (OTP / CLI device flow) and Better Auth session minting over the Neon serverless
-  adapter. See the deploy plan's risk notes.
+- First-deploy runtime check: `crypto.randomInt` (OTP / CLI device flow) works under
+  `nodejs_compat` — `POST /auth/otp/request` returns 200 and an immediate resend hits
+  `RESEND_COOLDOWN` (429), so code generation and the Upstash write/read path are live.
+  Still to confirm with a real login: Better Auth session minting over the Neon
+  serverless adapter (the OTP *verify* → session-cookie step, not exercisable while
+  `OTP_DEBUG_RETURN_CODE=false`).
 
 ## CD fallback: Render / Koyeb (Docker)
 
