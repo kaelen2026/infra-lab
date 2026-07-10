@@ -13,7 +13,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@ai-sdk/openai-compatible": "1.0.42",
+    "@ai-sdk/openai-compatible": "3.0.7",
     "@infra/env": "workspace:*",
     "@larksuiteoapi/node-sdk": "1.70.0",
     "ai": "5.0.209",
