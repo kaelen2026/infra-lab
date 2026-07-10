@@ -24,6 +24,19 @@ updates:
       # Revisit once the bundler toolchain supports the native compiler. (#151)
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
+      # @types/node must track the runtime, which is Node 24 (engines `>=24`,
+      # CI runs node-version 24). Node 26 typings tighten lib types (e.g.
+      # `Uint8Array<ArrayBufferLike>` no longer a `BlobPart`) and break the
+      # typecheck. Bump this major only when the runtime moves to Node 26. (#161)
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # The AI SDK ships version-aligned families: `ai@5` pairs with
+      # `@ai-sdk/openai-compatible@1`, `ai@7` with `@ai-sdk/openai-compatible@3`
+      # (returns `LanguageModelV4`, incompatible with our `ai@5` `LanguageModel`).
+      # A standalone major bump can't compile — the whole family must move in
+      # lockstep as a deliberate migration. (#160)
+      - dependency-name: "@ai-sdk/openai-compatible"
+        update-types: ["version-update:semver-major"]
     commit-message:
       # Satisfy commitlint (Conventional Commits) on the PR title.
       prefix: "chore(deps)"
