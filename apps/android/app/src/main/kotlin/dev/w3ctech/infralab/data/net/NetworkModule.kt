@@ -33,7 +33,15 @@ class NetworkModule(
 
     private val normalizedBaseUrl: String = if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/"
 
-    private fun loggingInterceptor() = HttpLoggingInterceptor().apply {
+    // Debug-only BODY logging still must not spill an OTP, phone number or token
+    // into logcat — every line passes through LogRedaction before the default logger.
+    private val redactingLogger = object : HttpLoggingInterceptor.Logger {
+        override fun log(message: String) {
+            HttpLoggingInterceptor.Logger.DEFAULT.log(LogRedaction.redact(message))
+        }
+    }
+
+    private fun loggingInterceptor() = HttpLoggingInterceptor(redactingLogger).apply {
         level = if (enableLogging) HttpLoggingInterceptor.Level.BODY else HttpLoggingInterceptor.Level.NONE
         // Tokens are sensitive — never log the Authorization header.
         redactHeader("Authorization")

@@ -342,9 +342,19 @@ export interface CreateQrLoginResponse {
   expiresIn: number;
 }
 
+/**
+ * Header carrying the secret `pollToken` on the status poll. A capability token in
+ * a GET query string gets recorded by upstream proxies / browser history / Referer;
+ * a header does not. The server still accepts the legacy `pollToken` query
+ * parameter for one deploy cycle (an already-open web tab polls with the old
+ * bundle until refreshed) — new clients must send the header.
+ */
+export const QR_POLL_TOKEN_HEADER = "x-qr-poll-token";
+
 /** Browser status poll — carries the secret `pollToken` so only the creator can read it. */
 export const qrLoginStatusQuerySchema = z.object({
   ticketId: z.string().trim().min(1).max(128),
+  /** Sent via {@link QR_POLL_TOKEN_HEADER}; query form is deprecated (leaks into proxy logs). */
   pollToken: z.string().trim().min(1).max(256),
 });
 export type QrLoginStatusQuery = z.infer<typeof qrLoginStatusQuerySchema>;

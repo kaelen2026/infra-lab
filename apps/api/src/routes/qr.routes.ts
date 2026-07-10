@@ -4,6 +4,7 @@ import {
   approveQrLoginSchema,
   consumeQrLoginSchema,
   QR_LOGIN_LIMITS,
+  QR_POLL_TOKEN_HEADER,
   type QrLoginStatus,
   qrLoginStatusQuerySchema,
 } from "@infra/shared";
@@ -97,7 +98,11 @@ export function createQrRoutes(deps: QrRouteDeps): Hono<ObsEnv> {
   app.get("/auth/qr/status", async (c) => {
     const parsed = qrLoginStatusQuerySchema.safeParse({
       ticketId: c.req.query("ticketId"),
-      pollToken: c.req.query("pollToken"),
+      // The capability token travels in a header: a GET query string gets recorded
+      // by upstream proxies / browser history / Referer. The query form is kept as
+      // a deprecated fallback for one deploy cycle — an already-open login tab
+      // polls with the previous bundle until refreshed (issue #129 L1).
+      pollToken: c.req.header(QR_POLL_TOKEN_HEADER) ?? c.req.query("pollToken"),
     });
     if (!parsed.success) return fail(c, "INVALID_REQUEST", { issues: parsed.error.issues });
 
