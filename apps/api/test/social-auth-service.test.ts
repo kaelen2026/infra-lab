@@ -108,3 +108,46 @@ describe("social auth service — signInWithIdToken", () => {
     );
   });
 });
+
+describe("social auth service — startWebOAuth", () => {
+  it("passes callbackURL + disableRedirect and returns the authorization url", async () => {
+    let seen: any;
+    const svc = createSocialAuthService({
+      auth: authWith(async (args) => {
+        seen = args;
+        return { redirect: true, url: "https://accounts.google.com/o/oauth2/v2/auth?x=1" };
+      }),
+      enabledProviders: enabled,
+    });
+    const out = await svc.startWebOAuth({ provider: "google", callbackURL: "https://app/x" });
+    expect(seen.body).toEqual({
+      provider: "google",
+      callbackURL: "https://app/x",
+      disableRedirect: true,
+    });
+    expect(out).toEqual({ ok: true, url: "https://accounts.google.com/o/oauth2/v2/auth?x=1" });
+  });
+
+  it("maps a missing url to SOCIAL_ACCOUNT_ERROR", async () => {
+    const svc = createSocialAuthService({
+      auth: authWith(async () => ({ redirect: true })),
+      enabledProviders: enabled,
+    });
+    const out = await svc.startWebOAuth({ provider: "google", callbackURL: "https://app/x" });
+    expect(out).toEqual({ ok: false, error: "SOCIAL_ACCOUNT_ERROR" });
+  });
+
+  it("maps an APIError (misconfigured provider) to SOCIAL_ACCOUNT_ERROR", async () => {
+    const svc = createSocialAuthService({
+      auth: authWith(async () => {
+        throw new APIError("BAD_REQUEST", {
+          message: "no secret",
+          code: "CLIENT_ID_AND_SECRET_REQUIRED",
+        });
+      }),
+      enabledProviders: enabled,
+    });
+    const out = await svc.startWebOAuth({ provider: "google", callbackURL: "https://app/x" });
+    expect(out).toEqual({ ok: false, error: "SOCIAL_ACCOUNT_ERROR" });
+  });
+});

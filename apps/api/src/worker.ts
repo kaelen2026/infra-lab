@@ -90,6 +90,8 @@ function buildApp(env: WorkerEnv): Hono<ObsEnv> {
   const otpStore = createUpstashOtpStore(redis);
 
   const googleConfig = googleConfigFromEnv(core);
+  // Late-bound bridge — see server.ts for the why (auth precedes sessions).
+  let mintWebSessionCookie: ((userId: string) => string) | null = null;
   const auth = createAuth({
     db,
     schema,
@@ -97,7 +99,12 @@ function buildApp(env: WorkerEnv): Hono<ObsEnv> {
     baseURL: core.BETTER_AUTH_URL,
     trustedOrigins: core.TRUSTED_ORIGINS,
     cookie: { secure: core.COOKIE_SECURE, domain: core.COOKIE_DOMAIN },
-    ...(googleConfig ? { google: googleConfig } : {}),
+    ...(googleConfig
+      ? {
+          google: googleConfig,
+          onOAuthCallbackSession: (userId) => mintWebSessionCookie?.(userId) ?? null,
+        }
+      : {}),
   });
 
   const sessions = createSessionService({
@@ -107,6 +114,7 @@ function buildApp(env: WorkerEnv): Hono<ObsEnv> {
     cookie: { name: "infra.session", secure: core.COOKIE_SECURE, domain: core.COOKIE_DOMAIN },
     ttl: { webSeconds: 30 * DAY, accessSeconds: 15 * 60, refreshSeconds: 30 * DAY },
   });
+  mintWebSessionCookie = (userId) => sessions.mintWebSessionCookie(userId);
 
   // OTP delivery stub — mirrors server.ts: the code is surfaced only under the dev
   // debug flag, never in a production-like config.

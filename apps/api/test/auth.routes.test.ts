@@ -161,6 +161,9 @@ class FakeSessionService implements SessionService {
       cookies: [`infra.session=${token}; Path=/; HttpOnly; SameSite=Lax`],
     };
   }
+  mintWebSessionCookie(userId: string): string {
+    return `infra.session=sess_${userId}_${++this.seq}; Path=/; HttpOnly; SameSite=Lax`;
+  }
   async issueWebSessionForUser(
     userId: string,
   ): Promise<{ user: UserRecord; cookies: string[] } | null> {

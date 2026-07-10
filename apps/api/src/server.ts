@@ -39,6 +39,11 @@ const redis = createRedis(env.REDIS_URL, {
 });
 // Google sign-in is opt-in: enabled only when both GOOGLE_CLIENT_ID/SECRET are set.
 const googleConfig = googleConfigFromEnv(env);
+// Late-bound: the Google web-redirect bridge (hooks.after in createAuth) mints our
+// session cookie via `sessions`, which is constructed AFTER `auth` (it depends on it).
+// A mutable holder breaks the cycle; the hook only fires during a request, long after
+// this is assigned below.
+let mintWebSessionCookie: ((userId: string) => string) | null = null;
 const auth = createAuth({
   db,
   schema,
@@ -46,7 +51,12 @@ const auth = createAuth({
   baseURL,
   trustedOrigins: env.TRUSTED_ORIGINS,
   cookie: { secure: env.COOKIE_SECURE, domain: env.COOKIE_DOMAIN },
-  ...(googleConfig ? { google: googleConfig } : {}),
+  ...(googleConfig
+    ? {
+        google: googleConfig,
+        onOAuthCallbackSession: (userId) => mintWebSessionCookie?.(userId) ?? null,
+      }
+    : {}),
 });
 const social = createSocialAuthService({
   auth,
@@ -75,6 +85,8 @@ const sessions = createSessionService({
   cookie: { name: "infra.session", secure: env.COOKIE_SECURE, domain: env.COOKIE_DOMAIN },
   ttl: { webSeconds: 30 * DAY, accessSeconds: 15 * 60, refreshSeconds: 30 * DAY },
 });
+// Bind the OAuth-callback bridge now that the session service exists (see above).
+mintWebSessionCookie = (userId) => sessions.mintWebSessionCookie(userId);
 
 // APNS is optional: enabled only when the full APNS_* set is present.
 const apnsConfig = apnsConfigFromEnv(env);

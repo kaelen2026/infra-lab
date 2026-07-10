@@ -45,14 +45,18 @@ mini-program, `apps/miniprogram`) both ride the native Bearer channel.
 token). `miniprogram` (`weapp`) is intentionally excluded. Google users have no phone (`user.phone`
 nullable, so `AuthUser.phone` is `string | null` — a cross-client contract change). Sessions
 are still minted by our own `SessionService` (not Better Auth's session), so Google sessions are
-indistinguishable downstream from OTP ones. **Status:** the **native ID-token flow**
-(`POST /auth/social/:provider/token` → `auth.api.signInSocial` verify + find-or-create → our
-`SessionService`; contract in `packages/shared/src/contracts/social.ts`, route in
-`apps/api/src/routes/social.routes.ts`) has shipped; the **web redirect flow + Better Auth
-callback→cookie bridge** is the next phase (design §8 stage 2b). **Account linking** is in scope: a logged-in user can add
-the other credential (phone↔Google) onto one `user` — conflicts (target already owned by another
-account) are rejected, not auto-merged; a `user` must keep ≥1 login credential. Full design + phased
-rollout: [`docs/plans/google-login.md`](../../docs/plans/google-login.md).
+indistinguishable downstream from OTP ones. **Status:** both transports have shipped —
+the **native ID-token flow** (`POST /auth/social/:provider/token` → `auth.api.signInSocial`
+verify + find-or-create → our `SessionService`) and the **web redirect flow**
+(`GET /auth/social/:provider/start` → Google → Better Auth's `/api/auth/callback/google`,
+where a `hooks.after` bridge in `createAuth` — `bridgeOAuthCallbackSession` — swaps Better
+Auth's session cookie for our `infra.session` so logout stays authoritative). Contract in
+`packages/shared/src/contracts/social.ts`, routes in `apps/api/src/routes/social.routes.ts`,
+bridge in `packages/auth/src/better-auth.ts`. **Account linking** (design §2.3) is the next
+phase (not yet built): a logged-in user adds the other credential (phone↔Google) onto one
+`user` — conflicts (target already owned by another account) are rejected, not auto-merged; a
+`user` must keep ≥1 login credential. Full design + phased rollout:
+[`docs/plans/google-login.md`](../../docs/plans/google-login.md).
 
 **CLI browser-assisted login — device flow** (`apps/api/src/routes/auth.routes.ts`, gh-style / RFC 8628).
 The terminal client (`apps/cli`) can't read a browser cookie, so instead: (1) the CLI (unauthenticated)

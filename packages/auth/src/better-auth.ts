@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { createAuthMiddleware } from "better-auth/api";
 import { bearer } from "better-auth/plugins";
 
 export interface CreateAuthOptions {
@@ -27,6 +28,91 @@ export interface CreateAuthOptions {
     clientId: string | string[];
     clientSecret: string;
   };
+  /**
+   * Web-redirect session bridge. Called after a social OAuth **callback** completes and
+   * Better Auth has minted its own session, with the signed-in `userId`. Returns the
+   * `Set-Cookie` value for OUR `infra.session`; the callback response then carries only
+   * our cookie (Better Auth's own session cookies are stripped), so a Google web
+   * session is authored by our `SessionService` and is identical downstream to an OTP
+   * one — including logout, which clears `infra.session`. Omitted ⇒ no bridge (the
+   * native ID-token flow reads the returned user directly and needs none). Injected by
+   * the API composition (server.ts), so this package stays free of the session layer.
+   */
+  onOAuthCallbackSession?: (userId: string) => string | null;
+}
+
+// Better Auth's own session-related cookies (names carry the cookiePrefix + any
+// `__Secure-` prefix). We strip these from the OAuth-callback response so only our
+// `infra.session` survives — see `onOAuthCallbackSession`.
+interface AuthCookieDef {
+  name: string;
+}
+interface AuthCookies {
+  sessionToken: AuthCookieDef;
+  sessionData: AuthCookieDef;
+  dontRememberToken: AuthCookieDef;
+  accountData?: AuthCookieDef;
+}
+
+/** Minimal structural view of the Better Auth after-hook context this bridge reads. */
+export interface OAuthCallbackCtx {
+  path?: string;
+  params?: Record<string, string | undefined>;
+  context: {
+    newSession?: { user?: { id?: string } } | null;
+    responseHeaders?: Headers;
+    authCookies?: AuthCookies;
+  };
+}
+
+function collectBaCookieNames(cookies: AuthCookies | undefined): string[] {
+  if (!cookies) return [];
+  return [
+    cookies.sessionToken?.name,
+    cookies.sessionData?.name,
+    cookies.dontRememberToken?.name,
+    cookies.accountData?.name,
+  ].filter((n): n is string => typeof n === "string");
+}
+
+function readSetCookies(headers: Headers): string[] {
+  const withGetter = headers as Headers & { getSetCookie?: () => string[] };
+  if (typeof withGetter.getSetCookie === "function") return withGetter.getSetCookie();
+  const single = headers.get("set-cookie");
+  return single ? [single] : [];
+}
+
+/**
+ * The web-redirect session bridge, as a pure function of the after-hook context so it
+ * can be unit-tested without a live OAuth round-trip.
+ *
+ * Fires only on a social OAuth **callback** (`/callback/:id`) that just minted a
+ * session — NOT on `auth.api.signInSocial` (path `/sign-in/social`, the native
+ * ID-token flow, which also runs `after`), nor on the callback's error/redirect hops
+ * (no `newSession`). On a match it strips Better Auth's own session `Set-Cookie`(s)
+ * from the response and appends ONLY our `infra.session` cookie (from `mint`), leaving
+ * the 302 `Location` untouched — so the browser lands authenticated by our session
+ * alone, and logout (which clears `infra.session`) stays authoritative.
+ */
+export function bridgeOAuthCallbackSession(
+  ctx: OAuthCallbackCtx,
+  mint: (userId: string) => string | null,
+): void {
+  if (ctx.path !== "/callback/:id" || !ctx.params?.id) return;
+  const userId = ctx.context.newSession?.user?.id;
+  if (!userId) return;
+  const headers = ctx.context.responseHeaders;
+  if (!headers) return;
+  const cookie = mint(userId);
+  if (!cookie) return;
+
+  const baNames = collectBaCookieNames(ctx.context.authCookies);
+  const survivors = readSetCookies(headers).filter(
+    (entry) => !baNames.some((n) => entry.startsWith(`${n}=`) || entry.startsWith(`${n}.`)),
+  );
+  headers.delete("set-cookie");
+  for (const s of survivors) headers.append("set-cookie", s);
+  headers.append("set-cookie", cookie);
 }
 
 /**
@@ -42,6 +128,7 @@ export interface CreateAuthOptions {
  * After a code is verified we mint a session through `auth.$context.internalAdapter`.
  */
 export function createAuth(options: CreateAuthOptions) {
+  const onOAuthCallbackSession = options.onOAuthCallbackSession;
   return betterAuth({
     secret: options.secret,
     baseURL: options.baseURL,
@@ -67,6 +154,21 @@ export function createAuth(options: CreateAuthOptions) {
               clientId: options.google.clientId,
               clientSecret: options.google.clientSecret,
             },
+          },
+        }
+      : {}),
+    // Web-redirect bridge: on the Google OAuth callback, swap Better Auth's session
+    // cookie for our own `infra.session` (see `bridgeOAuthCallbackSession`). Registered
+    // only when the API composition supplies the minting callback.
+    ...(onOAuthCallbackSession
+      ? {
+          hooks: {
+            after: createAuthMiddleware(async (ctx) => {
+              bridgeOAuthCallbackSession(
+                ctx as unknown as OAuthCallbackCtx,
+                onOAuthCallbackSession,
+              );
+            }),
           },
         }
       : {}),

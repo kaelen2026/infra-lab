@@ -120,6 +120,14 @@ export function createSessionService(config: SessionServiceConfig): SessionServi
       return { cookies: webSessionCookies(user.id) };
     },
 
+    mintWebSessionCookie(userId) {
+      // Same signed HS256 JWT cookie issueWebSession emits — a Google web sign-in is
+      // indistinguishable from an OTP one downstream. `webSessionCookies` returns a
+      // single-element array (one Set-Cookie); take it.
+      const [cookie] = webSessionCookies(userId);
+      return cookie ?? "";
+    },
+
     async issueWebSessionForUser(userId) {
       // Re-load the user so a deleted/stale id can't mint a session, and so callers
       // (QR consume) get the fresh UserRecord to build the response DTO.
