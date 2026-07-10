@@ -6,7 +6,10 @@ import {
   type SocialAuthService,
   type SocialRouteDeps,
   type SocialSignInOutcome,
+  type SocialStartOutcome,
 } from "../src/routes/social.routes.js";
+
+const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth?client_id=test&state=abc";
 
 // undici's Response.json() is typed as unknown; tests assert on dynamic shapes.
 const readJson = (res: Response): Promise<any> => res.json() as Promise<any>;
@@ -70,14 +73,16 @@ const fakeSessions = {
   },
 };
 
-// A configurable fake social service: pick the outcome + which providers are enabled.
+// A configurable fake social service: pick the outcomes + which providers are enabled.
 function fakeSocial(
   outcome: SocialSignInOutcome,
   enabled: readonly string[] = ["google"],
+  startOutcome: SocialStartOutcome = { ok: true, url: GOOGLE_AUTH_URL },
 ): SocialAuthService {
   return {
     isEnabled: (provider) => enabled.includes(provider),
     signInWithIdToken: async () => outcome,
+    startWebOAuth: async () => startOutcome,
   };
 }
 
@@ -104,7 +109,7 @@ function setup(opts: { social?: SocialAuthService; seedUser?: UserRecord | null 
     social,
     users,
     sessions: fakeSessions,
-    config: { trustedProxyCount: 0 },
+    config: { trustedProxyCount: 0, webBaseUrl: "https://app.example" },
   };
   return { app: createSocialRoutes(deps), users };
 }
@@ -122,6 +127,80 @@ const iosBody = {
   platform: "ios" as Platform,
   device: { platform: "ios" as Platform, deviceId: "dev-1", model: "iPhone" },
 };
+
+describe("social routes — web redirect start", () => {
+  it("302s to the provider authorization URL", async () => {
+    const { app } = setup();
+    const res = await app.request("/auth/social/google/start?redirect=/account");
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(GOOGLE_AUTH_URL);
+  });
+
+  it("builds callbackURL from webBaseUrl + the validated redirect path", async () => {
+    let seenCallbackURL = "";
+    const social: SocialAuthService = {
+      isEnabled: () => true,
+      signInWithIdToken: async () => ({ ok: false, error: "SOCIAL_ACCOUNT_ERROR" }),
+      startWebOAuth: async ({ callbackURL }) => {
+        seenCallbackURL = callbackURL;
+        return { ok: true, url: GOOGLE_AUTH_URL };
+      },
+    };
+    const { app } = setup({ social });
+    await app.request("/auth/social/google/start?redirect=/account");
+    expect(seenCallbackURL).toBe("https://app.example/account");
+
+    // No redirect → defaults to the app root.
+    await app.request("/auth/social/google/start");
+    expect(seenCallbackURL).toBe("https://app.example/");
+  });
+
+  it("400s an open-redirect attempt (protocol-relative // path)", async () => {
+    const { app } = setup();
+    const res = await app.request(
+      `/auth/social/google/start?redirect=${encodeURIComponent("//evil.example/x")}`,
+    );
+    expect(res.status).toBe(400);
+    expect((await readJson(res)).code).toBe("INVALID_REQUEST");
+  });
+
+  it("400s an absolute-URL redirect", async () => {
+    const { app } = setup();
+    const res = await app.request(
+      `/auth/social/google/start?redirect=${encodeURIComponent("https://evil.example")}`,
+    );
+    expect(res.status).toBe(400);
+    expect((await readJson(res)).code).toBe("INVALID_REQUEST");
+  });
+
+  it("400 SOCIAL_PROVIDER_DISABLED when the provider is not configured", async () => {
+    const { app } = setup({
+      social: fakeSocial({ ok: false, error: "SOCIAL_ACCOUNT_ERROR" }, []),
+    });
+    const res = await app.request("/auth/social/google/start");
+    expect(res.status).toBe(400);
+    expect((await readJson(res)).code).toBe("SOCIAL_PROVIDER_DISABLED");
+  });
+
+  it("400 SOCIAL_PROVIDER_DISABLED for an unknown provider segment", async () => {
+    const { app } = setup();
+    const res = await app.request("/auth/social/facebook/start");
+    expect(res.status).toBe(400);
+    expect((await readJson(res)).code).toBe("SOCIAL_PROVIDER_DISABLED");
+  });
+
+  it("surfaces a start failure as 401 SOCIAL_ACCOUNT_ERROR", async () => {
+    const { app } = setup({
+      social: fakeSocial({ ok: false, error: "SOCIAL_ACCOUNT_ERROR" }, ["google"], {
+        ok: false,
+        error: "SOCIAL_ACCOUNT_ERROR",
+      }),
+    });
+    const res = await app.request("/auth/social/google/start");
+    expect(res.status).toBe(401);
+    expect((await readJson(res)).code).toBe("SOCIAL_ACCOUNT_ERROR");
+  });
+});
 
 describe("social routes — native id token, success", () => {
   it("verifies, provisions a new profile, and returns Bearer tokens isomorphic to verifyOtp", async () => {

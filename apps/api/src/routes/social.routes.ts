@@ -5,6 +5,7 @@ import {
   type SocialProvider,
   socialIdTokenSchema,
   socialProviderSchema,
+  socialStartQuerySchema,
 } from "@infra/shared";
 import { type Context, Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
@@ -38,6 +39,11 @@ export type SocialSignInOutcome =
   | { ok: true; data: SocialSignIn }
   | { ok: false; error: SocialSignInError };
 
+/** Result of starting the web redirect flow: the provider authorization URL, or an error. */
+export type SocialStartOutcome =
+  | { ok: true; url: string }
+  | { ok: false; error: SocialSignInError };
+
 /**
  * Verifies a provider ID token and resolves it to one of our users. The adapter
  * (services/social-auth-service.ts) wraps Better Auth's `signInSocial`; tests inject
@@ -54,6 +60,17 @@ export interface SocialAuthService {
     nonce?: string;
     accessToken?: string;
   }): Promise<SocialSignInOutcome>;
+  /**
+   * Begin the web redirect flow: ask Better Auth for the provider authorization URL
+   * to send the browser to. `callbackURL` is where Better Auth 302s the browser after
+   * its own OAuth callback completes — the app landing page (validated same-origin
+   * upstream). The callback→our-session bridge happens in the `hooks.after` wired in
+   * `createAuth` (see server.ts), not here.
+   */
+  startWebOAuth(input: {
+    provider: SocialProvider;
+    callbackURL: string;
+  }): Promise<SocialStartOutcome>;
 }
 
 export interface SocialRouteDeps {
@@ -65,6 +82,12 @@ export interface SocialRouteDeps {
   config: {
     /** See `clientIp` — trusted reverse-proxy hop count for the audited/limited IP. */
     trustedProxyCount?: number;
+    /**
+     * Web origin the browser lands on after a redirect sign-in. The `redirect` query
+     * (a validated same-origin path) is appended to it to form Better Auth's
+     * `callbackURL`. This is `BETTER_AUTH_URL` (the web app origin).
+     */
+    webBaseUrl: string;
   };
 }
 
@@ -99,6 +122,30 @@ export function createSocialRoutes(deps: SocialRouteDeps): Hono<ObsEnv> {
       return undefined;
     }
   }
+
+  // ── Web / h5: begin the redirect flow ────────────────────────────────────────
+  // The browser navigates here (full page). We ask Better Auth for the provider
+  // authorization URL and 302 to it. After the provider calls back to Better Auth's
+  // own `/api/auth/callback/:provider`, the `hooks.after` bridge (wired in createAuth)
+  // swaps Better Auth's session cookie for our `infra.session`, then Better Auth 302s
+  // the browser to `callbackURL` = webBaseUrl + the validated `redirect` path.
+  app.get(SOCIAL_ROUTE_PATTERNS.startWebOAuth, async (c) => {
+    const providerParsed = socialProviderSchema.safeParse(c.req.param("provider"));
+    if (!providerParsed.success) return fail(c, "SOCIAL_PROVIDER_DISABLED");
+    const provider = providerParsed.data;
+    if (!social.isEnabled(provider)) return fail(c, "SOCIAL_PROVIDER_DISABLED");
+
+    // `redirect` is a same-origin app path (validated by the schema — a single leading
+    // `/`, never `//` or an absolute URL — so it can't bounce the authenticated
+    // browser off-origin). Defaults to the app root.
+    const q = socialStartQuerySchema.safeParse({ redirect: c.req.query("redirect") });
+    if (!q.success) return fail(c, "INVALID_REQUEST", { issues: q.error.issues });
+
+    const callbackURL = `${config.webBaseUrl}${q.data.redirect ?? "/"}`;
+    const outcome = await social.startWebOAuth({ provider, callbackURL });
+    if (!outcome.ok) return fail(c, outcome.error);
+    return c.redirect(outcome.url);
+  });
 
   // ── Native: exchange a provider ID token for a session (login == register) ─────
   // The client verified nothing itself — it just carries the provider's ID token.

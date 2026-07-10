@@ -168,9 +168,16 @@ Better Auth 的 `/api/auth/*` handler 已挂在 `apps/api/src/app.ts:166`,OAuth 
 4. 审计:复用 `users.recordLoginEvent`(`platform=web`,`phone` 可空 → 记 `null`,新增
    一个非手机来源标记或复用 `reason`)。
 
-> 该桥接是本设计**技术风险最高**的一环:需确认 better-auth 1.6.23 的 after-hook 能拿到
-> 新会话的 userId、以及回调响应能被我们改写为"清掉 BA cookie + 下发 infra cookie + 302"。
-> 落地首个 PR 应带**集成测试**(hermetic:mock Google token 端点)锁定这条链路。
+> **已落地(stage 2b)**。经核实 better-auth 1.6.23:`hooks.after`(单个 `AuthMiddleware`,
+> `createAuthMiddleware` 包裹)在 OAuth 回调完成后能读 `ctx.context.newSession.user.id`,
+> 且 session `Set-Cookie` 与 302 `Location` 都在 `ctx.context.responseHeaders` 上,可原地
+> 改写(删 `set-cookie`、按 `ctx.context.authCookies` 名过滤后重新 append + 追加我们的
+> cookie,`Location` 不动)。gate 必须含 `newSession` 且 path 为 `/callback/:id` —— 因
+> `auth.api.signInSocial`(原生 idToken 流,path `/sign-in/social`)**也**会触发 `after`。
+> **origin 一致性**:BA 用 `baseURL` 拼 redirect_uri,`callbackURL` 受 `trustedOrigins`
+> 校验(否则 403 `INVALID_CALLBACK_URL`);部署时须让 API 挂载 origin、`BETTER_AUTH_URL`、
+> Google 控制台注册的 redirect URI 三者自洽(dev 下 web 需代理 `/api/auth/*` 到 API,或
+> 直接把浏览器导到 API origin 的 `/auth/social/google/start`)。
 
 ### 5.3 native ID Token 流(ios/android/harmony/cli)
 
@@ -221,10 +228,18 @@ CI——各端改动需本地过门禁,并保证 `phone` 可空后无强解包(`
      (复用 `SessionService`)、env(`GOOGLE_CLIENT_ID/SECRET` both-or-neither 守卫)、
      `login_event.phone` 可空迁移、**hermetic 测试**(路由端口 fake + 适配器 APIError 映射)。
      TS 客户端(web/h5/cli/miniprogram)同 PR 跟上 `phone` 可空。全部走 CI 门禁。
-   - **2b(待做)**:**web/h5 重定向流** `GET /auth/social/:provider/start` + BA 回调
-     桥接(§5.2,本设计**技术风险最高**的一环:BA `hooks.after` 读 `newSession.user.id`
-     → 下发 `infra.session` cookie + 清 BA cookie),需带 mock Google 码交换的集成测试。
-     单独 PR 聚焦。
+   - **2b(已实现)**:**web/h5 重定向流** `GET /auth/social/:provider/start`(校验 `redirect`
+     同源路径 → `auth.api.signInSocial({ callbackURL, disableRedirect })` 取授权 URL → 302)+
+     **BA 回调桥接**(`createAuth` 的 `hooks.after`,gate 于 `path==="/callback/:id" &&
+     params.id && newSession`:读 `newSession.user` → 剥离 BA 自身 session cookie、下发
+     `infra.session` cookie,保留 302 `Location`)。桥接与原生流**对称**:同样 `ensureProfile`
+     (用 Google `name`/`picture` 建 profile)+ `recordLoginEvent`(`platform=web`、`phone=null`,
+     ip 在回调 hook 处不可得记 `null`;资料/审计为 best-effort,失败不阻塞登录)。桥接抽成纯函数
+     `bridgeOAuthCallbackSession` 单测锁定(不需真跑 OAuth);`/start` 路由 + 适配器走端口 fake 单测。
+     > 端到端(真实 Google 码交换)不在 hermetic 范围内 —— BA 的 OAuth 机制属上游、
+     > 已被其自身测试覆盖;我们新增的面(URL 生成、cookie 交换、redirect 校验、disabled)
+     > 均已直测。真实联调随 stage 3 UI + 真凭证进行,并需保证 `BETTER_AUTH_URL`/回调 origin
+     > /Google 控制台 redirect URI 一致(见 §5.2 备注)。
 3. **web/h5 UI**:Google 登录按钮 + 回跳落地(依赖 2b)。
 4. **账号绑定(§2.3)**:`/auth/identities`、`/auth/link/*`、`/auth/unlink` 端点 + 冲突/
    守恒规则 + 审计 + hermetic 测试(走 CI);web/h5 "账号安全"页展示与绑定/解绑入口。

@@ -91,7 +91,7 @@ class FakeUserRepository implements UserRepository {
     userId: string | null;
     phone: string | null;
     platform: Platform;
-    ip: string;
+    ip: string | null;
     deviceId?: string;
     success: boolean;
     reason?: string;
@@ -160,6 +160,9 @@ class FakeSessionService implements SessionService {
     return {
       cookies: [`infra.session=${token}; Path=/; HttpOnly; SameSite=Lax`],
     };
+  }
+  mintWebSessionCookie(userId: string): string {
+    return `infra.session=sess_${userId}_${++this.seq}; Path=/; HttpOnly; SameSite=Lax`;
   }
   async issueWebSessionForUser(
     userId: string,

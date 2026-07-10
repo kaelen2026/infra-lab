@@ -1,7 +1,11 @@
 import type { Auth } from "@infra/auth";
 import type { SocialProvider } from "@infra/shared";
 import { APIError } from "better-auth/api";
-import type { SocialAuthService, SocialSignInOutcome } from "../routes/social.routes.js";
+import type {
+  SocialAuthService,
+  SocialSignInOutcome,
+  SocialStartOutcome,
+} from "../routes/social.routes.js";
 
 export interface SocialAuthServiceConfig {
   /** Better Auth instance; its `signInSocial` verifies the token + finds-or-creates. */
@@ -13,6 +17,11 @@ export interface SocialAuthServiceConfig {
 /** Shape we read off Better Auth's `signInSocial` idToken result (`{ user, token }`). */
 interface SignInSocialResult {
   user?: { id: string; name?: string | null; image?: string | null };
+}
+
+/** Redirect-flow result: `{ redirect: true, url }` — the provider authorization URL. */
+interface SignInSocialRedirectResult {
+  url?: string;
 }
 
 /**
@@ -72,6 +81,24 @@ export function createSocialAuthService(config: SocialAuthServiceConfig): Social
           }
           return { ok: false, error: "SOCIAL_ACCOUNT_ERROR" };
         }
+        throw err;
+      }
+    },
+
+    async startWebOAuth({ provider, callbackURL }): Promise<SocialStartOutcome> {
+      try {
+        // `disableRedirect` makes signInSocial RETURN `{ redirect: true, url }` instead
+        // of throwing a redirect, so we control the 302 ourselves. Better Auth 302s the
+        // browser to `callbackURL` only AFTER its own OAuth callback completes.
+        const result = (await auth.api.signInSocial({
+          body: { provider, callbackURL, disableRedirect: true },
+        })) as SignInSocialRedirectResult;
+        if (!result.url) return { ok: false, error: "SOCIAL_ACCOUNT_ERROR" };
+        return { ok: true, url: result.url };
+      } catch (err) {
+        // A misconfigured provider (e.g. missing secret) throws here; surface a stable
+        // account error rather than a raw 500. Non-APIError is unexpected — rethrow.
+        if (err instanceof APIError) return { ok: false, error: "SOCIAL_ACCOUNT_ERROR" };
         throw err;
       }
     },

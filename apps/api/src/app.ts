@@ -193,7 +193,7 @@ export function createApp(deps: AppDeps): Hono<ObsEnv> {
       social: deps.social,
       users: deps.users,
       sessions: deps.sessions,
-      config: { trustedProxyCount: env.TRUSTED_PROXY_COUNT },
+      config: { trustedProxyCount: env.TRUSTED_PROXY_COUNT, webBaseUrl: env.BETTER_AUTH_URL },
     }),
   );
   // QR cross-device login: an already-authenticated native client (Cookie or Bearer)
