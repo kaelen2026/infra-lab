@@ -52,7 +52,6 @@ const social = createSocialAuthService({
   auth,
   enabledProviders: new Set(googleConfig ? (["google"] as const) : []),
 });
-
 // The OTP + CLI device-flow services and QR ticket store share the one Redis
 // connection; their keys live in disjoint namespaces (otp:* / qr:* / rl:*).
 const otpStore = createRedisOtpStore(redis);
@@ -70,7 +69,6 @@ const sms = async (phone: string, code: string): Promise<void> => {
 
 const sessions = createSessionService({
   db,
-  auth,
   secret: env.BETTER_AUTH_SECRET,
   cookie: { name: "infra.session", secure: env.COOKIE_SECURE, domain: env.COOKIE_DOMAIN },
   ttl: { webSeconds: 30 * DAY, accessSeconds: 15 * 60, refreshSeconds: 30 * DAY },
@@ -89,7 +87,6 @@ const app = createApp({
   log,
   db,
   redis,
-  auth,
   otp,
   cliDeviceFlow,
   users: createUserRepository(db),

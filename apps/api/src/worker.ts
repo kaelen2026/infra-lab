@@ -99,10 +99,8 @@ function buildApp(env: WorkerEnv): Hono<ObsEnv> {
     cookie: { secure: core.COOKIE_SECURE, domain: core.COOKIE_DOMAIN },
     ...(googleConfig ? { google: googleConfig } : {}),
   });
-
   const sessions = createSessionService({
     db,
-    auth,
     secret: core.BETTER_AUTH_SECRET,
     cookie: { name: "infra.session", secure: core.COOKIE_SECURE, domain: core.COOKIE_DOMAIN },
     ttl: { webSeconds: 30 * DAY, accessSeconds: 15 * 60, refreshSeconds: 30 * DAY },
@@ -120,7 +118,6 @@ function buildApp(env: WorkerEnv): Hono<ObsEnv> {
     log,
     db,
     redis,
-    auth,
     otp: createOtpService({ store: otpStore, secret: core.OTP_SECRET }),
     cliDeviceFlow: createCliDeviceFlowService({ store: otpStore, secret: core.OTP_SECRET }),
     users: createUserRepository(db),
