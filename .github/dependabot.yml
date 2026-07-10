@@ -17,6 +17,13 @@ updates:
       npm-minor-patch:
         patterns: ["*"]
         update-types: ["minor", "patch"]
+    ignore:
+      # TypeScript 7.0 is the native (Go) rewrite; tsup / rollup-plugin-dts don't
+      # support it yet — the build crashes in .d.ts generation
+      # (`Cannot read properties of undefined (reading 'useCaseSensitiveFileNames')`).
+      # Revisit once the bundler toolchain supports the native compiler. (#151)
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
     commit-message:
       # Satisfy commitlint (Conventional Commits) on the PR title.
       prefix: "chore(deps)"
