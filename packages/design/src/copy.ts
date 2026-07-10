@@ -46,6 +46,12 @@ export const COPY = {
     submitBusy: "发送中…",
   },
 
+  /** Social sign-in chrome. The provider buttons themselves render system labels
+   *  (e.g. Sign in with Apple); only the "or" separator is our own copy. */
+  social: {
+    orDivider: "或",
+  },
+
   code: {
     title: "输入验证码",
     /** `{phone}` and `{minutes}` interpolated at runtime. */

@@ -9,7 +9,12 @@
 import { serve } from "@hono/node-server";
 import { createAuth, createCliDeviceFlowService, createOtpService } from "@infra/auth";
 import { createDb, schema } from "@infra/db";
-import { apnsConfigFromEnv, googleConfigFromEnv, loadCoreEnv } from "@infra/env/core";
+import {
+  apnsConfigFromEnv,
+  appleConfigFromEnv,
+  googleConfigFromEnv,
+  loadCoreEnv,
+} from "@infra/env/core";
 import { createRedis, createRedisOtpStore, createRedisRateLimitStore } from "@infra/redis";
 import { createApp } from "./app.js";
 import { createLogger } from "./observability/logger.js";
@@ -37,8 +42,10 @@ const db = createDb(env.DATABASE_URL, { max: env.DATABASE_POOL_MAX });
 const redis = createRedis(env.REDIS_URL, {
   onError: (err) => log.error("redis client error", { error: err.message }),
 });
-// Google sign-in is opt-in: enabled only when both GOOGLE_CLIENT_ID/SECRET are set.
+// Social sign-in is opt-in per provider: Google when GOOGLE_CLIENT_ID/SECRET are set,
+// Apple (native ID-token) when APPLE_CLIENT_ID is set.
 const googleConfig = googleConfigFromEnv(env);
+const appleConfig = appleConfigFromEnv(env);
 const auth = createAuth({
   db,
   schema,
@@ -47,10 +54,16 @@ const auth = createAuth({
   trustedOrigins: env.TRUSTED_ORIGINS,
   cookie: { secure: env.COOKIE_SECURE, domain: env.COOKIE_DOMAIN },
   ...(googleConfig ? { google: googleConfig } : {}),
+  ...(appleConfig
+    ? { apple: { clientId: appleConfig.clientId, appBundleIdentifier: appleConfig.clientId } }
+    : {}),
 });
 const social = createSocialAuthService({
   auth,
-  enabledProviders: new Set(googleConfig ? (["google"] as const) : []),
+  enabledProviders: new Set([
+    ...(googleConfig ? (["google"] as const) : []),
+    ...(appleConfig ? (["apple"] as const) : []),
+  ]),
 });
 
 // The OTP + CLI device-flow services and QR ticket store share the one Redis

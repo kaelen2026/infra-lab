@@ -11,6 +11,10 @@ final class PreviewAuthClient: AuthClient {
         VerifyOtpResponse(ok: true, user: .preview, tokens: nil)
     }
 
+    func signInWithApple(idToken: String, nonce: String?, device: DeviceInfo?) async throws -> AuthUser {
+        .preview
+    }
+
     func refresh() async throws -> AuthTokens? { nil }
     func me() async throws -> AuthUser { .preview }
     func updateProfile(displayName: String) async throws -> AuthUser { .preview }

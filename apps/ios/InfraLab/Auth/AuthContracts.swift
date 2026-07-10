@@ -62,6 +62,12 @@ enum AuthErrorCode: String, Codable, Sendable {
     case qrNotFound = "QR_NOT_FOUND"
     case qrAlreadyUsed = "QR_ALREADY_USED"
     case qrNotApproved = "QR_NOT_APPROVED"
+    /// Social sign-in (e.g. Sign in with Apple) — provider not configured here.
+    case socialProviderDisabled = "SOCIAL_PROVIDER_DISABLED"
+    /// Social sign-in — the provider ID token failed server-side verification.
+    case socialTokenInvalid = "SOCIAL_TOKEN_INVALID"
+    /// Social sign-in — verified, but the account couldn't be established/loaded.
+    case socialAccountError = "SOCIAL_ACCOUNT_ERROR"
     /// Fallback for any code the server adds before this client is updated.
     case unknown = "UNKNOWN"
 
@@ -105,7 +111,9 @@ struct VerifyOtpInput: Encodable {
 
 struct AuthUser: Codable, Identifiable, Equatable {
     let id: String
-    let phone: String
+    /// Null for a social-only account (e.g. Sign in with Apple) that never verified
+    /// a phone. Mirrors `AuthUser.phone: string | null` in `@infra/shared`.
+    let phone: String?
     let displayName: String?
     let avatarUrl: String?
     let createdAt: String // ISO 8601
@@ -129,6 +137,29 @@ struct VerifyOtpResponse: Decodable {
 
 struct RefreshInput: Encodable {
     let refreshToken: String
+}
+
+// MARK: - Social sign-in (native ID-token flow)
+
+/// Native social sign-in body — POSTed to `/auth/social/<provider>/token`. Mirrors
+/// `socialIdTokenSchema`; the provider is a path segment, not a body field. `nonce`
+/// is the RAW nonce whose SHA-256 the client bound into the provider request (Apple
+/// hashes it before signing); the server verifies either form. `JSONEncoder` drops
+/// the `nil` optionals, matching the schema's `.optional()` fields.
+struct SocialIdTokenInput: Encodable {
+    let idToken: String
+    var accessToken: String?
+    var nonce: String?
+    let platform: Platform
+    var device: DeviceInfo?
+}
+
+/// Native social sign-in result — byte-isomorphic to `VerifyOtpResponse`, so the
+/// client reuses the same token storage + refresh path. Mirrors `SocialAuthResponse`.
+struct SocialAuthResponse: Decodable {
+    let ok: Bool
+    let user: AuthUser
+    let tokens: AuthTokens?
 }
 
 /// Approve a scanned QR login ticket. Mirrors `approveQrLoginSchema` — the browser
@@ -222,4 +253,8 @@ enum AuthRoutes {
     static let pushToken = "/auth/devices/push-token"
     static let loginEvents = "/auth/login-events"
     static let qrApprove = "/auth/qr/approve"
+
+    /// Native social ID-token exchange for `provider` (e.g. `apple`). Mirrors
+    /// `socialTokenPath` in `@infra/shared` — the provider is a path segment.
+    static func socialToken(_ provider: String) -> String { "/auth/social/\(provider)/token" }
 }

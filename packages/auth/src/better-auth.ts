@@ -27,6 +27,18 @@ export interface CreateAuthOptions {
     clientId: string | string[];
     clientSecret: string;
   };
+  /**
+   * Apple sign-in. Injected only when configured (see `appleConfigFromEnv`). Native-
+   * only for now: the on-device Sign in with Apple idToken carries the app bundle id
+   * in its `aud`, so `clientId` is the bundle id and we also pass it as
+   * `appBundleIdentifier` (Better Auth verifies the native token's audience against
+   * it). No `clientSecret` — that is only needed for the (later) web authorization-
+   * code flow, and the native ID-token flow verifies against the audience alone.
+   */
+  apple?: {
+    clientId: string;
+    appBundleIdentifier: string;
+  };
 }
 
 /**
@@ -55,18 +67,32 @@ export function createAuth(options: CreateAuthOptions) {
       expiresIn: 60 * 60 * 24 * 30, // 30 days session record
       updateAge: 60 * 60 * 24, // refresh the session record at most once a day
     },
-    // Registered only when Google is configured. Sign-in itself stays driven by our
-    // own layers: the native ID-token flow calls `auth.api.signInSocial` to verify
-    // the token + find-or-create, then discards Better Auth's session and mints our
-    // own via `SessionService` (see routes/social.routes.ts). Better Auth is the
-    // identity store, not the session authority — same posture as the OTP flow.
-    ...(options.google
+    // Registered only for the providers configured (Google and/or Apple). Sign-in
+    // itself stays driven by our own layers: the native ID-token flow calls
+    // `auth.api.signInSocial` to verify the token + find-or-create, then discards
+    // Better Auth's session and mints our own via `SessionService` (see
+    // routes/social.routes.ts). Better Auth is the identity store, not the session
+    // authority — same posture as the OTP flow.
+    ...(options.google || options.apple
       ? {
           socialProviders: {
-            google: {
-              clientId: options.google.clientId,
-              clientSecret: options.google.clientSecret,
-            },
+            ...(options.google
+              ? {
+                  google: {
+                    clientId: options.google.clientId,
+                    clientSecret: options.google.clientSecret,
+                  },
+                }
+              : {}),
+            ...(options.apple
+              ? {
+                  apple: {
+                    clientId: options.apple.clientId,
+                    // Native idToken `aud` is the bundle id, not a Services ID.
+                    appBundleIdentifier: options.apple.appBundleIdentifier,
+                  },
+                }
+              : {}),
           },
         }
       : {}),

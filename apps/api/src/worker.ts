@@ -11,7 +11,7 @@
 import type { ExecutionContext, R2Bucket } from "@cloudflare/workers-types";
 import { createAuth, createCliDeviceFlowService, createOtpService } from "@infra/auth";
 import { createNeonDb, schema } from "@infra/db/neon";
-import { googleConfigFromEnv, parseCoreEnv } from "@infra/env/core";
+import { appleConfigFromEnv, googleConfigFromEnv, parseCoreEnv } from "@infra/env/core";
 import {
   createUpstashOtpStore,
   createUpstashRateLimitStore,
@@ -47,6 +47,8 @@ export interface WorkerEnv {
   // Google sign-in (optional secrets; both-or-neither, enforced by parseCoreEnv).
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
+  // Apple sign-in (native ID-token flow; single optional var = the app bundle id).
+  APPLE_CLIENT_ID?: string;
   // Vars ([vars] in wrangler.toml)
   BETTER_AUTH_URL: string;
   NODE_ENV?: string;
@@ -90,6 +92,7 @@ function buildApp(env: WorkerEnv): Hono<ObsEnv> {
   const otpStore = createUpstashOtpStore(redis);
 
   const googleConfig = googleConfigFromEnv(core);
+  const appleConfig = appleConfigFromEnv(core);
   const auth = createAuth({
     db,
     schema,
@@ -98,6 +101,9 @@ function buildApp(env: WorkerEnv): Hono<ObsEnv> {
     trustedOrigins: core.TRUSTED_ORIGINS,
     cookie: { secure: core.COOKIE_SECURE, domain: core.COOKIE_DOMAIN },
     ...(googleConfig ? { google: googleConfig } : {}),
+    ...(appleConfig
+      ? { apple: { clientId: appleConfig.clientId, appBundleIdentifier: appleConfig.clientId } }
+      : {}),
   });
 
   const sessions = createSessionService({
@@ -131,7 +137,10 @@ function buildApp(env: WorkerEnv): Hono<ObsEnv> {
     sessions,
     social: createSocialAuthService({
       auth,
-      enabledProviders: new Set(googleConfig ? (["google"] as const) : []),
+      enabledProviders: new Set([
+        ...(googleConfig ? (["google"] as const) : []),
+        ...(appleConfig ? (["apple"] as const) : []),
+      ]),
     }),
     qrTickets: createRedisQrTicketStore(otpStore),
     rateLimitStore: createUpstashRateLimitStore(redis),

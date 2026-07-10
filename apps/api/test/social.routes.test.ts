@@ -162,6 +162,35 @@ describe("social routes — native id token, success", () => {
   });
 });
 
+describe("social routes — apple provider (native id token)", () => {
+  // Apple is a valid provider segment now (SOCIAL_PROVIDERS). When enabled, the route
+  // is provider-agnostic: same success shape as Google. Apple's on-device idToken
+  // usually carries no name, so displayName commonly resolves to null — assert that.
+  it("signs in via /auth/social/apple/token when apple is enabled", async () => {
+    const { app, users } = setup({
+      social: fakeSocial(
+        { ok: true, data: { userId: GOOGLE_USER_ID, displayName: null, avatarUrl: null } },
+        ["apple"],
+      ),
+    });
+    const res = await postToken(app, "apple", iosBody);
+    expect(res.status).toBe(200);
+    const body = await readJson(res);
+    expect(body.ok).toBe(true);
+    expect(body.user).toMatchObject({ id: GOOGLE_USER_ID, phone: null, isNew: true });
+    expect(body.user.displayName).toBeNull();
+    expect(body.tokens).toMatchObject({ tokenType: "Bearer" });
+    expect(users.events).toEqual([{ userId: GOOGLE_USER_ID, phone: null, platform: "ios" }]);
+  });
+
+  it("400 SOCIAL_PROVIDER_DISABLED for apple when only google is configured", async () => {
+    const { app } = setup(); // default fakeSocial enables ["google"] only
+    const res = await postToken(app, "apple", iosBody);
+    expect(res.status).toBe(400);
+    expect((await readJson(res)).code).toBe("SOCIAL_PROVIDER_DISABLED");
+  });
+});
+
 describe("social routes — native id token, rejections", () => {
   it("400 SOCIAL_PROVIDER_DISABLED when the provider is not configured", async () => {
     const { app } = setup({

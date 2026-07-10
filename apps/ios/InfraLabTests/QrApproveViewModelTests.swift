@@ -94,6 +94,9 @@ private final class StubAuthClient: AuthClient {
     func verifyOtp(phone: String, code: String, device: DeviceInfo?) async throws -> VerifyOtpResponse {
         VerifyOtpResponse(ok: true, user: .stub, tokens: nil)
     }
+    func signInWithApple(idToken: String, nonce: String?, device: DeviceInfo?) async throws -> AuthUser {
+        .stub
+    }
     func refresh() async throws -> AuthTokens? { nil }
     func me() async throws -> AuthUser { .stub }
     func updateProfile(displayName: String) async throws -> AuthUser { .stub }
