@@ -19,6 +19,7 @@ import {
   appleConfigFromEnv,
   googleConfigFromEnv,
   loadCoreEnv,
+  resendConfigFromEnv,
 } from "@infra/env/core";
 import { createRedis, createRedisOtpStore, createRedisRateLimitStore } from "@infra/redis";
 import { createApp } from "./app.js";
@@ -26,7 +27,9 @@ import { createLogger } from "./observability/logger.js";
 import { createAdminRepository } from "./services/admin-repository.js";
 import { createApnsClient } from "./services/apns-client.js";
 import { createLocalImageStore } from "./services/image-store.js";
+import { buildOtpEmail } from "./services/otp-email.js";
 import { createRedisQrTicketStore } from "./services/qr-ticket-store.js";
+import { createResendClient } from "./services/resend-client.js";
 import { createSessionService } from "./services/session-service.js";
 import { createSocialAuthService } from "./services/social-auth-service.js";
 import { createTimelineRepository } from "./services/timeline-repository.js";
@@ -97,6 +100,23 @@ const sms = async (phone: string, code: string): Promise<void> => {
   else log.debug("sms code dispatched");
 };
 
+// Email OTP delivery: Resend when configured, else the same dev log stub as `sms`
+// (the code is surfaced only under OTP_DEBUG_RETURN_CODE, never in a production-like
+// config). A send failure is logged at error for ops — status/reason only, never the
+// email or code — and does not throw: the code is valid in Redis for its TTL and the
+// user can resend, matching the phone channel's fire-and-forget posture.
+const resendConfig = resendConfigFromEnv(env);
+const resend = resendConfig ? createResendClient(resendConfig) : undefined;
+const sendEmailOtp = resend
+  ? async (email: string, code: string): Promise<void> => {
+      const res = await resend.send(buildOtpEmail(email, code));
+      if (!res.ok) log.error("email otp send failed", { status: res.status, reason: res.reason });
+    }
+  : async (email: string, code: string): Promise<void> => {
+      if (env.OTP_DEBUG_RETURN_CODE) log.warn("dev email stub: delivering code", { email, code });
+      else log.debug("email code dispatched");
+    };
+
 const sessions = createSessionService({
   db,
   secret: env.BETTER_AUTH_SECRET,
@@ -154,6 +174,7 @@ const app = createApp({
   qrTickets: createRedisQrTicketStore(otpStore),
   rateLimitStore: createRedisRateLimitStore(redis),
   sms,
+  sendEmailOtp,
   apns,
   apnsProduction: apnsConfig?.production,
   isShuttingDown: () => shuttingDown,
