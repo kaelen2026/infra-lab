@@ -1,3 +1,4 @@
+import { QR_POLL_TOKEN_HEADER } from "@infra/shared";
 import { describe, expect, it } from "vitest";
 import type { UserRecord } from "../src/routes/auth.routes.js";
 import {
@@ -82,24 +83,52 @@ describe("qr routes — create", () => {
 });
 
 describe("qr routes — status", () => {
-  it("reports pending, then approved after a native approve", async () => {
+  // Canonical form: the secret pollToken rides the x-qr-poll-token header, never
+  // the query string (a GET query is recorded by proxies / browser history).
+  const statusWithHeader = (
+    app: ReturnType<typeof createQrRoutes>,
+    ticketId: string,
+    pollToken: string,
+  ) =>
+    app.request(`/auth/qr/status?${new URLSearchParams({ ticketId })}`, {
+      headers: { [QR_POLL_TOKEN_HEADER]: pollToken },
+    });
+
+  it("reports pending, then approved after a native approve (header form)", async () => {
     const { app } = setup();
     const { ticketId, pollToken } = await createTicket(app);
 
-    const q = new URLSearchParams({ ticketId, pollToken });
-    let res = await app.request(`/auth/qr/status?${q}`);
+    let res = await statusWithHeader(app, ticketId, pollToken);
     expect(await readJson(res)).toMatchObject({ status: "pending" });
 
     await post(app, "/auth/qr/approve", { ticketId });
-    res = await app.request(`/auth/qr/status?${q}`);
+    res = await statusWithHeader(app, ticketId, pollToken);
     expect(await readJson(res)).toMatchObject({ status: "approved" });
+  });
+
+  it("still accepts the deprecated pollToken query parameter (one deploy cycle)", async () => {
+    const { app } = setup();
+    const { ticketId, pollToken } = await createTicket(app);
+    const q = new URLSearchParams({ ticketId, pollToken });
+    const res = await app.request(`/auth/qr/status?${q}`);
+    expect(await readJson(res)).toMatchObject({ status: "pending" });
+  });
+
+  it("prefers the header over the query when both are present", async () => {
+    const { app } = setup();
+    const { ticketId, pollToken } = await createTicket(app);
+    // Correct header + garbage query: header must win, so the poll succeeds.
+    const q = new URLSearchParams({ ticketId, pollToken: "wrong-token" });
+    const res = await app.request(`/auth/qr/status?${q}`, {
+      headers: { [QR_POLL_TOKEN_HEADER]: pollToken },
+    });
+    expect(await readJson(res)).toMatchObject({ status: "pending" });
   });
 
   it("collapses a wrong pollToken to expired (no ticket-existence leak)", async () => {
     const { app } = setup();
     const { ticketId } = await createTicket(app);
-    const q = new URLSearchParams({ ticketId, pollToken: "wrong-token" });
-    const res = await app.request(`/auth/qr/status?${q}`);
+    const res = await statusWithHeader(app, ticketId, "wrong-token");
     expect(res.status).toBe(200);
     expect(await readJson(res)).toMatchObject({ status: "expired" });
   });

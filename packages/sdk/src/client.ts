@@ -25,6 +25,7 @@ import {
   type LoginEventsResponse,
   type Platform,
   type ProfileResponse,
+  QR_POLL_TOKEN_HEADER,
   type QrLoginClient,
   type QrLoginStatus,
   type QrLoginStatusQuery,
@@ -242,8 +243,13 @@ export function createQrLoginClient(options: CreateQrLoginClientOptions): QrLogi
   const store = options.tokens ?? noopTokenStore;
   const isWeb = options.platform === "web";
 
-  async function request<T>(path: string, method: string, body?: unknown): Promise<T> {
-    const headers: Record<string, string> = { "content-type": "application/json" };
+  async function request<T>(
+    path: string,
+    method: string,
+    body?: unknown,
+    extraHeaders?: Record<string, string>,
+  ): Promise<T> {
+    const headers: Record<string, string> = { "content-type": "application/json", ...extraHeaders };
     if (!isWeb) {
       const t = await store.load();
       if (t) headers.authorization = `${t.tokenType} ${t.accessToken}`;
@@ -265,10 +271,14 @@ export function createQrLoginClient(options: CreateQrLoginClientOptions): QrLogi
     },
 
     async status(input: QrLoginStatusQuery): Promise<QrLoginStatus> {
-      const query = new URLSearchParams({ ticketId: input.ticketId, pollToken: input.pollToken });
+      // The secret pollToken rides a header, never the query string — a GET query
+      // is recorded by proxies / browser history (issue #129 L1).
+      const query = new URLSearchParams({ ticketId: input.ticketId });
       const res = await request<QrLoginStatusResponse>(
         `${AUTH_ROUTES.qrStatus}?${query.toString()}`,
         "GET",
+        undefined,
+        { [QR_POLL_TOKEN_HEADER]: input.pollToken },
       );
       return res.status;
     },
