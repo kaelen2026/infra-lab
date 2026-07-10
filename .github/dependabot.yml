@@ -1,0 +1,36 @@
+# Dependency-update automation (issue #134). `pnpm audit` in security-scan.yml only
+# flags known CVEs; this proactively opens upgrade PRs — which also keeps the
+# SHA-pinned third-party actions (#129 M2) moving instead of frozen forever.
+# Volume control: weekly cadence, minor+patch grouped into one PR per ecosystem,
+# majors arrive individually under a small open-PR cap.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    commit-message:
+      # Satisfy commitlint (Conventional Commits) on the PR title.
+      prefix: "chore(deps)"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 5
+    groups:
+      actions-all:
+        patterns: ["*"]
+    commit-message:
+      prefix: "ci(deps)"

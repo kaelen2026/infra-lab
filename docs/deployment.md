@@ -134,8 +134,31 @@ For a real production database, run migrations from CI/CD or a one-off release j
 | `postgres` | `postgres:16-alpine` | `127.0.0.1:POSTGRES_PORT` → `5432` | Bound to loopback for migrations and backup/restore operations. |
 | `api` | `apps/api/Dockerfile` | `API_PORT` → `3001` | Hono API. Requires Postgres, Redis, production secrets, secure-cookie settings, and trusted proxy count. |
 | `web` | `apps/web/Dockerfile` | `WEB_PORT` → `3000` | Next.js standalone runtime. `NEXT_PUBLIC_API_URL` is compiled into the browser bundle. |
-| `h5` | `apps/h5/Dockerfile` | `H5_PORT` → `80` | Static SPA served by nginx. `VITE_API_URL` is compiled into the browser bundle. |
+| `h5` | `apps/h5/Dockerfile` | `H5_PORT` → `8080` | Static SPA served by **unprivileged** nginx (non-root ⇒ in-container port is 8080). `VITE_API_URL` is compiled into the browser bundle. |
 | `bot` | `apps/bot/Dockerfile` | none | Optional outbound Feishu/GitHub bridge. Start with `--profile bot`. |
+
+All four runtime images run as a **non-root user** (`node` for api/web/bot, `nginx` for h5).
+The API image pre-creates `/data/uploads` owned by `node`, so the compose `uploads` volume
+inherits writable ownership on first mount — mount custom upload paths accordingly.
+
+> **Upgrading an existing deployment:** ownership seeding only applies to an **empty** volume —
+> Docker never re-chowns a non-empty one on re-mount. An `uploads` volume populated by the old
+> root-running image stays root-owned, and the now-non-root API fails image uploads with EACCES.
+> One-time fix before rolling the new api image:
+>
+> ```bash
+> docker compose --env-file .env.deploy -f docker-compose.deploy.yml \
+>   run --rm --user root api chown -R node:node /data/uploads
+> ```
+
+### Published images (GHCR)
+
+Pushing a version tag (`git tag v0.3.0 && git push origin v0.3.0`) runs
+`.github/workflows/release-images.yml`, which builds all four images and pushes them to
+`ghcr.io/<owner>/<repo>/{api,web,h5,bot}` tagged `<semver>` + `sha-<commit>`. Deploy hosts can
+then `docker compose pull` instead of building on the box. Web/h5 bake their public API origin
+at build time from the repo Variables `NEXT_PUBLIC_API_URL` / `VITE_API_URL` — one published
+image serves one topology; set both Variables before tagging.
 
 ### Required Runtime Choices
 

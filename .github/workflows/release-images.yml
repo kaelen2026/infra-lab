@@ -1,0 +1,92 @@
+name: release-images
+
+# Build the four runtime images and push them to GHCR, so deploy hosts can
+# `docker compose pull` a versioned image instead of building on the box
+# (docker-compose.deploy.yml's `--build` stays available for local validation).
+#
+# Trigger: push a version tag (`git tag v0.3.0 && git push origin v0.3.0`), or run
+# manually via workflow_dispatch (tags the images with the branch/sha only).
+#
+# Images: ghcr.io/<owner>/<repo>/{api,web,h5,bot}:<version|sha>.
+#
+# Database migrations are NOT run here — the CD workflow (deploy.yml) already
+# orders `db-migrate` before `deploy-api` on push to main; self-hosted compose
+# operators run migrations out-of-band per docs/deployment.md.
+#
+# NOTE: web/h5 bake their public API origin into the browser bundle at BUILD time
+# (NEXT_PUBLIC_API_URL / VITE_API_URL, from repo Variables). One published image
+# therefore serves ONE topology; set both Variables before tagging a release.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+# The GITHUB_TOKEN only needs to read the repo and publish packages.
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: release-images-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-push:
+    name: Build & push ${{ matrix.app }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [api, web, h5, bot]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Tag scheme: semver tags from the git tag (v1.2.3 → 1.2.3, 1.2, latest),
+      # plus the commit sha for exact pinning; dispatch runs get branch + sha.
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
+        with:
+          images: ghcr.io/${{ github.repository }}/${{ matrix.app }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=ref,event=branch
+            type=sha
+
+      # Fail fast instead of silently publishing a web image with the Dockerfile's
+      # localhost default baked into the browser bundle (same strictness as the
+      # deploy compose's `:?` expansion). h5 is exempt: an empty VITE_API_URL is a
+      # legitimate same-origin build.
+      - name: Preflight browser-bundle origin
+        if: matrix.app == 'web' && vars.NEXT_PUBLIC_API_URL == ''
+        run: >-
+          echo "::error::repo Variable NEXT_PUBLIC_API_URL is not set — the published web
+          image would call http://localhost:3001 from every browser. Set it under
+          Settings → Secrets and variables → Actions → Variables, then re-tag."
+          && exit 1
+
+      # Build args beyond what an app's Dockerfile declares are ignored with a
+      # warning, so the browser-bundle origins can be passed uniformly here.
+      - name: Build and push
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: apps/${{ matrix.app }}/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
+            VITE_API_URL=${{ vars.VITE_API_URL }}
