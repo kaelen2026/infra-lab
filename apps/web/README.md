@@ -19,6 +19,11 @@ pnpm --filter @infra/web typecheck  # next typegen + tsc --noEmit
 point at the public API origin that CORS + Better Auth trust. Lint (`pnpm lint`) and
 the hermetic tests (`pnpm test`) run repo-wide.
 
+`NEXT_PUBLIC_GOOGLE_ENABLED` (default off) gates the "使用 Google 登录" button on `/auth`.
+There is no public config endpoint, so set it to `true` **only when the API also has
+`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`** configured — otherwise a click lands on the
+API's `SOCIAL_PROVIDER_DISABLED` response. Also build-time (`NEXT_PUBLIC_*`).
+
 ## CD: Vercel (free Hobby tier)
 
 Deployed by [`.github/workflows/deploy.yml`](../../.github/workflows/deploy.yml)

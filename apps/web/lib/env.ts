@@ -23,7 +23,19 @@ function resolveApiBaseUrl(): string {
   return parsed.toString().replace(/\/$/, "");
 }
 
+/**
+ * Whether to show the Google sign-in button. The backend enables Google only when
+ * GOOGLE_CLIENT_ID/SECRET are set (there is no public config endpoint), so this
+ * build-time flag gates the button independently — keep it in sync with the backend
+ * (both on, or both off). Default off, so the button never appears half-wired and
+ * dumps the server's SOCIAL_PROVIDER_DISABLED JSON onto a full-page navigation.
+ */
+function resolveGoogleEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_GOOGLE_ENABLED === "true";
+}
+
 /** Validated web runtime configuration. Import this instead of reading env vars. */
 export const env = {
   apiBaseUrl: resolveApiBaseUrl(),
+  googleEnabled: resolveGoogleEnabled(),
 } as const;

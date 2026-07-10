@@ -95,6 +95,19 @@ export const COPY = {
     privacyLabel: "《隐私协议》",
   },
 
+  /**
+   * Social sign-in entry (Google). web/h5-only surface — the browser redirect flow
+   * has no native counterpart (native uses on-device ID tokens), so like
+   * `timelineShare`/`legal` these strings are NOT emitted to the native clients by
+   * `generate.ts`; web/h5 read them straight from this source.
+   */
+  social: {
+    /** Label on the "sign in with Google" button. */
+    googleButton: "使用 Google 登录",
+    /** Separator between the phone form and the social button (e.g. "— 或 —"). */
+    divider: "或",
+  },
+
   errors: {
     messages: ERROR_MESSAGES,
     network: "网络异常，请稍后再试。",
