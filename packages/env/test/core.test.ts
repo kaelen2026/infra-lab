@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { apnsConfigFromEnv, parseCoreEnv } from "../src/core.js";
+import { apnsConfigFromEnv, googleConfigFromEnv, parseCoreEnv } from "../src/core.js";
 
 const base = {
   DATABASE_URL: "postgres://app:app@localhost:5432/app",
@@ -307,5 +307,45 @@ describe("APNS config", () => {
       message = e instanceof Error ? e.message : String(e);
     }
     expect(message).toContain("APNS_PRIVATE_KEY");
+  });
+});
+
+describe("Google sign-in config", () => {
+  const googleBase = {
+    GOOGLE_CLIENT_ID: "123-abc.apps.googleusercontent.com",
+    GOOGLE_CLIENT_SECRET: "secret-xyz",
+  };
+
+  it("googleConfigFromEnv returns null when neither var is set", () => {
+    expect(googleConfigFromEnv(parseCoreEnv(base))).toBeNull();
+  });
+
+  it("builds config when both are set", () => {
+    const cfg = googleConfigFromEnv(parseCoreEnv({ ...base, ...googleBase }));
+    expect(cfg).toEqual({
+      clientId: "123-abc.apps.googleusercontent.com",
+      clientSecret: "secret-xyz",
+    });
+  });
+
+  it("rejects the client id without the secret (both-or-neither)", () => {
+    expect(() => parseCoreEnv({ ...base, GOOGLE_CLIENT_ID: googleBase.GOOGLE_CLIENT_ID })).toThrow(
+      /GOOGLE_CLIENT_SECRET/,
+    );
+  });
+
+  it("rejects the secret without the client id (both-or-neither)", () => {
+    expect(() =>
+      parseCoreEnv({ ...base, GOOGLE_CLIENT_SECRET: googleBase.GOOGLE_CLIENT_SECRET }),
+    ).toThrow(/GOOGLE_CLIENT_ID/);
+  });
+
+  it("treats an empty-string value as unset (no half-config error)", () => {
+    // optionalNonEmpty maps "" → undefined, so both-empty is 'both unset', not a partial.
+    expect(
+      googleConfigFromEnv(
+        parseCoreEnv({ ...base, GOOGLE_CLIENT_ID: "", GOOGLE_CLIENT_SECRET: "" }),
+      ),
+    ).toBeNull();
   });
 });

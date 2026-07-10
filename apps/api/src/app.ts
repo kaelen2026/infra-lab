@@ -32,6 +32,7 @@ import {
 import { createMcpRoutes } from "./routes/mcp.routes.js";
 import { createNotificationRoutes } from "./routes/notification.routes.js";
 import { createQrRoutes, type QrTicketStore } from "./routes/qr.routes.js";
+import { createSocialRoutes, type SocialAuthService } from "./routes/social.routes.js";
 import {
   createTimelineRoutes,
   type ImageStore,
@@ -65,6 +66,12 @@ export interface AppDeps {
   admin: AdminRepository;
   images: ImageStore;
   sessions: SessionService;
+  /**
+   * Social sign-in (Google). Always present; when no provider is configured it
+   * simply reports every provider disabled, so the routes answer
+   * SOCIAL_PROVIDER_DISABLED rather than 404.
+   */
+  social: SocialAuthService;
   qrTickets: QrTicketStore;
   /** Counter store backing the transport-level rate limiter. */
   rateLimitStore: RateLimitStore;
@@ -180,6 +187,18 @@ export function createApp(deps: AppDeps): Hono<ObsEnv> {
         // The CLI opens `${webBaseUrl}/auth/cli` to approve; BETTER_AUTH_URL is the web origin.
         webBaseUrl: env.BETTER_AUTH_URL,
       },
+    }),
+  );
+  // Social sign-in (Google). Native ID-token flow only for now: the client verifies
+  // with Google on-device, POSTs the ID token, and we mint the SAME session the OTP
+  // flow issues. The web redirect + bridge is a follow-up (design stage 2b).
+  app.route(
+    "/",
+    createSocialRoutes({
+      social: deps.social,
+      users: deps.users,
+      sessions: deps.sessions,
+      config: { trustedProxyCount: env.TRUSTED_PROXY_COUNT },
     }),
   );
   // QR cross-device login: an already-authenticated native client (Cookie or Bearer)

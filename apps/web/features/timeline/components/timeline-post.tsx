@@ -29,7 +29,7 @@ interface TimelinePostCardProps {
 function monogram(user: AuthUser | null): string {
   const name = user?.displayName?.trim();
   if (name) return (Array.from(name)[0] ?? "·").toUpperCase();
-  const digits = user?.phone.replace(/\D/g, "") ?? "";
+  const digits = user?.phone?.replace(/\D/g, "") ?? "";
   return digits.slice(-2) || "··";
 }
 

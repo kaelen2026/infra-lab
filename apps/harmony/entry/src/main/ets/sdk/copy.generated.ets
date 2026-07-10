@@ -55,6 +55,12 @@ export function errorMessageFor(code: AuthErrorCode): string {
       return "该二维码已被使用，请刷新后重试。";
     case "QR_NOT_APPROVED":
       return "尚未在手机上确认登录。";
+    case "SOCIAL_PROVIDER_DISABLED":
+      return "暂不支持该登录方式。";
+    case "SOCIAL_TOKEN_INVALID":
+      return "第三方账号验证失败，请重试。";
+    case "SOCIAL_ACCOUNT_ERROR":
+      return "第三方登录失败，请稍后再试。";
     default:
       return ERROR_GENERIC;
   }

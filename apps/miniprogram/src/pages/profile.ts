@@ -35,7 +35,7 @@ Page<ProfileData, ProfileCustom>({
     try {
       const user = await withRefresh(auth, () => auth.me());
       const name = user.displayName ?? "";
-      this.setData({ phone: user.phone, displayName: name, draft: name });
+      this.setData({ phone: user.phone ?? "", displayName: name, draft: name });
     } catch (err) {
       if (!this.guard(err)) this.setData({ error: "加载失败" });
     }

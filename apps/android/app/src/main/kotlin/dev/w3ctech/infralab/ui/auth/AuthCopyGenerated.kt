@@ -45,6 +45,9 @@ object AuthCopyGenerated {
         AuthErrorCode.QR_NOT_FOUND to "二维码无效或已过期，请刷新后重试。",
         AuthErrorCode.QR_ALREADY_USED to "该二维码已被使用，请刷新后重试。",
         AuthErrorCode.QR_NOT_APPROVED to "尚未在手机上确认登录。",
+        AuthErrorCode.SOCIAL_PROVIDER_DISABLED to "暂不支持该登录方式。",
+        AuthErrorCode.SOCIAL_TOKEN_INVALID to "第三方账号验证失败，请重试。",
+        AuthErrorCode.SOCIAL_ACCOUNT_ERROR to "第三方登录失败，请稍后再试。",
     )
 
     fun codeDescription(phone: String, minutes: Int): String =

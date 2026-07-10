@@ -62,7 +62,7 @@ export async function runLoginWeb(deps: WebLoginDeps): Promise<number> {
     const result = await pollToken(apiUrl, started.deviceCode);
     if (result.ok) {
       await tokens.save(result.tokens);
-      io.print(`已登录:${result.user.displayName ?? result.user.phone}`);
+      io.print(`已登录:${result.user.displayName ?? result.user.phone ?? result.user.id}`);
       return 0;
     }
     switch (result.status) {

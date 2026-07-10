@@ -14,6 +14,19 @@ export interface CreateAuthOptions {
     domain?: string;
     secure?: boolean;
   };
+  /**
+   * Google sign-in. Injected only when configured (see `googleConfigFromEnv`); when
+   * omitted no social provider is registered and the social routes answer
+   * SOCIAL_PROVIDER_DISABLED. `clientId` accepts an array so the native ID-token flow
+   * can accept tokens minted for several audiences (web + iOS + Android client ids);
+   * the web redirect flow uses the first entry. `clientSecret` is required for the
+   * (later) web authorization-code flow; the native ID-token flow verifies against
+   * the audience alone. Never logged.
+   */
+  google?: {
+    clientId: string | string[];
+    clientSecret: string;
+  };
 }
 
 /**
@@ -42,6 +55,21 @@ export function createAuth(options: CreateAuthOptions) {
       expiresIn: 60 * 60 * 24 * 30, // 30 days session record
       updateAge: 60 * 60 * 24, // refresh the session record at most once a day
     },
+    // Registered only when Google is configured. Sign-in itself stays driven by our
+    // own layers: the native ID-token flow calls `auth.api.signInSocial` to verify
+    // the token + find-or-create, then discards Better Auth's session and mints our
+    // own via `SessionService` (see routes/social.routes.ts). Better Auth is the
+    // identity store, not the session authority — same posture as the OTP flow.
+    ...(options.google
+      ? {
+          socialProviders: {
+            google: {
+              clientId: options.google.clientId,
+              clientSecret: options.google.clientSecret,
+            },
+          },
+        }
+      : {}),
     advanced: {
       cookiePrefix: "infra",
       defaultCookieAttributes: {

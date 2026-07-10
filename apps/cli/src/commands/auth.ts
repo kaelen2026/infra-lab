@@ -36,7 +36,8 @@ export async function runLogin(deps: AuthCommandDeps): Promise<number> {
     device: describeDevice(deviceId),
   });
 
-  const who = verified.user.displayName ?? verified.user.phone;
+  // phone is null for a social-only account; fall back to name, then id.
+  const who = verified.user.displayName ?? verified.user.phone ?? verified.user.id;
   io.print(verified.user.isNew ? `已注册并登录:${who}` : `已登录:${who}`);
   return 0;
 }
@@ -46,7 +47,7 @@ export async function runWhoami(deps: AuthCommandDeps): Promise<number> {
   const { auth, io } = deps;
   try {
     const user = await withRefresh(auth, () => auth.me());
-    io.print(`手机号: ${user.phone}`);
+    if (user.phone) io.print(`手机号: ${user.phone}`);
     if (user.displayName) io.print(`昵称:   ${user.displayName}`);
     io.print(`用户 ID: ${user.id}`);
     return 0;

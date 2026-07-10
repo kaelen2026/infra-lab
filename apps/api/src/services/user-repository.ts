@@ -17,7 +17,7 @@ export function createUserRepository(db: Db): UserRepository {
     if (!row) return null;
     return {
       id: row.user.id,
-      phone: row.user.phone ?? phone,
+      phone: row.user.phone ?? null,
       displayName: row.profile?.displayName ?? null,
       avatarUrl: row.profile?.avatarUrl ?? null,
       role: row.user.role,
@@ -36,7 +36,7 @@ export function createUserRepository(db: Db): UserRepository {
     if (!row) return null;
     return {
       id: row.user.id,
-      phone: row.user.phone ?? "",
+      phone: row.user.phone ?? null,
       displayName: row.profile?.displayName ?? null,
       avatarUrl: row.profile?.avatarUrl ?? null,
       role: row.user.role,
@@ -60,6 +60,24 @@ export function createUserRepository(db: Db): UserRepository {
       // New accounts default to the `user` role (the DB default); promote to admin
       // out-of-band via scripts/grant-admin.mjs.
       return { id, phone, displayName: null, avatarUrl: null, role: "user", createdAt: now };
+    },
+
+    async ensureProfile(userId, hints) {
+      // profile.userId is unique — onConflictDoNothing makes this idempotent, so a
+      // returning social user (profile already present) is untouched. Only the first
+      // sign-in seeds displayName/avatar from the provider's hints. `returning` is
+      // empty on conflict, so a non-empty result means we inserted (a new account).
+      const inserted = await db
+        .insert(profile)
+        .values({
+          id: randomUUID(),
+          userId,
+          displayName: hints.displayName ?? null,
+          avatarUrl: hints.avatarUrl ?? null,
+        })
+        .onConflictDoNothing({ target: profile.userId })
+        .returning({ id: profile.id });
+      return inserted.length > 0;
     },
 
     async updateProfile(userId, patch) {
@@ -101,7 +119,7 @@ export function createUserRepository(db: Db): UserRepository {
 
     async recordLoginEvent(event: {
       userId: string | null;
-      phone: string;
+      phone: string | null;
       platform: Platform;
       ip: string;
       deviceId?: string;

@@ -11,7 +11,7 @@
 import type { ExecutionContext, R2Bucket } from "@cloudflare/workers-types";
 import { createAuth, createCliDeviceFlowService, createOtpService } from "@infra/auth";
 import { createNeonDb, schema } from "@infra/db/neon";
-import { parseCoreEnv } from "@infra/env/core";
+import { googleConfigFromEnv, parseCoreEnv } from "@infra/env/core";
 import {
   createUpstashOtpStore,
   createUpstashRateLimitStore,
@@ -25,6 +25,7 @@ import { createAdminRepository } from "./services/admin-repository.js";
 import { createRedisQrTicketStore } from "./services/qr-ticket-store.js";
 import { createR2ImageStore } from "./services/r2-image-store.js";
 import { createSessionService } from "./services/session-service.js";
+import { createSocialAuthService } from "./services/social-auth-service.js";
 import { createTimelineRepository } from "./services/timeline-repository.js";
 import { createTodoRepository } from "./services/todo-repository.js";
 import { createUserRepository } from "./services/user-repository.js";
@@ -43,6 +44,9 @@ export interface WorkerEnv {
   BETTER_AUTH_SECRET: string;
   UPSTASH_REDIS_REST_URL: string;
   UPSTASH_REDIS_REST_TOKEN: string;
+  // Google sign-in (optional secrets; both-or-neither, enforced by parseCoreEnv).
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
   // Vars ([vars] in wrangler.toml)
   BETTER_AUTH_URL: string;
   NODE_ENV?: string;
@@ -85,6 +89,7 @@ function buildApp(env: WorkerEnv): Hono<ObsEnv> {
   const redis = createUpstashRedis(env.UPSTASH_REDIS_REST_URL, env.UPSTASH_REDIS_REST_TOKEN);
   const otpStore = createUpstashOtpStore(redis);
 
+  const googleConfig = googleConfigFromEnv(core);
   const auth = createAuth({
     db,
     schema,
@@ -92,6 +97,7 @@ function buildApp(env: WorkerEnv): Hono<ObsEnv> {
     baseURL: core.BETTER_AUTH_URL,
     trustedOrigins: core.TRUSTED_ORIGINS,
     cookie: { secure: core.COOKIE_SECURE, domain: core.COOKIE_DOMAIN },
+    ...(googleConfig ? { google: googleConfig } : {}),
   });
 
   const sessions = createSessionService({
@@ -123,6 +129,10 @@ function buildApp(env: WorkerEnv): Hono<ObsEnv> {
     admin: createAdminRepository(db),
     images: createR2ImageStore({ bucket: env.IMAGES }),
     sessions,
+    social: createSocialAuthService({
+      auth,
+      enabledProviders: new Set(googleConfig ? (["google"] as const) : []),
+    }),
     qrTickets: createRedisQrTicketStore(otpStore),
     rateLimitStore: createUpstashRateLimitStore(redis),
     sms,

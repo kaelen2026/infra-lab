@@ -60,6 +60,9 @@ enum AuthCopy {
         case .qrNotFound: return "二维码无效或已过期，请刷新后重试。"
         case .qrAlreadyUsed: return "该二维码已被使用，请刷新后重试。"
         case .qrNotApproved: return "尚未在手机上确认登录。"
+        case .undefined: return "暂不支持该登录方式。"
+        case .undefined: return "第三方账号验证失败，请重试。"
+        case .undefined: return "第三方登录失败，请稍后再试。"
             case .unknown: return generic
             }
         }
