@@ -40,17 +40,17 @@
     ]
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.1",
-    "@commitlint/cli": "21.2.0",
+    "@biomejs/biome": "2.5.3",
+    "@commitlint/cli": "21.2.1",
     "@commitlint/config-conventional": "21.2.0",
     "@types/node": "24.13.2",
     "husky": "9.1.7",
-    "knip": "^6.23.0",
+    "knip": "^6.25.0",
     "lint-staged": "17.0.8",
     "tsup": "8.5.1",
-    "turbo": "^2.10.1",
+    "turbo": "^2.10.4",
     "typescript": "5.9.3",
-    "vitest": "4.1.9"
+    "vitest": "4.1.10"
   },
   "pnpm": {
     "overrides": {

@@ -15,11 +15,11 @@
   "dependencies": {
     "@ai-sdk/openai-compatible": "1.0.42",
     "@infra/env": "workspace:*",
-    "@larksuiteoapi/node-sdk": "1.68.0",
+    "@larksuiteoapi/node-sdk": "1.70.0",
     "ai": "5.0.209",
     "zod": "4.4.3"
   },
   "devDependencies": {
-    "tsx": "4.22.4"
+    "tsx": "4.23.0"
   }
 }
