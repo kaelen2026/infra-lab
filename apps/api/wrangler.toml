@@ -24,6 +24,14 @@ compatibility_date = "2026-07-01"
 # node:crypto (OTP HMAC + JWT), node:buffer — required by the auth/session code.
 compatibility_flags = ["nodejs_compat"]
 
+# Custom domain so the session cookie stays same-site with web/h5 (a *.workers.dev
+# host is a different site and breaks it). Requires the w3ctech.dev zone to live in
+# this Cloudflare account; wrangler creates/manages the api.w3ctech.dev hostname and
+# its certificate on deploy.
+[[routes]]
+pattern = "api.w3ctech.dev"
+custom_domain = true
+
 # Durable timeline/avatar uploads. Bound as `env.IMAGES` (see src/worker.ts).
 [[r2_buckets]]
 binding = "IMAGES"
@@ -34,9 +42,9 @@ bucket_name = "infra-lab-uploads"
 # @infra/env/core refuse to boot unless COOKIE_SECURE=true and TRUSTED_PROXY_COUNT>0.
 [vars]
 NODE_ENV = "production"
-BETTER_AUTH_URL = "https://app.example.com"
-TRUSTED_ORIGINS = "https://h5.example.com"
-COOKIE_DOMAIN = ".example.com"
+BETTER_AUTH_URL = "https://w3ctech.dev"
+TRUSTED_ORIGINS = "https://h5.w3ctech.dev"
+COOKIE_DOMAIN = ".w3ctech.dev"
 COOKIE_SECURE = "true"
 # Cloudflare is the single trusted proxy hop in front of the Worker.
 TRUSTED_PROXY_COUNT = "1"
