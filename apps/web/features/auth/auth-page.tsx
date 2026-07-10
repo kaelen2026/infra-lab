@@ -1,17 +1,26 @@
 "use client";
 
 import { COPY } from "@infra/design";
-import { LEGAL_ROUTES, OTP_LIMITS } from "@infra/shared";
+import { LEGAL_ROUTES, OTP_LIMITS, socialStartUrl } from "@infra/shared";
 import { QrCode } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { ModeToggle } from "@/components/mode-toggle";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useRedirectIfAuthenticated, useSession } from "@/features/session";
+import { env } from "@/lib/env";
 import { CodeStep } from "./components/code-step";
+import { GoogleIcon } from "./components/google-icon";
 import { PhoneStep } from "./components/phone-step";
 import { useOtpLogin } from "./use-otp-login";
+
+// Full-page navigation to the API's redirect-flow entry. The server 302s to Google,
+// bridges the callback into our `infra.session` cookie, then lands back at `/` — guarded
+// by the session provider, which re-checks auth on mount, so the returning browser is
+// signed in.
+const googleSignInUrl = socialStartUrl(env.apiBaseUrl, "google");
 
 /** Orchestrates the OTP login flow: wires the headless hook to step views, then redirects home. */
 export default function AuthPage() {
@@ -82,6 +91,22 @@ export default function AuthPage() {
             >
               {login.error}
             </p>
+          )}
+
+          {login.step === "phone" && env.googleEnabled && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                <span className="h-px flex-1 bg-border" aria-hidden />
+                {COPY.social.divider}
+                <span className="h-px flex-1 bg-border" aria-hidden />
+              </div>
+              <Button asChild variant="outline" size="lg" className="w-full">
+                <a href={googleSignInUrl}>
+                  <GoogleIcon className="size-4" />
+                  {COPY.social.googleButton}
+                </a>
+              </Button>
+            </div>
           )}
 
           {login.step === "phone" && (

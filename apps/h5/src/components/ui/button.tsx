@@ -19,6 +19,20 @@ const sizes: Record<Size, string> = {
   icon: "size-10",
 };
 
+const BASE =
+  "inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0";
+
+/** Button styling as a class string, so non-`<button>` elements (e.g. an `<a>` used
+ *  as a link-button for a full-page navigation) can wear the same look. */
+export function buttonClasses(opts: { variant?: Variant; size?: Size; className?: string } = {}) {
+  return cn(
+    BASE,
+    variants[opts.variant ?? "default"],
+    sizes[opts.size ?? "default"],
+    opts.className,
+  );
+}
+
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
   size?: Size;
@@ -30,15 +44,5 @@ export function Button({
   size = "default",
   ...props
 }: ButtonProps) {
-  return (
-    <button
-      className={cn(
-        "inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0",
-        variants[variant],
-        sizes[size],
-        className,
-      )}
-      {...props}
-    />
-  );
+  return <button className={buttonClasses({ variant, size, className })} {...props} />;
 }

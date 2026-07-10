@@ -240,7 +240,14 @@ CI——各端改动需本地过门禁,并保证 `phone` 可空后无强解包(`
      > 已被其自身测试覆盖;我们新增的面(URL 生成、cookie 交换、redirect 校验、disabled)
      > 均已直测。真实联调随 stage 3 UI + 真凭证进行,并需保证 `BETTER_AUTH_URL`/回调 origin
      > /Google 控制台 redirect URI 一致(见 §5.2 备注)。
-3. **web/h5 UI**:Google 登录按钮 + 回跳落地(依赖 2b)。
+3. **web/h5 UI(已实现)**:登录页 `/auth` 加「使用 Google 登录」按钮 —— 整页跳到
+   `socialStartUrl(apiBase, "google")`(= `<api>/auth/social/google/start?redirect=%2F`,
+   builder 在 `@infra/shared`,含 hermetic 单测),回跳落地 `/` 由既有 SessionProvider
+   挂载时 `refresh()` 自动认领(无需额外接线)。按钮**显隐由前端 flag 门禁**
+   (`NEXT_PUBLIC_GOOGLE_ENABLED` / `VITE_GOOGLE_ENABLED`,默认关)—— 无公共 config 端点,
+   故与后端 `GOOGLE_CLIENT_ID/SECRET` 手动保持一致(都开或都关),避免未配置时点按钮落到
+   `SOCIAL_PROVIDER_DISABLED` 的 JSON。文案 `COPY.social`(web/h5-only,不进原生生成)。
+   Google G 图标为内联 4 色 SVG。
 4. **账号绑定(§2.3)**:`/auth/identities`、`/auth/link/*`、`/auth/unlink` 端点 + 冲突/
    守恒规则 + 审计 + hermetic 测试(走 CI);web/h5 "账号安全"页展示与绑定/解绑入口。
 5. **原生镜像**(可并行、各自 PR):iOS / Android / Harmony 契约镜像 + idToken 流 +

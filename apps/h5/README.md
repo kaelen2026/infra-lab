@@ -33,6 +33,11 @@ Point it at a non-default API with `VITE_API_URL` (defaults to
 `http://localhost:3001`). The API must allow this origin with
 `Access-Control-Allow-Credentials` for the cookie session to work cross-origin.
 
+`VITE_GOOGLE_ENABLED=true` shows the "使用 Google 登录" button on `/auth` (default off).
+Set it only when the API also has `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` configured —
+there is no public config endpoint, so an enabled button against an unconfigured API
+just lands on `SOCIAL_PROVIDER_DISABLED`. Build-time inlined, like `VITE_API_URL`.
+
 ```bash
 pnpm --filter @infra/h5 build      # production bundle to dist/
 pnpm --filter @infra/h5 typecheck  # tsc --noEmit

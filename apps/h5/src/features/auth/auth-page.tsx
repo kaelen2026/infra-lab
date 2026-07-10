@@ -1,13 +1,23 @@
 import { COPY } from "@infra/design";
-import { LEGAL_ROUTES, OTP_LIMITS } from "@infra/shared";
+import { LEGAL_ROUTES, OTP_LIMITS, socialStartUrl } from "@infra/shared";
 import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { ThemeToggle } from "@/components/theme-toggle";
+import { buttonClasses } from "@/components/ui/button";
 import { useSession } from "@/features/session";
+import { API_BASE } from "@/lib/auth-client";
 import { CodeStep } from "./components/code-step";
+import { GoogleIcon } from "./components/google-icon";
 import { PhoneStep } from "./components/phone-step";
 import { useOtpLogin } from "./use-otp-login";
+
+// Show the Google button only when the backend has Google configured (kept in sync via
+// this build-time flag — see vite-env.d.ts). Default hidden.
+const googleEnabled = import.meta.env.VITE_GOOGLE_ENABLED === "true";
+// Full-page navigation to the API redirect flow; the server bridges the callback into
+// our `infra.session` cookie and lands back at `/` (the session provider re-checks on mount).
+const googleSignInUrl = socialStartUrl(API_BASE, "google");
 
 /** Mobile-first OTP login: wires the headless hook to the step views, then redirects home. */
 export function AuthPage() {
@@ -81,6 +91,23 @@ export function AuthPage() {
           >
             {login.error}
           </p>
+        )}
+
+        {login.step === "phone" && googleEnabled && (
+          <div className="mt-6 space-y-4">
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <span className="h-px flex-1 bg-border" aria-hidden />
+              {COPY.social.divider}
+              <span className="h-px flex-1 bg-border" aria-hidden />
+            </div>
+            <a
+              href={googleSignInUrl}
+              className={buttonClasses({ variant: "outline", size: "lg", className: "w-full" })}
+            >
+              <GoogleIcon className="size-4" />
+              {COPY.social.googleButton}
+            </a>
+          </div>
         )}
       </div>
 
