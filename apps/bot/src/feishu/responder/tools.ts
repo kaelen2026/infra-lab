@@ -1,4 +1,4 @@
-import { tool } from "ai";
+import { type Tool, tool } from "ai";
 import { z } from "zod";
 import { dispatchLocal } from "../dispatcher";
 import { reactWithEmoji, VALID_REACTION_EMOJIS, type ValidReactionEmoji } from "../reactions";
@@ -15,6 +15,18 @@ export interface ResponderToolDeps {
   replyMarkdown?: typeof replyMarkdown;
   dispatchLocal?: typeof dispatchLocal;
   reactWithEmoji?: typeof reactWithEmoji;
+}
+
+/**
+ * `createResponderActionTools` 的返回形状。显式标注(而非交给推断)是必需的：
+ * `tool()` 的返回类型引用 `@ai-sdk` 的内部路径,导出函数上的推断类型不可移植
+ * (tsc TS2742)。`tools` 保留具名 `react` / `dispatch` 两个 key,让 responder 的
+ * step gate 能用 `keyof` 拿到工具名字面量。
+ */
+export interface ResponderActionTools {
+  ensureReacted: () => Promise<void>;
+  tools: { react: Tool; dispatch: Tool };
+  getDecision: () => ResponderDecision | null;
 }
 
 /**
@@ -41,7 +53,7 @@ const FALLBACK_REACTION_EMOJI: ValidReactionEmoji = "OnIt";
 export function createResponderActionTools(
   event: FeishuMessageReceiveEvent,
   deps: ResponderToolDeps = {},
-) {
+): ResponderActionTools {
   const reply = deps.replyMarkdown ?? replyMarkdown;
   const dispatch = deps.dispatchLocal ?? dispatchLocal;
   const react = deps.reactWithEmoji ?? reactWithEmoji;
