@@ -15,29 +15,66 @@
   OAuth 重定向;Google 也不在国内小程序场景。小程序继续只走手机号 OTP。契约层面
   Google 相关能力对 `weapp` 一律不暴露(见 §4)。
 
-**非目标**(本次不做,列入 §9 未决):账号绑定/合并(同一自然人的手机号账号与 Google
-账号打通)、其它社交源(Apple / 微信 / GitHub)、把 email 变为可登录的第一凭证。
+**账号绑定纳入本设计**(见 §2.3,已确认要做):同一账号可同时挂手机号 + Google 两种登录
+凭证,两种方式都能登录到同一个 `user`。**非目标**(本次不做):账号**合并**——把两个
+**已独立存在**的账号(各有 todo/timeline/device 等数据)打通迁移到一起;这是独立的高风险
+课题(见 §2.3 冲突规则与 §9)、其它社交源(Apple / 微信 / GitHub)、把 email 变为可登录
+的第一凭证。
 
-## 2. 核心设计决策(需产品确认的关键项)
+## 2. 核心设计决策
 
-### 2.1 身份模型:Google 账号 = 独立的新账号(默认方案)
+### 2.1 身份模型:Google 账号 = 独立的新账号(首次登录时)
 
 现状:`user` 以 **手机号** 为主身份(`user.phone` 唯一),Google 只提供 **email**,两者
 是**不相交的身份空间**——OTP 用户没有 email,Google 用户没有手机号,**无法自动匹配**。
 
-**默认方案(推荐,成本最低、语义最清晰):** 一次 Google 登录 = 一个以 Google 账号
-(`account.providerId='google'` + `account.accountId=<google sub>`)标识的用户;若该
-Google 账号从未登录过,则**新建 `user`(email 有值、`phone` 为 `null`)+ `profile`**,
-与手机号新用户的 find-or-create 完全对称。已存在则直接复用。
+**首次用某 Google 账号登录**(此前从未登录、也未被任何账号绑定):新建一个以 Google 账号
+(`account.providerId='google'` + `account.accountId=<google sub>`)标识的 `user`
+(email 有值、`phone` 为 `null`)+ `profile`,与手机号新用户的 find-or-create 完全对称。
+该 Google 账号已属于某个 `user`(无论是独立注册还是被绑定的)则直接复用、登录到那个 user。
 
 数据基础已就绪:`packages/db/schema/auth.ts` 里 `user.phone`、`user.email` 都是**可空**
 且各有唯一索引,`account` 表就是 Better Auth 标准 OAuth 账户表。**无需迁移即可容纳
-"只有 Google、没有手机号" 的用户。**
+"只有 Google、没有手机号" 的用户,也无需迁移即可让一个 user 同时有 phone + google account。**
 
-> ⚠️ **需产品确认**:是否要"同一个人手机号登录后再绑 Google / 反之"的**账号绑定**?
-> 若要,则需要新增绑定端点、在已登录态下调用 Better Auth 的 link-account、并处理
-> "Google email 恰好等于某手机号用户后来填的 email" 的冲突。**本设计默认不做绑定**,
-> Google 账号与手机号账号各自独立;绑定作为后续增量(§9)。确认后再动工,避免返工。
+### 2.3 账号绑定(已确认要做)
+
+**语义**:绑定 = **已登录**用户给当前账号**追加**第二种登录凭证,之后两种方式都登录到
+**同一个** `user`。这**不是**账号合并(§1 非目标)——绑定只处理"目标凭证尚未被占用"的
+情形,不迁移两个既有账号的数据。
+
+**两个方向(对称)**:
+
+1. **手机号账号 → 绑 Google**:已登录态(Cookie/Bearer)发起 **link 模式** 的 Google
+   OAuth / idToken 流(与 §5.2 / §5.3 同一套传输,但**不新建 user**,而是把 google
+   `account` 行挂到 `当前 requireUser 解析出的 user.id`,并在 `user.email` 为空时回填)。
+2. **Google 账号 → 绑手机号**:已登录态复用现有 OTP —— 先 `POST /auth/otp/request`,再
+   `POST /auth/link/phone { phone, code }`;OTP 校验通过后把 `phone` 写到当前 `user`
+   (**不走 `/auth/otp/verify`**,那条会 find-or-create 建新账号)。
+
+**冲突规则(默认拒绝,绝不自动合并)**:
+
+- 目标 Google 账号已属于**另一个** `user` → `SOCIAL_ALREADY_LINKED`(409),提示已被占用,
+  引导用户先在那个账号解绑 / 或走(尚未实现的)账号合并。
+- 目标手机号已属于**另一个** `user` → `PHONE_ALREADY_LINKED`(409)。
+- 当前账号已绑同类凭证(已有 phone 又绑 phone / 已有 google 又绑另一个 google)→ 先要求
+  解绑或直接拒绝,避免"一个 user 挂多个手机号"的歧义(本期:一个 user 至多一个 phone、
+  至多一个 google account)。
+
+**解绑**(`POST /auth/unlink { target: "google" | "phone" }`):
+
+- **守恒规则**:一个 `user` 必须**至少保留一种可登录凭证**。解绑到只剩零个凭证 →
+  `LAST_CREDENTIAL`(409)拒绝。这是防止账号变成无法登录的孤儿的硬约束。
+
+**Better Auth link**:1.6.23 的 account linking 默认仅在 email 一致时自动 link;我们要的是
+**已登录态显式 link**,需用 server 端 API(`auth.api.linkSocialAccount` / `unlinkAccount`
+一类)并核对 `accountLinking.trustedProviders` 配置。**待落地时验证确切 API 名与行为**
+(§9 技术校验项)。手机号侧不经 Better Auth,直接写 `user.phone`。
+
+**审计与安全**:绑定/解绑是**敏感操作**,须记 `login_event`(复用现有表,`reason` 记
+`link_google` / `link_phone` / `unlink_*`)。风险点:会话被盗后攻击者给账号绑上自己的凭证
+以长期驻留 —— 缓解靠解绑能力 + (后续可选)绑定成功后向既有凭证发通知。绑手机号必须完整
+走 OTP,不能凭空写入。
 
 ### 2.2 会话桥接:Google 登录后签发**本仓库自己的**会话,而非 Better Auth 会话
 
@@ -76,6 +113,13 @@ Better Auth OAuth 账户表。落地时仅需:
   - `nativeIdToken`(原生用):`POST /auth/social/:provider/token`,body
     `{ idToken, platform, device? }`,返回**与 `verifyOtp` 同构**的
     `{ ok, user, tokens }`。
+- **账号绑定端点(§2.3,均需已登录态)**:
+  - `GET /auth/identities` → `{ ok, phone: boolean, providers: SocialProvider[] }`,供
+    "账号安全"页展示当前已绑登录方式。
+  - `POST /auth/link/social/:provider/start`(web/h5 重定向,link 模式)/
+    `POST /auth/link/social/:provider/token`(原生 idToken,link 模式)。
+  - `POST /auth/link/phone { phone, code }`(已登录 + OTP 已通过,把手机号挂到当前 user)。
+  - `POST /auth/unlink { target }`(`target: "google" | "phone"`)。
 - **`AuthUser.phone` 由 `string` 改为 `string | null`**(Google 用户无手机号)。这是
   **破坏性跨端契约变更**,波及所有解码 `AuthUser` 的客户端:
   - TS:`@infra/sdk`、`apps/web`、`apps/h5`、`apps/cli` 处理 `phone` 展示的地方需容忍
@@ -84,8 +128,9 @@ Better Auth OAuth 账户表。落地时仅需:
     `common/contracts.ets` 的 `phone` 字段改可空,**必须与本次同 PR 或紧随其后的镜像
     PR 协调**(原生门禁在本地,不进 CI)。
 - 新增错误码:`SOCIAL_PROVIDER_DISABLED`(未配置 clientId 时)、`SOCIAL_TOKEN_INVALID`
-  (idToken 校验失败)、`SOCIAL_ACCOUNT_ERROR`;并入 `AUTH_ERROR_CODES` 与
-  `ERROR_STATUS`(→ 400/401)。
+  (idToken 校验失败)、`SOCIAL_ACCOUNT_ERROR`;绑定相关 `SOCIAL_ALREADY_LINKED`、
+  `PHONE_ALREADY_LINKED`、`LAST_CREDENTIAL`(§2.3,→ 409);并入 `AUTH_ERROR_CODES` 与
+  `ERROR_STATUS`。
 - `AuthClient` 接口按端能力**可选**扩展 `signInWithGoogleIdToken(...)`(原生实现),web
   用重定向不进该接口。`weapp` 不实现任何 Google 方法(§1)。
 
@@ -175,19 +220,30 @@ CI——各端改动需本地过门禁,并保证 `phone` 可空后无强解包(`
    全部走 CI 门禁(lint/typecheck/build/test)。TS 客户端(sdk/web/h5/cli)同 PR 跟上
    `phone` 可空。
 3. **web/h5 UI**:Google 登录按钮 + 回跳落地。
-4. **原生镜像**(可并行、各自 PR):iOS / Android / Harmony 契约镜像 + idToken 流 + 本地
-   门禁。
-5. **cli**:`auth login --google`。
+4. **账号绑定(§2.3)**:`/auth/identities`、`/auth/link/*`、`/auth/unlink` 端点 + 冲突/
+   守恒规则 + 审计 + hermetic 测试(走 CI);web/h5 "账号安全"页展示与绑定/解绑入口。
+5. **原生镜像**(可并行、各自 PR):iOS / Android / Harmony 契约镜像 + idToken 流 +
+   绑定页 + 本地门禁。
+6. **cli**:`auth login --google`(绑定操作在移动/web 端做即可,cli 不强求)。
 
-## 9. 未决问题(需产品/负责人拍板)
+## 9. 未决问题
 
-1. **账号绑定**:手机号账号与 Google 账号是否要能互相绑定/合并?(默认:不绑,各自独立。)
-2. **email 冲突策略**:两个不同 Google 账号返回相同 email 几乎不会发生(Google sub 唯一),
-   但若未来允许 email 登录需定策略。
-3. **Google `picture` 头像**:是否自动拉取为 `avatarUrl`,还是仅新用户默认、之后由用户上传覆盖。
-4. **cli 的 Google 流**:loopback 回调 vs 复用现有 web device flow(后者可免本地端口,
-   与现有 `auth login --web` 一致,倾向后者)。
-5. **合规**:Google 登录页/隐私政策需在 `@infra/design` 的法律文案里补充第三方登录说明。
+**已确认**:账号绑定要做(§2.3);账号**合并**(迁移两个既有账号数据)暂不做。
+
+仍需拍板 / 落地时校验:
+
+1. **账号合并**:当用户想绑的凭证已属于**另一个既有账号**时,当前是**拒绝**(§2.3 冲突
+   规则)。未来是否要提供真正的"合并"(迁移 todo/timeline/device/refresh_token 等)?
+   风险高、需单独设计,本期不做。
+2. **技术校验(阻塞第 4 阶段)**:better-auth 1.6.23 的显式 link/unlink server API 确切名
+   与行为(`accountLinking.trustedProviders` 是否必需、link 是否强制 email 一致)——落地
+   前须用最小 spike 验证,不能凭记忆。
+3. **Google `picture` 头像**:自动拉取为 `avatarUrl`,还是仅新用户默认、之后由用户上传覆盖。
+4. **cli 的 Google 流**:loopback 回调 vs 复用现有 web device flow(后者免本地端口,与
+   `auth login --web` 一致,倾向后者)。
+5. **合规**:Google 登录 + 第三方账号绑定需在 `@infra/design` 法律文案补充说明。
+6. **绑定通知**(可选安全增强):绑定成功后是否向账号既有凭证发通知,以防会话被盗后被
+   静默绑定。
 
 ---
 
