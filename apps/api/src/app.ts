@@ -29,6 +29,7 @@ import {
   type SessionService,
   type UserRepository,
 } from "./routes/auth.routes.js";
+import { createEmailAuthRoutes } from "./routes/email-auth.routes.js";
 import { createMcpRoutes } from "./routes/mcp.routes.js";
 import { createNotificationRoutes } from "./routes/notification.routes.js";
 import { createQrRoutes, type QrTicketStore } from "./routes/qr.routes.js";
@@ -75,6 +76,11 @@ export interface AppDeps {
   rateLimitStore: RateLimitStore;
   /** Delivery channel for OTP codes (a real SMS provider in production). */
   sms: (phone: string, code: string) => Promise<void>;
+  /**
+   * Delivery channel for email-OTP codes (Resend in production; a dev log stub when
+   * unconfigured — see resend-client / server.ts). Backs the email-login endpoints.
+   */
+  sendEmailOtp: (email: string, code: string) => Promise<void>;
   /** APNS client; when present, push is considered configured. Omitted on Workers. */
   apns?: ApnsClient;
   /** APNS host flag, surfaced only in the "configured" log line. */
@@ -181,6 +187,21 @@ export function createApp(deps: AppDeps): Hono<ObsEnv> {
         trustedProxyCount: env.TRUSTED_PROXY_COUNT,
         // The CLI opens `${webBaseUrl}/auth/cli` to approve; BETTER_AUTH_URL is the web origin.
         webBaseUrl: env.BETTER_AUTH_URL,
+      },
+    }),
+  );
+  // Email-OTP login (login == register), sharing the OTP + session + user layers with
+  // the phone flow. `sendEmailOtp` delivers via Resend when configured, else a dev stub.
+  app.route(
+    "/",
+    createEmailAuthRoutes({
+      otp: deps.otp,
+      users: deps.users,
+      sessions: deps.sessions,
+      sendEmailOtp: deps.sendEmailOtp,
+      config: {
+        debugReturnCode: env.OTP_DEBUG_RETURN_CODE,
+        trustedProxyCount: env.TRUSTED_PROXY_COUNT,
       },
     }),
   );

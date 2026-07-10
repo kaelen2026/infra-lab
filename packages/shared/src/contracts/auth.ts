@@ -49,6 +49,18 @@ export const otpCodeSchema = z
   .trim()
   .regex(new RegExp(`^\\d{${OTP_LIMITS.codeLength}}$`), "code must be 6 digits");
 
+// ── Email address (alternative OTP subject) ─────────────────────────────────────
+// Trimmed + lowercased before validation so lookup/storage is case-insensitive
+// (a user typing `Foo@Bar.com` maps to the same account as `foo@bar.com`). Capped
+// at the RFC 5321 practical maximum. Delivery is via Resend (see the API's
+// resend-client); the same OTP service backs both phone and email codes.
+export const emailSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .max(254)
+  .email("must be a valid email address");
+
 // ── Error codes (stable, client-switchable) ───────────────────────────────────
 export const AUTH_ERROR_CODES = [
   "INVALID_REQUEST",
@@ -86,6 +98,16 @@ export const requestOtpSchema = z.object({
 });
 export type RequestOtpInput = z.infer<typeof requestOtpSchema>;
 
+// ── Request: send email OTP ─────────────────────────────────────────────────────
+// The email counterpart of {@link requestOtpSchema}. Same limits, TTL and response
+// shape as the phone flow — only the subject (and delivery channel) differ. The
+// response reuses {@link RequestOtpResponse}.
+export const requestEmailOtpSchema = z.object({
+  email: emailSchema,
+  platform: platformSchema,
+});
+export type RequestEmailOtpInput = z.infer<typeof requestEmailOtpSchema>;
+
 export interface RequestOtpResponse {
   ok: true;
   /** TTL of the freshly issued code. */
@@ -116,6 +138,18 @@ export const verifyOtpSchema = z.object({
 });
 export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
 
+// ── Request: verify email OTP (login == register) ───────────────────────────────
+// The email counterpart of {@link verifyOtpSchema}. On success the server
+// finds-or-creates the account by email and issues a session; the response reuses
+// {@link VerifyOtpResponse}.
+export const verifyEmailOtpSchema = z.object({
+  email: emailSchema,
+  code: otpCodeSchema,
+  platform: platformSchema,
+  device: deviceInfoSchema.optional(),
+});
+export type VerifyEmailOtpInput = z.infer<typeof verifyEmailOtpSchema>;
+
 // ── Request: update a device's push token ───────────────────────────────────────
 // A native install acquires its APNS/FCM/HMS push token asynchronously — usually
 // after login, and it can rotate independently of the session. This endpoint lets an
@@ -141,6 +175,13 @@ export interface AuthUser {
    * `displayName` for presentation. See `docs/plans/google-login.md`.
    */
   phone: string | null;
+  /**
+   * `null` for accounts with no email credential — a phone-OTP or social account
+   * that never signed in with an email. Populated for accounts created via the
+   * email-OTP flow. Additive to the contract: every decoder (TS SDK + native
+   * mirrors) must tolerate its absence/null.
+   */
+  email: string | null;
   displayName: string | null;
   avatarUrl: string | null;
   createdAt: string; // ISO 8601
@@ -400,6 +441,8 @@ export interface ConsumeQrLoginResponse {
 export const AUTH_ROUTES = {
   requestOtp: "/auth/otp/request",
   verifyOtp: "/auth/otp/verify",
+  requestEmailOtp: "/auth/otp/email/request",
+  verifyEmailOtp: "/auth/otp/email/verify",
   refresh: "/auth/refresh",
   logout: "/auth/logout",
   me: "/auth/me",

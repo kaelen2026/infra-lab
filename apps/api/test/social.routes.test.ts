@@ -91,6 +91,7 @@ function setup(opts: { social?: SocialAuthService; seedUser?: UserRecord | null 
   const googleUser: UserRecord = {
     id: GOOGLE_USER_ID,
     phone: null, // a Google-only account has no phone
+    email: null,
     displayName: null,
     avatarUrl: null,
     role: "user",
