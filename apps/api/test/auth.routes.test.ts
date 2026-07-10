@@ -91,7 +91,7 @@ class FakeUserRepository implements UserRepository {
     userId: string | null;
     phone: string | null;
     platform: Platform;
-    ip: string;
+    ip: string | null;
     deviceId?: string;
     success: boolean;
     reason?: string;

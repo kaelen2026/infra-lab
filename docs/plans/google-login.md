@@ -231,9 +231,11 @@ CI——各端改动需本地过门禁,并保证 `phone` 可空后无强解包(`
    - **2b(已实现)**:**web/h5 重定向流** `GET /auth/social/:provider/start`(校验 `redirect`
      同源路径 → `auth.api.signInSocial({ callbackURL, disableRedirect })` 取授权 URL → 302)+
      **BA 回调桥接**(`createAuth` 的 `hooks.after`,gate 于 `path==="/callback/:id" &&
-     params.id && newSession`:读 `newSession.user.id` → 剥离 BA 自身 session cookie、下发
-     `infra.session` cookie,保留 302 `Location`)。桥接抽成纯函数 `bridgeOAuthCallbackSession`
-     单测锁定(不需真跑 OAuth);`/start` 路由 + 适配器走端口 fake 单测。
+     params.id && newSession`:读 `newSession.user` → 剥离 BA 自身 session cookie、下发
+     `infra.session` cookie,保留 302 `Location`)。桥接与原生流**对称**:同样 `ensureProfile`
+     (用 Google `name`/`picture` 建 profile)+ `recordLoginEvent`(`platform=web`、`phone=null`,
+     ip 在回调 hook 处不可得记 `null`;资料/审计为 best-effort,失败不阻塞登录)。桥接抽成纯函数
+     `bridgeOAuthCallbackSession` 单测锁定(不需真跑 OAuth);`/start` 路由 + 适配器走端口 fake 单测。
      > 端到端(真实 Google 码交换)不在 hermetic 范围内 —— BA 的 OAuth 机制属上游、
      > 已被其自身测试覆盖;我们新增的面(URL 生成、cookie 交换、redirect 校验、disabled)
      > 均已直测。真实联调随 stage 3 UI + 真凭证进行,并需保证 `BETTER_AUTH_URL`/回调 origin

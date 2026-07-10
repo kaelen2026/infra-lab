@@ -30,15 +30,27 @@ export interface CreateAuthOptions {
   };
   /**
    * Web-redirect session bridge. Called after a social OAuth **callback** completes and
-   * Better Auth has minted its own session, with the signed-in `userId`. Returns the
-   * `Set-Cookie` value for OUR `infra.session`; the callback response then carries only
-   * our cookie (Better Auth's own session cookies are stripped), so a Google web
-   * session is authored by our `SessionService` and is identical downstream to an OTP
-   * one — including logout, which clears `infra.session`. Omitted ⇒ no bridge (the
-   * native ID-token flow reads the returned user directly and needs none). Injected by
-   * the API composition (server.ts), so this package stays free of the session layer.
+   * Better Auth has minted its own session, with the signed-in user (id + the provider
+   * name/avatar hints Better Auth stored). Returns the `Set-Cookie` value for OUR
+   * `infra.session`; the callback response then carries only our cookie (Better Auth's
+   * own session cookies are stripped), so a Google web session is authored by our
+   * `SessionService` and is identical downstream to an OTP one — including logout, which
+   * clears `infra.session`. The callback also gets to run async side effects
+   * (provision the `profile` row from the hints, audit a `login_event`) — symmetric with
+   * the native ID-token route. Omitted ⇒ no bridge (native reads the returned user
+   * directly). Injected by the API composition (server.ts), so this package stays free
+   * of the session layer.
    */
-  onOAuthCallbackSession?: (userId: string) => string | null;
+  onOAuthCallbackSession?: (info: OAuthCallbackUser) => string | null | Promise<string | null>;
+}
+
+/** The signed-in user handed to the web-redirect bridge callback. */
+export interface OAuthCallbackUser {
+  userId: string;
+  /** Provider display name (Google `name`), for first-time profile provisioning. */
+  name: string | null;
+  /** Provider avatar (Google `picture`), for first-time profile provisioning. */
+  image: string | null;
 }
 
 // Better Auth's own session-related cookies (names carry the cookiePrefix + any
@@ -59,7 +71,9 @@ export interface OAuthCallbackCtx {
   path?: string;
   params?: Record<string, string | undefined>;
   context: {
-    newSession?: { user?: { id?: string } } | null;
+    newSession?: {
+      user?: { id?: string; name?: string | null; image?: string | null };
+    } | null;
     responseHeaders?: Headers;
     authCookies?: AuthCookies;
   };
@@ -94,16 +108,20 @@ function readSetCookies(headers: Headers): string[] {
  * the 302 `Location` untouched — so the browser lands authenticated by our session
  * alone, and logout (which clears `infra.session`) stays authoritative.
  */
-export function bridgeOAuthCallbackSession(
+export async function bridgeOAuthCallbackSession(
   ctx: OAuthCallbackCtx,
-  mint: (userId: string) => string | null,
-): void {
+  mint: (info: OAuthCallbackUser) => string | null | Promise<string | null>,
+): Promise<void> {
   if (ctx.path !== "/callback/:id" || !ctx.params?.id) return;
-  const userId = ctx.context.newSession?.user?.id;
-  if (!userId) return;
+  const user = ctx.context.newSession?.user;
+  if (!user?.id) return;
   const headers = ctx.context.responseHeaders;
   if (!headers) return;
-  const cookie = mint(userId);
+  const cookie = await mint({
+    userId: user.id,
+    name: user.name ?? null,
+    image: user.image ?? null,
+  });
   if (!cookie) return;
 
   const baNames = collectBaCookieNames(ctx.context.authCookies);
@@ -164,7 +182,7 @@ export function createAuth(options: CreateAuthOptions) {
       ? {
           hooks: {
             after: createAuthMiddleware(async (ctx) => {
-              bridgeOAuthCallbackSession(
+              await bridgeOAuthCallbackSession(
                 ctx as unknown as OAuthCallbackCtx,
                 onOAuthCallbackSession,
               );

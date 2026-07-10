@@ -80,7 +80,8 @@ export interface UserRepository {
     /** `null` for a social sign-in event (Google), which has no phone. */
     phone: string | null;
     platform: Platform;
-    ip: string;
+    /** `null` when the source IP isn't available (e.g. the web OAuth-callback bridge). */
+    ip: string | null;
     deviceId?: string;
     success: boolean;
     /** Auth error code for failed attempts (INVALID_CODE / LOCKED / CODE_EXPIRED). */

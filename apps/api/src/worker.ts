@@ -9,7 +9,12 @@
 // Workers, and push is opt-in.
 
 import type { ExecutionContext, R2Bucket } from "@cloudflare/workers-types";
-import { createAuth, createCliDeviceFlowService, createOtpService } from "@infra/auth";
+import {
+  createAuth,
+  createCliDeviceFlowService,
+  createOtpService,
+  type OAuthCallbackUser,
+} from "@infra/auth";
 import { createNeonDb, schema } from "@infra/db/neon";
 import { googleConfigFromEnv, parseCoreEnv } from "@infra/env/core";
 import {
@@ -89,9 +94,11 @@ function buildApp(env: WorkerEnv): Hono<ObsEnv> {
   const redis = createUpstashRedis(env.UPSTASH_REDIS_REST_URL, env.UPSTASH_REDIS_REST_TOKEN);
   const otpStore = createUpstashOtpStore(redis);
 
+  const users = createUserRepository(db);
+
   const googleConfig = googleConfigFromEnv(core);
   // Late-bound bridge — see server.ts for the why (auth precedes sessions).
-  let mintWebSessionCookie: ((userId: string) => string) | null = null;
+  let bridgeWebSession: ((info: OAuthCallbackUser) => Promise<string | null>) | null = null;
   const auth = createAuth({
     db,
     schema,
@@ -102,7 +109,8 @@ function buildApp(env: WorkerEnv): Hono<ObsEnv> {
     ...(googleConfig
       ? {
           google: googleConfig,
-          onOAuthCallbackSession: (userId) => mintWebSessionCookie?.(userId) ?? null,
+          onOAuthCallbackSession: async (info) =>
+            bridgeWebSession ? bridgeWebSession(info) : null,
         }
       : {}),
   });
@@ -114,7 +122,24 @@ function buildApp(env: WorkerEnv): Hono<ObsEnv> {
     cookie: { name: "infra.session", secure: core.COOKIE_SECURE, domain: core.COOKIE_DOMAIN },
     ttl: { webSeconds: 30 * DAY, accessSeconds: 15 * 60, refreshSeconds: 30 * DAY },
   });
-  mintWebSessionCookie = (userId) => sessions.mintWebSessionCookie(userId);
+  // Provision profile + audit + mint our cookie on the Google web callback (see server.ts).
+  bridgeWebSession = async ({ userId, name, image }) => {
+    try {
+      await users.ensureProfile(userId, { displayName: name, avatarUrl: image });
+      await users.recordLoginEvent({
+        userId,
+        phone: null,
+        platform: "web",
+        ip: null,
+        success: true,
+      });
+    } catch (err) {
+      log.warn("google web sign-in: profile/audit side-effect failed", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+    return sessions.mintWebSessionCookie(userId);
+  };
 
   // OTP delivery stub — mirrors server.ts: the code is surfaced only under the dev
   // debug flag, never in a production-like config.
@@ -131,7 +156,7 @@ function buildApp(env: WorkerEnv): Hono<ObsEnv> {
     auth,
     otp: createOtpService({ store: otpStore, secret: core.OTP_SECRET }),
     cliDeviceFlow: createCliDeviceFlowService({ store: otpStore, secret: core.OTP_SECRET }),
-    users: createUserRepository(db),
+    users,
     todos: createTodoRepository(db),
     timeline: createTimelineRepository(db),
     admin: createAdminRepository(db),
