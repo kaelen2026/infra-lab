@@ -10,8 +10,8 @@ arguments, which is what makes the route/OTP tests hermetic.
 **Auth flow.** Our Redis OTP service is the **sole authority** for code issuance/verification and all
 limits (TTL 300s, 60s resend cooldown, 10/day per phone, 30/hour per IP, lockout after 5 wrong for 600s).
 Codes are stored only as HMAC-SHA256 hashes (`OTP_SECRET`) and deleted immediately on success (single-use).
-Redis key shapes live in `OTP_KEYS` (`otp:code|attempt|cooldown|lock|daily|ip`). Better Auth owns the
-identity model (Drizzle adapter + `bearer()` plugin) and session resolution.
+Redis key shapes live in `OTP_KEYS` (`otp:code|attempt|cooldown|lock|daily|ip`). Better Auth verifies social
+identities and owns compatible core tables; `SessionService` is the sole authority for product sessions.
 
 **Runtime guardrails.** Core env parsing (`packages/env/src/core.ts`) is part of the auth boundary, not
 just configuration plumbing. In production the API refuses to boot when `OTP_DEBUG_RETURN_CODE` is enabled,
@@ -26,8 +26,9 @@ application routes.
 - native → response body carries `accessToken` (15-min HS256 JWT) + opaque `refreshToken`
   (30-day, stored **hashed** in the `refresh_token` table, **rotated** on each `/auth/refresh` — the old
   token is revoked via `revoked_at`/`replaced_by`).
-- `requireUser(headers)` tries Better Auth `auth.api.getSession` first, then falls back to verifying our
-  JWT from the Bearer header or the cookie — so **both Cookie and Bearer resolve through one guard**.
+- `requireUser(headers)` verifies the application JWT from the Bearer header or the `infra.session` cookie —
+  so **both Cookie and Bearer resolve through one guard**. Product routes never fall back to Better Auth
+  sessions and `/api/auth/*` is not mounted.
 
 **Routes** (`apps/api/src/routes/auth.routes.ts`): `/auth/otp/request`, `/auth/otp/verify`,
 `/auth/refresh`, `/auth/logout`, `/auth/me`, profile editing (`PATCH`+`PUT /auth/profile` for the

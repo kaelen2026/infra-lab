@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/kaelen2026/infra-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/kaelen2026/infra-lab/actions/workflows/ci.yml)
 
-手机号 + 验证码的注册/登录系统。**登录即注册**，认证核心使用 [Better Auth](https://www.better-auth.com/)，
+手机号 + 验证码的注册/登录系统。**登录即注册**，应用会话由 `SessionService` 统一签发与校验，
 一套后端服务 **Web / iOS / Android / HarmonyOS / CLI** 五端（另有移动端 **H5**，作为浏览器客户端复用
 Web 的 Cookie 传输）。五端共享同一套 `AuthClient` 契约与 `@infra/sdk` 参考实现，仅传输与安全存储不同。
 
@@ -92,7 +92,7 @@ node scripts/verify-redis.mjs        # 针对运行中的 Redis 跑验收断言�
 packages/
   shared/   契约单一真相：Zod schema、DTO、错误码、限值、路由常量、Platform 枚举、
             Auth/QR/Todo/Timeline/Admin/Legal Client 接口与 URL 构造
-  auth/     OTP 领域服务（定义 OtpStore 端口）、CLI device flow、require-user、Better Auth 集成；testing 导出 FakeRedis
+  auth/     OTP 领域服务（定义 OtpStore 端口）、CLI device flow；testing 导出 FakeRedis
   redis/    OtpStore 的 ioredis 适配器（依赖 @infra/auth 的类型）；子路径 /upstash 为 Workers 的 Upstash REST 适配器
   db/       Drizzle schema（schema/{auth,todo,timeline}.ts + schema/index.ts 桶）+ postgres-js 客户端 + drizzle.config；子路径 /neon 为 Workers 的 Neon serverless 客户端
   sdk/      各端共用的 JS 参考实现：createAuthClient / createTodoClient /
@@ -125,7 +125,8 @@ docs/deployment.md                     免费基础服务层 + 本地容器化�
 Redis 驱动；`@infra/redis` 实现该端口（因此是 redis 依赖 auth，而非反向）。`createOtpService` /
 `createAuthRoutes` / `createSessionService` / `createUserRepository` / `createTodoRoutes` / `createTimelineRoutes`
 均通过参数注入依赖，测试用 `FakeRedis` 与内存仓储即可全程脱离外部服务。Redis OTP service 是验证码与限流的
-**唯一权威**，Better Auth 负责身份模型（Drizzle 适配器 + `bearer()` 插件）与会话解析。跨文件的更完整架构说明
+**唯一权威**；`SessionService` 负责应用 Cookie、Bearer access token 与 refresh token 的签发、解析和撤销。
+Better Auth 负责社交身份验证与兼容核心表，不参与产品路由会话解析。跨文件的更完整架构说明
 见 [`.claude/docs/architecture.md`](.claude/docs/architecture.md)。
 
 ## HTTP 接口

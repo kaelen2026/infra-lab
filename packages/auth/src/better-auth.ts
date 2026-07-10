@@ -30,16 +30,12 @@ export interface CreateAuthOptions {
 }
 
 /**
- * Better Auth instance for phone-OTP sessions.
+ * Better Auth adapter for social identity verification and the existing identity schema.
  *
- * - `bearer()` lets native clients send `Authorization: Bearer <token>`; the plugin
- *   maps it onto the session cookie internally, so `auth.api.getSession({ headers })`
- *   resolves both web (cookie) and native (bearer) requests — that is what backs
- *   `requireUser`.
- * - Web cookies are HttpOnly + SameSite=Lax by default; we set `secure` from config.
- *
- * Sign-in itself is driven by our own Redis OTP flow (see {@link import("./otp.js")}).
- * After a code is verified we mint a session through `auth.$context.internalAdapter`.
+ * The social-auth service uses it to verify provider credentials and provision users,
+ * then discards any Better Auth session result. Product sessions are issued and
+ * verified exclusively by API `SessionService`, so this is not a second session
+ * authority.
  */
 export function createAuth(options: CreateAuthOptions) {
   return betterAuth({
