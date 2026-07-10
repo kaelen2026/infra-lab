@@ -15,6 +15,6 @@
     "@infra/shared": "workspace:*"
   },
   "devDependencies": {
-    "miniprogram-api-typings": "^4.0.9"
+    "miniprogram-api-typings": "^5.2.1"
   }
 }
