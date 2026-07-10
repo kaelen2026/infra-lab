@@ -9,7 +9,7 @@
 | --- | --- | --- | --- |
 | API (`apps/api`) | https://api.w3ctech.dev | Cloudflare Workers Free | ✅ 已上线(`/health`、`/ready` 200) |
 | Web (`apps/web`) | https://w3ctech.dev | Vercel(项目 `w3ctech-web`,apex) | ✅ 已上线 |
-| H5 (`apps/h5`) | https://h5.w3ctech.dev | Cloudflare Pages Free | ⏳ 未部署(仅作为 `TRUSTED_ORIGINS` 预留) |
+| H5 (`apps/h5`) | https://h5.w3ctech.dev | Cloudflare Pages Free(项目 `w3ctech-h5`) | ✅ 已部署(https://w3ctech-h5.pages.dev);自定义域待补一条 DNS CNAME + 证书签发 |
 | Postgres | — | Neon Free | serverless driver,**pooled** 连接串 |
 | Redis | — | Upstash Free | REST 客户端(非 `redis://`) |
 | 对象存储 | — | Cloudflare R2 | 桶 `infra-lab-uploads`(bound as `env.IMAGES`) |
@@ -22,6 +22,13 @@
 - **Worker secrets**(`DATABASE_URL` pooled / `OTP_SECRET` / `BETTER_AUTH_SECRET` / `UPSTASH_REDIS_REST_URL` /
   `UPSTASH_REDIS_REST_TOKEN`)经 `wrangler secret put` 带外设置,**不入库**。DB 迁移用 Neon 的
   **direct/unpooled** 串跑(迁移要拿 `pg_advisory_lock`,PgBouncer 事务池会破坏它)。
+- **H5 跨源(拓扑 B)已被 API 支持**:h5 用 `VITE_API_URL=https://api.w3ctech.dev` 构建,调 API 跨
+  *origin* 但同 *site*(都在 `w3ctech.dev`)——`SameSite=Lax` cookie 照发;CORS 也放行,因为
+  `app.ts` 的 `cors({ origin: env.TRUSTED_ORIGINS })` 已含 `https://h5.w3ctech.dev`。无需改 API。
+  (`apps/h5/docs/deployment.md` 里"API 只反射单一 origin"是旧描述,当前反射整个 TRUSTED_ORIGINS 白名单。)
+- **Pages SPA 回退默认开启**:`/legal/*`、`/t/:id` 等深链直接 200 返回 `index.html`,无需 `_redirects`。
+- **Pages 自定义域**:经 API 加域*不会*自动建 DNS。需在 `w3ctech.dev` 区手动加一条
+  `CNAME h5 → w3ctech-h5.pages.dev`(Proxied),证书随后自动签发。
 
 ## Free-Tier Baseline
 
