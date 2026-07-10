@@ -24,6 +24,9 @@ private final class FakeAuthClient: AuthClient {
         verifiedCodes.append(code)
         return try verifyOtpResult.get()
     }
+    func signInWithApple(idToken: String, nonce: String?, device: DeviceInfo?) async throws -> AuthUser {
+        throw Unscripted()
+    }
     func refresh() async throws -> AuthTokens? { try refreshResult.get() }
     func me() async throws -> AuthUser {
         guard !meResults.isEmpty else { throw Unscripted() }

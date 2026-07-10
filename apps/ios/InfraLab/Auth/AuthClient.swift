@@ -6,6 +6,9 @@ import Foundation
 protocol AuthClient {
     func requestOtp(phone: String) async throws -> RequestOtpResponse
     func verifyOtp(phone: String, code: String, device: DeviceInfo?) async throws -> VerifyOtpResponse
+    /// Exchange a Sign in with Apple identity token for a session (login == register).
+    /// `nonce` is the RAW nonce whose SHA-256 was bound into the Apple request.
+    func signInWithApple(idToken: String, nonce: String?, device: DeviceInfo?) async throws -> AuthUser
     /// Reads the Keychain refresh token and rotates it; nil when none is stored.
     func refresh() async throws -> AuthTokens?
     func me() async throws -> AuthUser
@@ -77,6 +80,19 @@ final class HTTPAuthClient: AuthClient {
         let res: VerifyOtpResponse = try await send(AuthRoutes.verifyOtp, method: "POST", body: input)
         if let tokens = res.tokens { store.save(tokens) }
         return res
+    }
+
+    func signInWithApple(idToken: String, nonce: String?, device: DeviceInfo?) async throws -> AuthUser {
+        let input = SocialIdTokenInput(
+            idToken: idToken, accessToken: nil, nonce: nonce, platform: platform, device: device
+        )
+        let res: SocialAuthResponse = try await send(
+            AuthRoutes.socialToken("apple"), method: "POST", body: input
+        )
+        // Native → Bearer tokens; persist them exactly like verifyOtp so the shared
+        // refresher/transport pick them up. (A cookie platform would omit tokens.)
+        if let tokens = res.tokens { store.save(tokens) }
+        return res.user
     }
 
     func refresh() async throws -> AuthTokens? {

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { apnsConfigFromEnv, googleConfigFromEnv, parseCoreEnv } from "../src/core.js";
+import {
+  apnsConfigFromEnv,
+  appleConfigFromEnv,
+  googleConfigFromEnv,
+  parseCoreEnv,
+} from "../src/core.js";
 
 const base = {
   DATABASE_URL: "postgres://app:app@localhost:5432/app",
@@ -347,5 +352,22 @@ describe("Google sign-in config", () => {
         parseCoreEnv({ ...base, GOOGLE_CLIENT_ID: "", GOOGLE_CLIENT_SECRET: "" }),
       ),
     ).toBeNull();
+  });
+});
+
+describe("Apple sign-in config", () => {
+  it("appleConfigFromEnv returns null when unset (Apple disabled)", () => {
+    expect(appleConfigFromEnv(parseCoreEnv(base))).toBeNull();
+  });
+
+  it("builds config from the single bundle-id var (no secret to pair)", () => {
+    const cfg = appleConfigFromEnv(
+      parseCoreEnv({ ...base, APPLE_CLIENT_ID: "dev.w3ctech.infralab" }),
+    );
+    expect(cfg).toEqual({ clientId: "dev.w3ctech.infralab" });
+  });
+
+  it("treats an empty-string value as unset", () => {
+    expect(appleConfigFromEnv(parseCoreEnv({ ...base, APPLE_CLIENT_ID: "" }))).toBeNull();
   });
 });

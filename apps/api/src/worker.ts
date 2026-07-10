@@ -16,7 +16,7 @@ import {
   type OAuthCallbackUser,
 } from "@infra/auth";
 import { createNeonDb, schema } from "@infra/db/neon";
-import { googleConfigFromEnv, parseCoreEnv } from "@infra/env/core";
+import { appleConfigFromEnv, googleConfigFromEnv, parseCoreEnv } from "@infra/env/core";
 import {
   createUpstashOtpStore,
   createUpstashRateLimitStore,
@@ -52,6 +52,8 @@ export interface WorkerEnv {
   // Google sign-in (optional secrets; both-or-neither, enforced by parseCoreEnv).
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
+  // Apple sign-in (native ID-token flow; single optional var = the app bundle id).
+  APPLE_CLIENT_ID?: string;
   // Vars ([vars] in wrangler.toml)
   BETTER_AUTH_URL: string;
   NODE_ENV?: string;
@@ -97,6 +99,7 @@ function buildApp(env: WorkerEnv): Hono<ObsEnv> {
   const users = createUserRepository(db);
 
   const googleConfig = googleConfigFromEnv(core);
+  const appleConfig = appleConfigFromEnv(core);
   // Late-bound bridge — see server.ts for the why (auth precedes sessions).
   let bridgeWebSession: ((info: OAuthCallbackUser) => Promise<string | null>) | null = null;
   const auth = createAuth({
@@ -112,6 +115,9 @@ function buildApp(env: WorkerEnv): Hono<ObsEnv> {
           onOAuthCallbackSession: async (info) =>
             bridgeWebSession ? bridgeWebSession(info) : null,
         }
+      : {}),
+    ...(appleConfig
+      ? { apple: { clientId: appleConfig.clientId, appBundleIdentifier: appleConfig.clientId } }
       : {}),
   });
   const sessions = createSessionService({
@@ -161,7 +167,10 @@ function buildApp(env: WorkerEnv): Hono<ObsEnv> {
     sessions,
     social: createSocialAuthService({
       auth,
-      enabledProviders: new Set(googleConfig ? (["google"] as const) : []),
+      enabledProviders: new Set([
+        ...(googleConfig ? (["google"] as const) : []),
+        ...(appleConfig ? (["apple"] as const) : []),
+      ]),
     }),
     qrTickets: createRedisQrTicketStore(otpStore),
     rateLimitStore: createUpstashRateLimitStore(redis),

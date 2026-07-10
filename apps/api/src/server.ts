@@ -14,7 +14,12 @@ import {
   type OAuthCallbackUser,
 } from "@infra/auth";
 import { createDb, schema } from "@infra/db";
-import { apnsConfigFromEnv, googleConfigFromEnv, loadCoreEnv } from "@infra/env/core";
+import {
+  apnsConfigFromEnv,
+  appleConfigFromEnv,
+  googleConfigFromEnv,
+  loadCoreEnv,
+} from "@infra/env/core";
 import { createRedis, createRedisOtpStore, createRedisRateLimitStore } from "@infra/redis";
 import { createApp } from "./app.js";
 import { createLogger } from "./observability/logger.js";
@@ -44,8 +49,10 @@ const redis = createRedis(env.REDIS_URL, {
 });
 const users = createUserRepository(db);
 
-// Google sign-in is opt-in: enabled only when both GOOGLE_CLIENT_ID/SECRET are set.
+// Social sign-in is opt-in per provider: Google when GOOGLE_CLIENT_ID/SECRET are set,
+// Apple (native ID-token) when APPLE_CLIENT_ID is set.
 const googleConfig = googleConfigFromEnv(env);
+const appleConfig = appleConfigFromEnv(env);
 // Late-bound: the Google web-redirect bridge (hooks.after in createAuth) provisions the
 // profile + audits + mints our session cookie via `users`/`sessions`, and `sessions` is
 // constructed AFTER `auth` (it depends on it). A mutable holder breaks the cycle; the
@@ -64,10 +71,16 @@ const auth = createAuth({
         onOAuthCallbackSession: async (info) => (bridgeWebSession ? bridgeWebSession(info) : null),
       }
     : {}),
+  ...(appleConfig
+    ? { apple: { clientId: appleConfig.clientId, appBundleIdentifier: appleConfig.clientId } }
+    : {}),
 });
 const social = createSocialAuthService({
   auth,
-  enabledProviders: new Set(googleConfig ? (["google"] as const) : []),
+  enabledProviders: new Set([
+    ...(googleConfig ? (["google"] as const) : []),
+    ...(appleConfig ? (["apple"] as const) : []),
+  ]),
 });
 // The OTP + CLI device-flow services and QR ticket store share the one Redis
 // connection; their keys live in disjoint namespaces (otp:* / qr:* / rl:*).

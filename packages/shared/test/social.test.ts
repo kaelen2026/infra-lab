@@ -11,10 +11,12 @@ describe("social route paths", () => {
   it("builds the per-provider start / token paths", () => {
     expect(socialStartPath("google")).toBe("/auth/social/google/start");
     expect(socialTokenPath("google")).toBe("/auth/social/google/token");
+    expect(socialTokenPath("apple")).toBe("/auth/social/apple/token");
   });
 
-  it("exposes google as the only provider (for now)", () => {
-    expect([...SOCIAL_PROVIDERS]).toEqual(["google"]);
+  it("exposes google + apple as the providers", () => {
+    // apple is native-only for now (iOS Sign in with Apple); its web redirect is deferred.
+    expect([...SOCIAL_PROVIDERS]).toEqual(["google", "apple"]);
   });
 });
 

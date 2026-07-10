@@ -110,7 +110,8 @@ private func monogram(_ user: AuthUser) -> String {
     if let name = user.displayName?.trimmingCharacters(in: .whitespaces), !name.isEmpty {
         return String(name.prefix(1)).uppercased()
     }
-    let digits = user.phone.filter(\.isNumber)
+    // A social-only account (Sign in with Apple) has no phone → fall back to "··".
+    let digits = (user.phone ?? "").filter(\.isNumber)
     return digits.isEmpty ? "··" : String(digits.suffix(2))
 }
 
@@ -127,10 +128,13 @@ struct ProfileCard: View {
                     .font(.title3.weight(.medium))
                     .foregroundStyle(DesignTokens.textPrimary)
                 // Privacy-masked (138****8000) — the account owner already knows
-                // their number; masking keeps a shoulder-surfer from reading it.
-                Text(Format.maskedPhone(user.phone))
-                    .font(.subheadline.monospaced())
-                    .foregroundStyle(DesignTokens.textSecondary)
+                // their number; masking keeps a shoulder-surfer from reading it. A
+                // social-only account (Sign in with Apple) has no phone to show.
+                if let phone = user.phone {
+                    Text(Format.maskedPhone(phone))
+                        .font(.subheadline.monospaced())
+                        .foregroundStyle(DesignTokens.textSecondary)
+                }
                 Text("注册于 \(Format.date(user.createdAt))")
                     .font(.caption.monospaced())
                     .foregroundStyle(DesignTokens.textSecondary)

@@ -88,6 +88,9 @@ const SWIFT_CASE: Record<string, string> = {
   QR_NOT_FOUND: "qrNotFound",
   QR_ALREADY_USED: "qrAlreadyUsed",
   QR_NOT_APPROVED: "qrNotApproved",
+  SOCIAL_PROVIDER_DISABLED: "socialProviderDisabled",
+  SOCIAL_TOKEN_INVALID: "socialTokenInvalid",
+  SOCIAL_ACCOUNT_ERROR: "socialAccountError",
 };
 
 function emitIos(): void {
@@ -156,6 +159,10 @@ enum AuthCopy {
         static let placeholder = ${q(COPY.phone.placeholder)}
         static let submit = ${q(COPY.phone.submit)}
         static let submitBusy = ${q(COPY.phone.submitBusy)}
+    }
+
+    enum Social {
+        static let orDivider = ${q(COPY.social.divider)}
     }
 
     enum Code {

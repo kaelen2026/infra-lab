@@ -3,8 +3,8 @@ import type { AuthTokens, AuthUser } from "./auth";
 import { deviceInfoSchema, platformSchema } from "./auth";
 
 /**
- * Social sign-in contracts (Google today; the list is an extension point for
- * Apple / GitHub / … later). Shared by the API and every client SDK — the single
+ * Social sign-in contracts (Google + Apple today; the list is an extension point
+ * for GitHub / … later). Shared by the API and every client SDK — the single
  * source of truth for request/response shapes, routes and the provider list.
  *
  * Two transports, one identity outcome (see `docs/plans/google-login.md`):
@@ -22,12 +22,15 @@ import { deviceInfoSchema, platformSchema } from "./auth";
  */
 
 // ── Providers (an `as const` tuple → the union, one extension point) ────────────
-export const SOCIAL_PROVIDERS = ["google"] as const;
+// `apple` ships native-only for now (iOS `AuthenticationServices` → ID-token flow);
+// its web redirect + Services-ID/`.p8` client-secret path is deferred like Google's.
+export const SOCIAL_PROVIDERS = ["google", "apple"] as const;
 export const socialProviderSchema = z.enum(SOCIAL_PROVIDERS);
 export type SocialProvider = (typeof SOCIAL_PROVIDERS)[number];
 
 // ── Native: exchange a provider ID token for a session ──────────────────────────
-// The client acquires the ID token via the platform's Google SDK, then POSTs it.
+// The client acquires the ID token via the platform's provider SDK (Google Sign-In,
+// Apple `AuthenticationServices`, …), then POSTs it.
 // `device` mirrors the OTP verify body so a native install registers its device row
 // in the same shape. The provider itself is a path parameter, not a body field.
 export const socialIdTokenSchema = z.object({

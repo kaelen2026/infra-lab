@@ -87,6 +87,15 @@ const CoreEnvSchema = z
     // Never logged. See packages/auth/src/better-auth.ts + routes/social.routes.ts.
     GOOGLE_CLIENT_ID: optionalNonEmpty,
     GOOGLE_CLIENT_SECRET: optionalNonEmpty,
+    // ── Apple sign-in (Sign in with Apple), native-only for now ───────────────────
+    // Enables the Apple login entry point for the native ID-token flow (iOS today).
+    // Single, optional var: the on-device idToken's `aud` is the app bundle id, so we
+    // verify against it (Better Auth `appBundleIdentifier`). Unlike Google there is no
+    // both-or-neither pair — the web authorization-code flow (Services ID + `.p8`
+    // client secret) is deferred, so no APPLE_CLIENT_SECRET is needed yet. Set this to
+    // the iOS bundle id (dev.w3ctech.infralab). Unset → Apple disabled, its route
+    // answers SOCIAL_PROVIDER_DISABLED. See packages/auth/src/better-auth.ts.
+    APPLE_CLIENT_ID: optionalNonEmpty,
     // Global request-body ceiling (bytes). A body larger than this is rejected with a
     // 413 before the handler runs, bounding the memory one request can force the API to
     // buffer. Must stay above the largest legitimate body — a timeline image upload
@@ -333,6 +342,26 @@ export interface GoogleEnvConfig {
 export function googleConfigFromEnv(env: CoreEnv): GoogleEnvConfig | null {
   if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) return null;
   return { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET };
+}
+
+export interface AppleEnvConfig {
+  /**
+   * The audience the native ID token is verified against — the iOS app bundle id
+   * (`dev.w3ctech.infralab`). Passed to Better Auth as both `clientId` and
+   * `appBundleIdentifier`; the on-device Sign in with Apple idToken carries this
+   * bundle id in its `aud`, not a Services ID. Never logged.
+   */
+  clientId: string;
+}
+
+/**
+ * Build Apple sign-in config from validated env, or `null` when it is not
+ * configured (`APPLE_CLIENT_ID` unset → the provider is simply disabled). Native
+ * ID-token verification needs only the audience, so there is no secret to pair.
+ */
+export function appleConfigFromEnv(env: CoreEnv): AppleEnvConfig | null {
+  if (!env.APPLE_CLIENT_ID) return null;
+  return { clientId: env.APPLE_CLIENT_ID };
 }
 
 let cached: CoreEnv | undefined;
