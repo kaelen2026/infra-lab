@@ -10,16 +10,30 @@ name: Deploy
 #   DEPLOY_H5   → H5    → Cloudflare Pages
 #   DEPLOY_WEB  → Web   → Vercel
 #
-# Trigger: a pushed version tag (`git tag v0.3.0 && git push origin v0.3.0`), cut
-# from `main` after a `dev → main` promotion PR. Merging into `main` does NOT
-# deploy — it only runs the CI quality gate; the tag is the release/deploy gate.
-# release-images.yml builds the versioned GHCR images off the same tag.
-# `workflow_dispatch` remains for manual re-runs against the checked-out ref.
+# Trigger: a pushed PER-APP version tag `{app}_v{version}` where {version} matches
+# the app's package.json (e.g. api_v0.1.0), cut from `main` (all changes reach
+# `main` through a PR). The app segment selects which target deploys — `api_v*` →
+# API, `web_v*` → Web, `h5_v*` → H5 — so each service ships independently. Merging
+# into `main` does NOT deploy; the tag is the release gate. release-images.yml
+# builds the matching GHCR image off the same tag.
+#
+#   git tag api_v0.1.0 && git push origin api_v0.1.0   # deploy API only
+#   git tag web_v0.1.0 && git push origin web_v0.1.0   # deploy Web only
+#   git tag h5_v0.1.0  && git push origin h5_v0.1.0     # deploy H5 only
+#
+# `workflow_dispatch` takes a `target` input (api|web|h5) for a manual re-run
+# against the checked-out ref.
 
 on:
   push:
-    tags: ["v*"]
+    tags: ["api_v*", "web_v*", "h5_v*"]
   workflow_dispatch:
+    inputs:
+      target:
+        description: "Which app to deploy"
+        required: true
+        type: choice
+        options: [api, web, h5]
 
 # Never cancel an in-flight deploy; let each finish so a half-applied rollout can't happen.
 concurrency:
@@ -33,12 +47,37 @@ permissions:
   contents: read
 
 jobs:
+  # Enforce the tag ↔ source invariant before anything ships: the version in
+  # `{app}_v{version}` must equal that app's package.json version. On manual
+  # dispatch there is no release version, so the check is a no-op.
+  verify-version:
+    name: Verify tag version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Check tag matches package.json
+        if: github.event_name == 'push'
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          app="${REF_NAME%%_*}"         # api_v0.1.0 -> api
+          version="${REF_NAME#*_v}"     # api_v0.1.0 -> 0.1.0
+          pkg_version="$(node -p "require('./apps/${app}/package.json').version")"
+          if [ "$pkg_version" != "$version" ]; then
+            echo "::error::tag version '$version' != apps/${app}/package.json version '$pkg_version' — bump the package.json or fix the tag"
+            exit 1
+          fi
+          echo "apps/${app} package.json version $pkg_version matches tag '$REF_NAME'."
+
   # Apply versioned migrations against the target (Neon) BEFORE the new API rolls out.
   # Runs on the standard Postgres connection string (sslmode=require), not the
   # serverless driver — drizzle-kit needs a direct connection.
   db-migrate:
     name: DB migrate (Neon)
-    if: vars.DEPLOY_API == 'true'
+    if: vars.DEPLOY_API == 'true' && (startsWith(github.ref_name, 'api_v') || inputs.target == 'api')
+    needs: verify-version
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -66,7 +105,7 @@ jobs:
   # out-of-band via `wrangler secret put` / the dashboard, not here.
   deploy-api:
     name: Deploy API (Cloudflare Workers)
-    if: vars.DEPLOY_API == 'true'
+    if: vars.DEPLOY_API == 'true' && (startsWith(github.ref_name, 'api_v') || inputs.target == 'api')
     needs: db-migrate
     runs-on: ubuntu-latest
     steps:
@@ -102,7 +141,8 @@ jobs:
   # so it is a build-time variable, not a runtime secret.
   deploy-h5:
     name: Deploy H5 (Cloudflare Pages)
-    if: vars.DEPLOY_H5 == 'true'
+    if: vars.DEPLOY_H5 == 'true' && (startsWith(github.ref_name, 'h5_v') || inputs.target == 'h5')
+    needs: verify-version
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -137,7 +177,8 @@ jobs:
   # Directory to apps/web so Vercel's monorepo build resolves the workspace.
   deploy-web:
     name: Deploy Web (Vercel)
-    if: vars.DEPLOY_WEB == 'true'
+    if: vars.DEPLOY_WEB == 'true' && (startsWith(github.ref_name, 'web_v') || inputs.target == 'web')
+    needs: verify-version
     runs-on: ubuntu-latest
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}

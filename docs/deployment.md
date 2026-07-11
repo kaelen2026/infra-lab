@@ -97,34 +97,63 @@ See `.env.free.example` for the full variable list. Platform-specific build sett
 
 ## Branch & release flow
 
-- **Feature branches** (`feat/…`, `fix/…`, …) open PRs into **`dev`** — the default,
-  integration branch. CI (lint · typecheck · build · test) gates every PR.
-- **`dev` is promoted to `main`** by a direct fast-forward push
-  (`git push origin dev:main`) — no PR needed, since CI already gated every change
-  on its way into `dev`. Reaching `main` does not deploy on its own.
-- **Production ships from a version tag.** Cut a tag from `main`
-  (`git tag v0.3.0 && git push origin v0.3.0`); the tag triggers both `deploy.yml`
-  (this pipeline) and `release-images.yml` (versioned GHCR images). Tags are the
-  single release/deploy gate, so a rollback is a re-deploy of an earlier tag.
+- **`main` is the only long-lived branch.** Every change lands through a PR
+  (`feat/…`, `fix/…`, …) — `main` is branch-protected: PR required, CI (lint ·
+  typecheck · build · test) must pass, no direct or force pushes. Merging into
+  `main` does **not** deploy.
+- **Every app releases under a per-app tag `{app}_v{version}`** where `{version}`
+  matches that app's declared version source (`package.json` for TS apps,
+  `apps/{ios,android,harmony}/project.json` for native apps). Cut the tag from `main`:
 
-Branch protection: **`dev`** requires a PR with CI passing (no direct/force push);
-**`main`** allows the direct `dev → main` fast-forward but blocks force pushes and
-deletion.
+  ```
+  git tag api_v0.1.0     && git push origin api_v0.1.0      # → deploy API + build image
+  git tag web_v0.1.0     && git push origin web_v0.1.0      # → deploy Web + build image
+  git tag h5_v0.1.0      && git push origin h5_v0.1.0       # → deploy H5 + build image
+  git tag bot_v0.1.0     && git push origin bot_v0.1.0      # → build image only
+  git tag ios_v0.1.0     && git push origin ios_v0.1.0      # → release marker (ships via store)
+  git tag android_v0.1.0 && git push origin android_v0.1.0  # → release marker
+  git tag harmony_v1.0.0 && git push origin harmony_v1.0.0  # → release marker
+  git tag cli_v0.1.0 / miniprogram_v0.1.0                   # → release marker
+  ```
+
+- **What each tag triggers:** the app segment selects the target, so services ship
+  independently.
+
+  | Tag prefix | `deploy.yml` | `release-images.yml` | `release-tag-check.yml` |
+  | --- | --- | --- | --- |
+  | `api_v*` / `web_v*` / `h5_v*` | ✅ deploy that app | ✅ build that image | ✅ |
+  | `bot_v*` | — | ✅ build image | ✅ |
+  | `ios_v*` / `android_v*` / `harmony_v*` / `cli_v*` / `miniprogram_v*` | — | — | ✅ |
+
+- **`release-tag-check.yml` runs on *every* `*_v*` tag** and enforces the tag ↔
+  version invariant: `{version}` must equal the app's `package.json` / `project.json`
+  version, and for native apps `project.json` (`version` + `buildNumber`) must equal
+  the platform manifest that ships (iOS `project.yml` MARKETING_VERSION /
+  CURRENT_PROJECT_VERSION · Android `build.gradle.kts` versionName / versionCode ·
+  Harmony `app.json5` versionName / versionCode). This is the only gate for the
+  store-shipped / non-hosted apps, so their tags can't drift from the built version.
+
+- Native/cli/miniprogram tags don't run a hosted deploy — the mobile apps release
+  through their stores and cli/miniprogram through their own channels; the tag is a
+  version anchor plus the drift gate.
 
 ## CD pipeline (`.github/workflows/deploy.yml`)
 
 Continuous deployment is a single workflow with one job per target. Every job is
 **opt-in and safe-by-default**: it runs only when its repo *variable* is set to `"true"`
 (Settings → Secrets and variables → Actions → Variables), so the workflow does nothing
-until you enable a target and add its secrets. It triggers on a pushed **version tag**
-(`v*`) and via `workflow_dispatch`.
+until you enable a target and add its secrets. It triggers on a pushed per-app deploy
+tag (`api_v*` / `web_v*` / `h5_v*`) and via `workflow_dispatch` (with a `target` input).
+A `verify-version` job gates the deploys, failing if the tag version ≠ the app's
+`package.json`.
 
 | Job | Target | Runs when | Secrets | Variables |
 | --- | --- | --- | --- | --- |
-| `db-migrate` | Neon (migrations) | `DEPLOY_API=true` | `DATABASE_URL` | — |
-| `deploy-api` | Cloudflare Workers | `DEPLOY_API=true` (after `db-migrate`) | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | — |
-| `deploy-h5` | Cloudflare Pages | `DEPLOY_H5=true` | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | `CF_PAGES_PROJECT`, `VITE_API_URL` |
-| `deploy-web` | Vercel | `DEPLOY_WEB=true` | `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` | — |
+| `verify-version` | (guard) | every run | — | — |
+| `db-migrate` | Neon (migrations) | `DEPLOY_API=true` + `api_v*` | `DATABASE_URL` | — |
+| `deploy-api` | Cloudflare Workers | `DEPLOY_API=true` + `api_v*` (after `db-migrate`) | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | — |
+| `deploy-h5` | Cloudflare Pages | `DEPLOY_H5=true` + `h5_v*` | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | `CF_PAGES_PROJECT`, `VITE_API_URL` |
+| `deploy-web` | Vercel | `DEPLOY_WEB=true` + `web_v*` | `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` | — |
 
 The **Worker's own runtime secrets** are not in the workflow — set them once with
 `wrangler secret put` (or the dashboard): `DATABASE_URL`, `OTP_SECRET`,
@@ -199,12 +228,12 @@ inherits writable ownership on first mount — mount custom upload paths accordi
 
 ### Published images (GHCR)
 
-Pushing a version tag (`git tag v0.3.0 && git push origin v0.3.0`) runs
-`.github/workflows/release-images.yml`, which builds all four images and pushes them to
-`ghcr.io/<owner>/<repo>/{api,web,h5,bot}` tagged `<semver>` + `sha-<commit>`. Deploy hosts can
-then `docker compose pull` instead of building on the box. Web/h5 bake their public API origin
-at build time from the repo Variables `NEXT_PUBLIC_API_URL` / `VITE_API_URL` — one published
-image serves one topology; set both Variables before tagging.
+Pushing a per-app tag (`git tag api_v0.1.0 && git push origin api_v0.1.0`) runs
+`.github/workflows/release-images.yml`, which builds **that one app's** image and pushes it to
+`ghcr.io/<owner>/<repo>/<app>` tagged `<version>` + `latest` + `sha-<commit>` (apps: api, web,
+h5, bot). Deploy hosts can then `docker compose pull` instead of building on the box. Web/h5
+bake their public API origin at build time from the repo Variables `NEXT_PUBLIC_API_URL` /
+`VITE_API_URL` — one published image serves one topology; set both Variables before tagging.
 
 ### Required Runtime Choices
 

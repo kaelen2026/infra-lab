@@ -1,12 +1,12 @@
 name: CI
 
-# Quality gate: every push to the long-lived branches (dev · main) and every PR
-# must pass lint, typecheck, build, and the hermetic test suite before it can be
-# merged. Feature branches land on `dev` via PR; `dev` is promoted to `main` via
-# PR; production ships from a version tag (see docs/deployment.md).
+# Quality gate: every push to `main` and every PR must pass lint, typecheck,
+# build, and the hermetic test suite before it can be merged. `main` is the only
+# long-lived branch and every change reaches it through a PR; production ships
+# from a per-app version tag `v{app}-{date}` (see docs/deployment.md).
 on:
   push:
-    branches: [main, dev]
+    branches: [main]
   pull_request:
 
 # Cancel superseded runs on the same ref to save CI minutes.

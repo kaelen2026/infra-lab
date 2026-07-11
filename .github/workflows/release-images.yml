@@ -1,25 +1,36 @@
 name: release-images
 
-# Build the four runtime images and push them to GHCR, so deploy hosts can
+# Build ONE runtime image per release and push it to GHCR, so deploy hosts can
 # `docker compose pull` a versioned image instead of building on the box
 # (docker-compose.deploy.yml's `--build` stays available for local validation).
 #
-# Trigger: push a version tag (`git tag v0.3.0 && git push origin v0.3.0`), or run
-# manually via workflow_dispatch (tags the images with the branch/sha only).
+# Trigger: a pushed PER-APP version tag `{app}_v{version}` (app ∈ api|web|h5|bot,
+# version matches the app's package.json), cut from `main`. The app segment
+# selects which image builds, so each service releases independently:
 #
-# Images: ghcr.io/<owner>/<repo>/{api,web,h5,bot}:<version|sha>.
+#   git tag api_v0.1.0 && git push origin api_v0.1.0
+#   git tag bot_v0.1.0 && git push origin bot_v0.1.0
+#
+# Or run manually via workflow_dispatch (pick the app; images are tagged with a
+# `manual-<sha>` version). Images: ghcr.io/<owner>/<repo>/<app>:{<version>,latest,sha-<sha>}.
 #
 # Database migrations are NOT run here — the CD workflow (deploy.yml) triggers on
-# the same version tag and orders `db-migrate` before `deploy-api`; self-hosted
-# compose operators run migrations out-of-band per docs/deployment.md.
+# the same tag and orders `db-migrate` before `deploy-api`; self-hosted compose
+# operators run migrations out-of-band per docs/deployment.md.
 #
 # NOTE: web/h5 bake their public API origin into the browser bundle at BUILD time
 # (NEXT_PUBLIC_API_URL / VITE_API_URL, from repo Variables). One published image
 # therefore serves ONE topology; set both Variables before tagging a release.
 on:
   push:
-    tags: ["v*"]
+    tags: ["vapi-*", "vweb-*", "vh5-*", "vbot-*"]
   workflow_dispatch:
+    inputs:
+      app:
+        description: "Which app image to build"
+        required: true
+        type: choice
+        options: [api, web, h5, bot]
 
 # The GITHUB_TOKEN only needs to read the repo and publish packages.
 permissions:
@@ -31,16 +42,59 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-push:
-    name: Build & push ${{ matrix.app }}
+  # Derive the target app + version label from the tag (`v{app}-{date}`) or the
+  # manual dispatch input, and reject anything that isn't a known app.
+  resolve:
+    name: Resolve app + version
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        app: [api, web, h5, bot]
+    outputs:
+      app: ${{ steps.resolve.outputs.app }}
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - name: Resolve from tag / input
+        id: resolve
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          APP_INPUT: ${{ inputs.app }}
+          SHA: ${{ github.sha }}
+        run: |
+          if [ -n "$APP_INPUT" ]; then
+            app="$APP_INPUT"
+            version="manual-${SHA:0:7}"
+          else
+            app="${REF_NAME%%_*}"         # api_v0.1.0 -> api
+            version="${REF_NAME#*_v}"     # api_v0.1.0 -> 0.1.0
+          fi
+          case "$app" in
+            api|web|h5|bot) ;;
+            *) echo "::error::unrecognized app segment '$app' in ref '$REF_NAME' (expected {api|web|h5|bot}_v{version})"; exit 1 ;;
+          esac
+          echo "app=$app" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  build-push:
+    name: Build & push ${{ needs.resolve.outputs.app }}
+    needs: resolve
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+      # Enforce the tag ↔ source invariant: the version in `{app}_v{version}` must
+      # equal that app's package.json version. Skipped for manual dispatch (whose
+      # version is `manual-<sha>`, not a release version).
+      - name: Verify tag version matches package.json
+        if: github.event_name == 'push'
+        env:
+          APP: ${{ needs.resolve.outputs.app }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          pkg_version="$(node -p "require('./apps/${APP}/package.json').version")"
+          if [ "$pkg_version" != "$VERSION" ]; then
+            echo "::error::tag version '$VERSION' != apps/${APP}/package.json version '$pkg_version' — bump the package.json or fix the tag"
+            exit 1
+          fi
+          echo "apps/${APP} package.json version $pkg_version matches the tag."
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
@@ -52,25 +106,24 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Tag scheme: semver tags from the git tag (v1.2.3 → 1.2.3, 1.2, latest),
-      # plus the commit sha for exact pinning; dispatch runs get branch + sha.
+      # Tag scheme: the version segment from the tag (e.g. 20260711), a rolling
+      # `latest` for that app, plus the commit sha for exact pinning.
       - name: Docker metadata
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          images: ghcr.io/${{ github.repository }}/${{ matrix.app }}
+          images: ghcr.io/${{ github.repository }}/${{ needs.resolve.outputs.app }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=ref,event=branch
-            type=sha
+            type=raw,value=${{ needs.resolve.outputs.version }}
+            type=raw,value=latest
+            type=sha,prefix=sha-
 
       # Fail fast instead of silently publishing a web image with the Dockerfile's
       # localhost default baked into the browser bundle (same strictness as the
       # deploy compose's `:?` expansion). h5 is exempt: an empty VITE_API_URL is a
       # legitimate same-origin build.
       - name: Preflight browser-bundle origin
-        if: matrix.app == 'web' && vars.NEXT_PUBLIC_API_URL == ''
+        if: needs.resolve.outputs.app == 'web' && vars.NEXT_PUBLIC_API_URL == ''
         run: >-
           echo "::error::repo Variable NEXT_PUBLIC_API_URL is not set — the published web
           image would call http://localhost:3001 from every browser. Set it under
@@ -83,7 +136,7 @@ jobs:
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
-          file: apps/${{ matrix.app }}/Dockerfile
+          file: apps/${{ needs.resolve.outputs.app }}/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
