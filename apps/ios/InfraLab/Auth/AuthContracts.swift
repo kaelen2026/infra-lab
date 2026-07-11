@@ -68,6 +68,12 @@ enum AuthErrorCode: String, Codable, Sendable {
     case socialTokenInvalid = "SOCIAL_TOKEN_INVALID"
     /// Social sign-in — verified, but the account couldn't be established/loaded.
     case socialAccountError = "SOCIAL_ACCOUNT_ERROR"
+    /// Account linking — this social account is already linked (to this or another user).
+    case socialAlreadyLinked = "SOCIAL_ALREADY_LINKED"
+    /// Account linking — the phone already belongs to another account.
+    case phoneAlreadyLinked = "PHONE_ALREADY_LINKED"
+    /// Account linking — unlinking would leave the account with no way to sign in.
+    case lastCredential = "LAST_CREDENTIAL"
     /// Fallback for any code the server adds before this client is updated.
     case unknown = "UNKNOWN"
 

@@ -91,6 +91,9 @@ const SWIFT_CASE: Record<string, string> = {
   SOCIAL_PROVIDER_DISABLED: "socialProviderDisabled",
   SOCIAL_TOKEN_INVALID: "socialTokenInvalid",
   SOCIAL_ACCOUNT_ERROR: "socialAccountError",
+  SOCIAL_ALREADY_LINKED: "socialAlreadyLinked",
+  PHONE_ALREADY_LINKED: "phoneAlreadyLinked",
+  LAST_CREDENTIAL: "lastCredential",
 };
 
 function emitIos(): void {

@@ -67,9 +67,9 @@ enum AuthCopy {
         case .socialProviderDisabled: return "暂不支持该登录方式。"
         case .socialTokenInvalid: return "第三方账号验证失败，请重试。"
         case .socialAccountError: return "第三方登录失败，请稍后再试。"
-        case .undefined: return "该第三方账号已被绑定，无法重复绑定。"
-        case .undefined: return "该手机号已被占用，无法绑定。"
-        case .undefined: return "至少需保留一种登录方式，无法解绑。"
+        case .socialAlreadyLinked: return "该第三方账号已被绑定，无法重复绑定。"
+        case .phoneAlreadyLinked: return "该手机号已被占用，无法绑定。"
+        case .lastCredential: return "至少需保留一种登录方式，无法解绑。"
             case .unknown: return generic
             }
         }
