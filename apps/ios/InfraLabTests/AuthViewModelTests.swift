@@ -11,9 +11,12 @@ private final class FakeAuthClient: AuthClient {
     var verifyOtpResult: Result<VerifyOtpResponse, Error> = .failure(Unscripted())
     var meResults: [Result<AuthUser, Error>] = []
     var refreshResult: Result<AuthTokens?, Error> = .failure(Unscripted())
+    var signInWithGoogleResult: Result<AuthUser, Error> = .failure(Unscripted())
 
     private(set) var requestedPhones: [String] = []
     private(set) var verifiedCodes: [String] = []
+    private(set) var googleIdTokens: [String] = []
+    private(set) var googleNonces: [String?] = []
     private(set) var logoutCount = 0
 
     func requestOtp(phone: String) async throws -> RequestOtpResponse {
@@ -26,6 +29,11 @@ private final class FakeAuthClient: AuthClient {
     }
     func signInWithApple(idToken: String, nonce: String?, device: DeviceInfo?) async throws -> AuthUser {
         throw Unscripted()
+    }
+    func signInWithGoogle(idToken: String, nonce: String?, device: DeviceInfo?) async throws -> AuthUser {
+        googleIdTokens.append(idToken)
+        googleNonces.append(nonce)
+        return try signInWithGoogleResult.get()
     }
     func refresh() async throws -> AuthTokens? { try refreshResult.get() }
     func me() async throws -> AuthUser {
@@ -41,6 +49,22 @@ private final class FakeAuthClient: AuthClient {
     func listLoginEvents() async throws -> [LoginEventDTO] { [] }
     func approveQrLogin(ticketId: String) async throws {}
     func logout() async throws { logoutCount += 1 }
+}
+
+/// Scriptable ``GoogleSignInProvider`` for the Google-flow tests: a canned
+/// credential or a thrown error (e.g. `.cancelled`), with call counting.
+private final class FakeGoogleSignInProvider: GoogleSignInProvider {
+    var result: Result<GoogleSignInCredential, Error>
+    private(set) var callCount = 0
+
+    init(_ result: Result<GoogleSignInCredential, Error>) {
+        self.result = result
+    }
+
+    func signIn() async throws -> GoogleSignInCredential {
+        callCount += 1
+        return try result.get()
+    }
 }
 
 private extension AuthUser {
@@ -160,6 +184,83 @@ final class AuthViewModelTests: XCTestCase {
         XCTAssertNotEqual(model.step, .done)
         XCTAssertNotNil(model.errorMessage)
         XCTAssertNil(model.user)
+    }
+
+    // MARK: - Sign in with Google
+
+    func testStartGoogleSignInSignsInAndPublishesUser() async {
+        let client = FakeAuthClient()
+        client.signInWithGoogleResult = .success(.fixture)
+        let provider = FakeGoogleSignInProvider(.success(
+            GoogleSignInCredential(idToken: "eyJ.google.jwt", nonce: "raw-nonce")
+        ))
+        let model = AuthViewModel(client: client, googleSignIn: provider)
+
+        await model.startGoogleSignIn()
+
+        XCTAssertEqual(model.step, .done)
+        XCTAssertEqual(model.user?.id, "u1")
+        XCTAssertEqual(client.googleIdTokens, ["eyJ.google.jwt"])
+        XCTAssertEqual(client.googleNonces, ["raw-nonce"])
+        XCTAssertNil(model.errorMessage)
+        XCTAssertFalse(model.busy)
+    }
+
+    func testStartGoogleSignInCancelIsSilent() async {
+        let client = FakeAuthClient()
+        let provider = FakeGoogleSignInProvider(.failure(GoogleSignInError.cancelled))
+        let model = AuthViewModel(client: client, googleSignIn: provider)
+
+        await model.startGoogleSignIn()
+
+        XCTAssertEqual(model.step, .phone)
+        XCTAssertNil(model.user)
+        XCTAssertNil(model.errorMessage)
+        XCTAssertTrue(client.googleIdTokens.isEmpty)
+        XCTAssertFalse(model.busy)
+    }
+
+    func testStartGoogleSignInProviderFailureSurfacesMessage() async {
+        let client = FakeAuthClient()
+        let provider = FakeGoogleSignInProvider(.failure(GoogleSignInError.unavailable))
+        let model = AuthViewModel(client: client, googleSignIn: provider)
+
+        await model.startGoogleSignIn()
+
+        XCTAssertNotEqual(model.step, .done)
+        XCTAssertEqual(model.errorMessage, AuthCopy.Errors.network)
+        XCTAssertTrue(client.googleIdTokens.isEmpty)
+        XCTAssertFalse(model.busy)
+    }
+
+    func testGoogleDisabledByDefault() {
+        let model = AuthViewModel(client: FakeAuthClient())
+        XCTAssertFalse(model.googleEnabled)
+    }
+
+    func testGoogleEnabledWhenConfigured() {
+        let provider = FakeGoogleSignInProvider(.success(
+            GoogleSignInCredential(idToken: "t", nonce: nil)
+        ))
+        let model = AuthViewModel(client: FakeAuthClient(), googleSignIn: provider, googleEnabled: true)
+        XCTAssertTrue(model.googleEnabled)
+    }
+
+    func testCompleteGoogleSignInExchangeFailureStaysWithMessage() async {
+        let client = FakeAuthClient()
+        client.signInWithGoogleResult = .failure(AuthClientError.http(
+            status: 401, code: .socialTokenInvalid, message: nil, retryAfter: nil, remainingAttempts: nil
+        ))
+        let model = AuthViewModel(client: client)
+
+        await model.completeGoogleSignIn(
+            GoogleSignInCredential(idToken: "bad", nonce: nil)
+        )
+
+        XCTAssertNotEqual(model.step, .done)
+        XCTAssertEqual(model.errorMessage, AuthCopy.Errors.message(for: .socialTokenInvalid))
+        XCTAssertNil(model.user)
+        XCTAssertFalse(model.busy)
     }
 
     // MARK: - Input normalization / derived state

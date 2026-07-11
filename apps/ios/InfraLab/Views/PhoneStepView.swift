@@ -11,6 +11,33 @@ struct PhoneStepView: View {
         AuthCard {
             BrandMark()
 
+            // Social sign-in first: Google (only when a client id is configured) and
+            // the native Sign in with Apple. Both buttons render a system/SDK-localized
+            // label; the view model owns each nonce + token exchange (login == register).
+            VStack(spacing: 12) {
+                if auth.googleEnabled {
+                    GoogleAuthButton {
+                        Task { await auth.startGoogleSignIn() }
+                    }
+                    .disabled(auth.busy)
+                }
+
+                SignInWithAppleButton(.signIn) { request in
+                    auth.startAppleSignIn(request)
+                } onCompletion: { result in
+                    Task { await auth.completeAppleSignIn(result) }
+                }
+                .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
+                .frame(height: 52)
+                .clipShape(RoundedRectangle(cornerRadius: DesignTokens.radius, style: .continuous))
+                .disabled(auth.busy)
+            }
+
+            // A single error slot serves both the social and phone flows.
+            ErrorBanner(message: auth.errorMessage)
+
+            orDivider
+
             VStack(alignment: .leading, spacing: 8) {
                 Text(AuthCopy.Phone.title)
                     .font(AuthTheme.title)
@@ -34,27 +61,10 @@ struct PhoneStepView: View {
                     .authFieldBackground()
             }
 
-            ErrorBanner(message: auth.errorMessage)
-
             PrimaryButton(title: AuthCopy.Phone.submit, loading: auth.busy, enabled: auth.canSend) {
                 Task { await auth.sendCode() }
             }
-
-            orDivider
-
-            // Native Sign in with Apple. The button renders a system-localized label;
-            // the view model owns the nonce + token exchange (login == register).
-            SignInWithAppleButton(.signIn) { request in
-                auth.startAppleSignIn(request)
-            } onCompletion: { result in
-                Task { await auth.completeAppleSignIn(result) }
-            }
-            .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
-            .frame(height: 52)
-            .clipShape(RoundedRectangle(cornerRadius: DesignTokens.radius, style: .continuous))
-            .disabled(auth.busy)
         }
-        .onAppear { focused = true }
     }
 
     /// "———— 或 ————" — a labeled separator between phone login and social sign-in.

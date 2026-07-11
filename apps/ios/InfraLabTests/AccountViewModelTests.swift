@@ -33,6 +33,9 @@ private final class FakeAccountClient: AuthClient {
     func signInWithApple(idToken: String, nonce: String?, device: DeviceInfo?) async throws -> AuthUser {
         throw Unscripted()
     }
+    func signInWithGoogle(idToken: String, nonce: String?, device: DeviceInfo?) async throws -> AuthUser {
+        throw Unscripted()
+    }
     func refresh() async throws -> AuthTokens? { nil }
     func me() async throws -> AuthUser { throw Unscripted() }
     func updatePushToken(deviceId: String, pushToken: String) async throws {}

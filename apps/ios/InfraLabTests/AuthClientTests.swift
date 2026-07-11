@@ -118,6 +118,56 @@ final class AuthClientTests: XCTestCase {
         }
     }
 
+    func testSignInWithGooglePostsTokenAndPersistsTokens() async throws {
+        let store = InMemoryTokenStore()
+        var capturedPath: String?
+        var capturedBody: [String: Any]?
+        MockURLProtocol.handler = { request in
+            capturedPath = request.url?.path
+            // URLProtocol moves a POST body onto httpBodyStream, so read that.
+            capturedBody = Self.requestBody(request).flatMap {
+                (try? JSONSerialization.jsonObject(with: $0)) as? [String: Any]
+            }
+            return (200, self.json([
+                "ok": true,
+                // A Google-only account may have no phone → server sends null.
+                "user": [
+                    "id": "u_google", "phone": NSNull(), "displayName": NSNull(),
+                    "avatarUrl": NSNull(), "createdAt": "2026-06-30T00:00:00.000Z", "isNew": true
+                ],
+                "tokens": [
+                    "accessToken": "at", "accessTokenExpiresIn": 900,
+                    "refreshToken": "rt", "refreshTokenExpiresIn": 2_592_000, "tokenType": "Bearer"
+                ]
+            ]))
+        }
+        let user = try await makeClient(store: store)
+            .signInWithGoogle(idToken: "eyJ.google.jwt", nonce: "raw-nonce", device: nil)
+
+        XCTAssertEqual(capturedPath, AuthRoutes.socialToken("google"))
+        XCTAssertEqual(capturedBody?["idToken"] as? String, "eyJ.google.jwt")
+        XCTAssertEqual(capturedBody?["nonce"] as? String, "raw-nonce")
+        XCTAssertEqual(capturedBody?["platform"] as? String, "ios")
+        XCTAssertNil(user.phone)
+        XCTAssertTrue(user.isNew)
+        XCTAssertEqual(store.load()?.accessToken, "at")
+        XCTAssertEqual(store.load()?.refreshToken, "rt")
+    }
+
+    func testSignInWithGoogleMapsInvalidTokenError() async {
+        MockURLProtocol.handler = { _ in
+            (401, self.json(["ok": false, "code": "SOCIAL_TOKEN_INVALID"]))
+        }
+        do {
+            _ = try await makeClient().signInWithGoogle(idToken: "bad", nonce: nil, device: nil)
+            XCTFail("expected failure")
+        } catch let error as AuthClientError {
+            XCTAssertEqual(error.code, .socialTokenInvalid)
+        } catch {
+            XCTFail("unexpected error: \(error)")
+        }
+    }
+
     func testInvalidCodeMapsErrorAndRemainingAttempts() async {
         MockURLProtocol.handler = { _ in
             (401, self.json(["ok": false, "code": "INVALID_CODE", "remainingAttempts": 3]))

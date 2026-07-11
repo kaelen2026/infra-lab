@@ -35,6 +35,28 @@ enum AppConfig {
     }()
 }
 
+/// Google Sign-In availability, the iOS counterpart of web's
+/// `NEXT_PUBLIC_GOOGLE_ENABLED` and h5's `VITE_GOOGLE_ENABLED`: the button is shown
+/// only when an OAuth iOS client id is configured. The id is substituted into
+/// Info.plist's `GIDClientID` from the `GID_CLIENT_ID` build setting (empty by
+/// default), so an unconfigured build hides the button, injects the
+/// ``UnavailableGoogleSignInProvider`` and still builds / runs / tests. No real id
+/// is ever committed — pass it at build time (see project.yml).
+enum GoogleConfig {
+    /// The configured OAuth iOS client id, or `nil` when the Info.plist value is
+    /// absent or empty (the committed default).
+    static var clientID: String? {
+        guard let raw = Bundle.main.object(forInfoDictionaryKey: "GIDClientID") as? String else {
+            return nil
+        }
+        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// True when a client id is present — gates both the button and the real adapter.
+    static var isEnabled: Bool { clientID != nil }
+}
+
 /// Collects this install's device metadata for the `device` field of
 /// `/auth/otp/verify`. The `deviceId` is a stable per-install identifier:
 /// `identifierForVendor`, falling back to a persisted UUID.

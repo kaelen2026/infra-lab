@@ -353,6 +353,40 @@ describe("Google sign-in config", () => {
       ),
     ).toBeNull();
   });
+
+  it("keeps clientId a single string when GOOGLE_IOS_CLIENT_ID is unset (backward-compatible)", () => {
+    const cfg = googleConfigFromEnv(parseCoreEnv({ ...base, ...googleBase }));
+    expect(cfg?.clientId).toBe("123-abc.apps.googleusercontent.com");
+  });
+
+  it("widens clientId to [web, ios] when GOOGLE_IOS_CLIENT_ID is set", () => {
+    const cfg = googleConfigFromEnv(
+      parseCoreEnv({
+        ...base,
+        ...googleBase,
+        GOOGLE_IOS_CLIENT_ID: "123-ios.apps.googleusercontent.com",
+      }),
+    );
+    expect(cfg).toEqual({
+      clientId: ["123-abc.apps.googleusercontent.com", "123-ios.apps.googleusercontent.com"],
+      clientSecret: "secret-xyz",
+    });
+  });
+
+  it("treats an empty-string GOOGLE_IOS_CLIENT_ID as unset (single string)", () => {
+    const cfg = googleConfigFromEnv(
+      parseCoreEnv({ ...base, ...googleBase, GOOGLE_IOS_CLIENT_ID: "" }),
+    );
+    expect(cfg?.clientId).toBe("123-abc.apps.googleusercontent.com");
+  });
+
+  it("rejects GOOGLE_IOS_CLIENT_ID without the web GOOGLE_CLIENT_ID", () => {
+    // An iOS audience with no base Google config would be silently dropped
+    // (googleConfigFromEnv returns null), so fail fast at boot instead.
+    expect(() =>
+      parseCoreEnv({ ...base, GOOGLE_IOS_CLIENT_ID: "123-ios.apps.googleusercontent.com" }),
+    ).toThrow(/GOOGLE_IOS_CLIENT_ID/);
+  });
 });
 
 describe("Apple sign-in config", () => {

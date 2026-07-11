@@ -60,6 +60,8 @@ export interface WorkerEnv {
   // Google sign-in (optional secrets; both-or-neither, enforced by parseCoreEnv).
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
+  // Optional extra native audience (iOS OAuth client id); requires GOOGLE_CLIENT_ID.
+  GOOGLE_IOS_CLIENT_ID?: string;
   // Apple sign-in (native ID-token flow; single optional var = the app bundle id).
   APPLE_CLIENT_ID?: string;
   // Resend email delivery (optional secrets; both-or-neither, enforced by parseCoreEnv).

@@ -40,7 +40,18 @@ struct InfraLabApp: App {
         let timelineClient = HTTPTimelineClient(baseURL: baseURL, transport: transport)
         let healthClient = HTTPHealthClient(baseURL: baseURL)
         self.timelineClient = timelineClient
-        _auth = StateObject(wrappedValue: AuthViewModel(client: authClient))
+        // Wire the real GoogleSignIn adapter only when a client id is configured
+        // (GID_CLIENT_ID → Info.plist GIDClientID); otherwise keep the placeholder so
+        // the app builds + runs with the Google button hidden.
+        let googleSignIn: GoogleSignInProvider
+        if let clientID = GoogleConfig.clientID {
+            googleSignIn = GIDGoogleSignInProvider(clientID: clientID)
+        } else {
+            googleSignIn = UnavailableGoogleSignInProvider()
+        }
+        _auth = StateObject(wrappedValue: AuthViewModel(
+            client: authClient, googleSignIn: googleSignIn, googleEnabled: GoogleConfig.isEnabled
+        ))
         _account = StateObject(wrappedValue: AccountViewModel(client: authClient))
         _qrApprove = StateObject(wrappedValue: QrApproveViewModel(client: authClient))
         _todos = StateObject(wrappedValue: TodoViewModel(client: todoClient))

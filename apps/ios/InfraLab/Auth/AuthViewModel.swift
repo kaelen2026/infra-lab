@@ -37,14 +37,28 @@ final class AuthViewModel: ObservableObject {
     /// True while the launch-time session restore is in flight.
     @Published private(set) var restoring = true
 
+    /// Whether the Google button should be offered — mirrors web's
+    /// `NEXT_PUBLIC_GOOGLE_ENABLED` / h5's `VITE_GOOGLE_ENABLED`. The composition
+    /// root sets it from `GoogleConfig.isEnabled` (a client id is configured);
+    /// when false the view hides the button and the injected provider is the
+    /// ``UnavailableGoogleSignInProvider`` placeholder.
+    let googleEnabled: Bool
+
     private let client: AuthClient
+    private let googleSignIn: GoogleSignInProvider
     private var cooldownTask: Task<Void, Never>?
     /// Raw nonce for the in-flight Sign in with Apple request: its SHA-256 is bound
     /// into the Apple request, the raw value is sent to our server, which re-derives.
     private var appleNonce: String?
 
-    init(client: AuthClient) {
+    init(
+        client: AuthClient,
+        googleSignIn: GoogleSignInProvider = UnavailableGoogleSignInProvider(),
+        googleEnabled: Bool = false
+    ) {
         self.client = client
+        self.googleSignIn = googleSignIn
+        self.googleEnabled = googleEnabled
     }
 
     // MARK: - Derived UI state
@@ -154,6 +168,44 @@ final class AuthViewModel: ObservableObject {
         case let .failure(error):
             // A user-cancelled sheet is not a failure to report.
             if let authError = error as? ASAuthorizationError, authError.code == .canceled { return }
+            errorMessage = describe(error)
+        }
+    }
+
+    // MARK: - Sign in with Google
+
+    /// Button action: present the Google sheet via the injected provider, then hand
+    /// the ID token to the server exchange. A user-cancelled sheet is silent; any
+    /// other provider failure surfaces shared error copy. The provider owns nonce
+    /// generation/hashing and returns the raw nonce our server re-derives.
+    func startGoogleSignIn() async {
+        errorMessage = nil
+        let credential: GoogleSignInCredential
+        do {
+            credential = try await googleSignIn.signIn()
+        } catch GoogleSignInError.cancelled {
+            // A user-cancelled sheet is not a failure to report.
+            return
+        } catch {
+            errorMessage = describe(error)
+            return
+        }
+        await completeGoogleSignIn(credential)
+    }
+
+    /// Exchange a Google credential for our session and land on `.done`. Split out
+    /// from ``startGoogleSignIn()`` so the exchange half is driven directly in tests.
+    func completeGoogleSignIn(_ credential: GoogleSignInCredential) async {
+        errorMessage = nil
+        busy = true
+        defer { busy = false }
+        do {
+            let device = DeviceMetadata.current(pushToken: PushRegistration.shared.deviceToken)
+            user = try await client.signInWithGoogle(
+                idToken: credential.idToken, nonce: credential.nonce, device: device
+            )
+            step = .done
+        } catch {
             errorMessage = describe(error)
         }
     }
