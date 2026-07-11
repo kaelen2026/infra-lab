@@ -1,5 +1,6 @@
 ---
 name: reviewer
+model: opus
 description: >-
   评审员(对抗式)。主 agent 在 verifier 判绿之后、合入之前派它审一处 diff,专挑
   仓库红线:密钥/日志泄漏、分层越界、contract 跨端漂移、force-unwrap/any、单文件超限等。

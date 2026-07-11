@@ -1,5 +1,6 @@
 ---
 name: ts-implementer
+model: opus
 description: >-
   TypeScript 实现者(packages/* + apps/{api,web,h5,bot,cli,miniprogram})。主 agent 把一个
   **边界清晰、已有验收标准**的 TS 子任务交给它,用 **TDD**(red→green→refactor)落地,门禁是

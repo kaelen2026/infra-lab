@@ -1,5 +1,6 @@
 ---
 name: harmony-implementer
+model: opus
 description: >-
   Harmony 实现者(`apps/harmony`,ArkTS / HarmonyOS NEXT)。主 agent 把一个**边界清晰、
   已有验收标准**的 Harmony 子任务交给它,先测契约/SDK 逻辑再落地。它镜像共享 `AuthClient` 语义
