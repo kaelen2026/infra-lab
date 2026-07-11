@@ -95,13 +95,27 @@ See `.env.free.example` for the full variable list. Platform-specific build sett
 | Cloudflare API | `corepack pnpm --filter "@infra/api..." build` then `wrangler deploy` | Entry `apps/api/src/worker.ts`, config `apps/api/wrangler.toml`; set Worker secrets + R2 binding. |
 | Render/Koyeb API (fallback) | Dockerfile `apps/api/Dockerfile` | Set all API env vars from `.env.free.example`. |
 
+## Branch & release flow
+
+- **Feature branches** (`feat/…`, `fix/…`, …) open PRs into **`dev`** — the default,
+  integration branch. CI (lint · typecheck · build · test) gates every PR.
+- **`dev` is promoted to `main`** via PR. Merging into `main` runs the CI quality
+  gate only — **it does not deploy**.
+- **Production ships from a version tag.** Cut a tag from `main`
+  (`git tag v0.3.0 && git push origin v0.3.0`); the tag triggers both `deploy.yml`
+  (this pipeline) and `release-images.yml` (versioned GHCR images). Tags are the
+  single release/deploy gate, so a rollback is a re-deploy of an earlier tag.
+
+Both `dev` and `main` are branch-protected: PR required, CI must pass, no direct
+or force pushes.
+
 ## CD pipeline (`.github/workflows/deploy.yml`)
 
 Continuous deployment is a single workflow with one job per target. Every job is
 **opt-in and safe-by-default**: it runs only when its repo *variable* is set to `"true"`
 (Settings → Secrets and variables → Actions → Variables), so the workflow does nothing
-until you enable a target and add its secrets. It triggers on push to `main` and via
-`workflow_dispatch`.
+until you enable a target and add its secrets. It triggers on a pushed **version tag**
+(`v*`) and via `workflow_dispatch`.
 
 | Job | Target | Runs when | Secrets | Variables |
 | --- | --- | --- | --- | --- |
