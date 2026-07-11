@@ -30,6 +30,9 @@ export const ERROR_MESSAGES: Record<AuthErrorCode, string> = {
   SOCIAL_PROVIDER_DISABLED: "暂不支持该登录方式。",
   SOCIAL_TOKEN_INVALID: "第三方账号验证失败，请重试。",
   SOCIAL_ACCOUNT_ERROR: "第三方登录失败，请稍后再试。",
+  SOCIAL_ALREADY_LINKED: "该第三方账号已被绑定，无法重复绑定。",
+  PHONE_ALREADY_LINKED: "该手机号已被占用，无法绑定。",
+  LAST_CREDENTIAL: "至少需保留一种登录方式，无法解绑。",
 };
 
 export const COPY = {

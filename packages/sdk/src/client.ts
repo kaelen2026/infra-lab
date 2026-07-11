@@ -1,4 +1,5 @@
 import {
+  type AccountLinkClient,
   ADMIN_ROUTES,
   type AdminAccessResponse,
   type AdminClient,
@@ -19,6 +20,10 @@ import {
   type CreateTodoInput,
   type DeviceDTO,
   type DevicesResponse,
+  type IdentitiesResponse,
+  type LinkPhoneInput,
+  type LinkPhoneResponse,
+  type LinkSocialIdTokenInput,
   type ListAdminUsersInput,
   type ListTimelineOptions,
   type LoginEventDTO,
@@ -33,6 +38,9 @@ import {
   type RefreshInput,
   type RequestOtpInput,
   type RequestOtpResponse,
+  SOCIAL_LINK_ROUTE_PATTERNS,
+  type SocialProvider,
+  socialLinkTokenPath,
   TIMELINE_ROUTES,
   type TimelineClient,
   type TimelineImageContentType,
@@ -50,6 +58,7 @@ import {
   timelinePostPath,
   timelineSharePath,
   todoPath,
+  type UnlinkTarget,
   type UpdateProfileInput,
   type UpdateTodoInput,
   type UserRole,
@@ -300,6 +309,79 @@ export function createQrLoginClient(options: CreateQrLoginClientOptions): QrLogi
  */
 export function createWebQrLoginClient(baseUrl: string, fetchImpl?: typeof fetch): QrLoginClient {
   return createQrLoginClient({ baseUrl, platform: "web", fetch: fetchImpl });
+}
+
+export interface CreateAccountLinkClientOptions {
+  baseUrl: string;
+  platform: Platform;
+  /** Defaults to a no-op store (web); native platforms supply a secure store. */
+  tokens?: TokenStore;
+  fetch?: typeof fetch;
+}
+
+/**
+ * Reference {@link AccountLinkClient} — account-security operations for an
+ * already-authenticated user (list identities, link a phone, unlink, native social
+ * link). Same transport model as {@link createAuthClient}. Web links Google via a
+ * full-page redirect ({@link import("@infra/shared").socialLinkStartUrl}), so
+ * `linkSocialWithIdToken` is for native only. Non-2xx throws {@link HttpAuthError}.
+ */
+export function createAccountLinkClient(
+  options: CreateAccountLinkClientOptions,
+): AccountLinkClient {
+  const doFetch = options.fetch ?? globalThis.fetch;
+  const store = options.tokens ?? noopTokenStore;
+  const isWeb = options.platform === "web";
+
+  async function request<T>(path: string, method: string, body?: unknown): Promise<T> {
+    const headers: Record<string, string> = { "content-type": "application/json" };
+    if (!isWeb) {
+      const t = await store.load();
+      if (t) headers.authorization = `${t.tokenType} ${t.accessToken}`;
+    }
+    const res = await doFetch(`${options.baseUrl}${path}`, {
+      method,
+      headers,
+      credentials: isWeb ? "include" : "omit",
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+    const json: unknown = await res.json().catch(() => ({}));
+    if (!res.ok) throw new HttpAuthError(res.status, json);
+    return json as T;
+  }
+
+  return {
+    identities(): Promise<IdentitiesResponse> {
+      return request<IdentitiesResponse>(SOCIAL_LINK_ROUTE_PATTERNS.identities, "GET");
+    },
+    async linkPhone(input): Promise<AuthUser> {
+      const body: LinkPhoneInput = { ...input, platform: options.platform };
+      const res = await request<LinkPhoneResponse>(
+        SOCIAL_LINK_ROUTE_PATTERNS.linkPhone,
+        "POST",
+        body,
+      );
+      return res.user;
+    },
+    async unlink(target: UnlinkTarget): Promise<void> {
+      await request<{ ok: true }>(SOCIAL_LINK_ROUTE_PATTERNS.unlink, "POST", {
+        target,
+        platform: options.platform,
+      });
+    },
+    async linkSocialWithIdToken(provider: SocialProvider, input): Promise<void> {
+      const body: LinkSocialIdTokenInput = { ...input, platform: options.platform };
+      await request<{ ok: true }>(socialLinkTokenPath(provider), "POST", body);
+    },
+  };
+}
+
+/** Web-flavored {@link createAccountLinkClient} (cookie transport, no token store). */
+export function createWebAccountLinkClient(
+  baseUrl: string,
+  fetchImpl?: typeof fetch,
+): AccountLinkClient {
+  return createAccountLinkClient({ baseUrl, platform: "web", fetch: fetchImpl });
 }
 
 export interface CreateTodoClientOptions {

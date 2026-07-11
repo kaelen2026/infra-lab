@@ -4,6 +4,7 @@ import { parseCoreEnv } from "@infra/env/core";
 import { describe, expect, it } from "vitest";
 import { type AppDeps, createApp } from "../src/app.js";
 import type { Logger } from "../src/observability/logger.js";
+import type { AccountLinkService } from "../src/routes/account-link.routes.js";
 import type { AdminRepository } from "../src/routes/admin.routes.js";
 import type { SessionService, UserRepository } from "../src/routes/auth.routes.js";
 import type { QrTicketStore } from "../src/routes/qr.routes.js";
@@ -48,6 +49,7 @@ function buildApp(overrides: Partial<AppDeps> = {}) {
     images: {} as ImageStore,
     sessions: { requireUser: async () => null } as unknown as SessionService,
     social: { isEnabled: () => false } as unknown as SocialAuthService,
+    accountLink: { isEnabled: () => false } as unknown as AccountLinkService,
     qrTickets: {} as QrTicketStore,
     rateLimitStore: { incr: async () => 1, expire: async () => true },
     sms: async () => {},

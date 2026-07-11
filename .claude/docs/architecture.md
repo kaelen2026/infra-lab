@@ -53,10 +53,16 @@ verify + find-or-create → our `SessionService`) and the **web redirect flow**
 where a `hooks.after` bridge in `createAuth` — `bridgeOAuthCallbackSession` — swaps Better
 Auth's session cookie for our `infra.session` so logout stays authoritative). Contract in
 `packages/shared/src/contracts/social.ts`, routes in `apps/api/src/routes/social.routes.ts`,
-bridge in `packages/auth/src/better-auth.ts`. **Account linking** (design §2.3) is the next
-phase (not yet built): a logged-in user adds the other credential (phone↔Google) onto one
-`user` — conflicts (target already owned by another account) are rejected, not auto-merged; a
-`user` must keep ≥1 login credential. Full design + phased rollout:
+bridge in `packages/auth/src/better-auth.ts`. **Account linking** (design §2.3) has shipped:
+a logged-in user adds the other credential (phone↔Google) onto one `user` —
+`GET /auth/identities`, `POST /auth/link/phone`, native `POST /auth/link/social/:provider/token`,
+web `GET /auth/link/social/:provider/start` (reuses the callback bridge, which no-ops on a link),
+`POST /auth/unlink`. Conflicts are rejected not auto-merged (`SOCIAL_ALREADY_LINKED` /
+`PHONE_ALREADY_LINKED`), and a `user` must keep ≥1 credential (`LAST_CREDENTIAL`). Note the phone
+is `user.phone`, **not** a Better Auth `account` row, so our own conservation rule counts it — BA's
+`unlinkAccount` guard can't. Routes in `apps/api/src/routes/account-link.routes.ts` (`AccountLinkService`
+adapter over BA's account API + internal adapter); web/h5 surface it in the account page's
+"登录方式" card. Full design + phased rollout:
 [`docs/plans/google-login.md`](../../docs/plans/google-login.md).
 
 **CLI browser-assisted login — device flow** (`apps/api/src/routes/auth.routes.ts`, gh-style / RFC 8628).

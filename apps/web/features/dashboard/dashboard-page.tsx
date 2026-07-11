@@ -7,6 +7,7 @@ import { AppNav } from "@/components/app-nav";
 import { Button } from "@/components/ui/button";
 import { useRequireAuth, useSession } from "@/features/session";
 import { DevicesCard } from "./components/devices-card";
+import { IdentitiesCard } from "./components/identities-card";
 import { LoginEventsCard } from "./components/login-events-card";
 import { ProfileCard } from "./components/profile-card";
 import { SessionCard } from "./components/session-card";
@@ -55,6 +56,8 @@ export default function DashboardPage() {
             <SessionCard />
             <DevicesCard devices={devices} loading={loading} />
           </div>
+
+          <IdentitiesCard />
 
           <LoginEventsCard events={events} loading={loading} />
 

@@ -89,6 +89,25 @@ class FakeUserRepository implements UserRepository {
     }
     return true;
   }
+  async attachPhone(
+    userId: string,
+    phone: string,
+  ): Promise<
+    | { ok: true; user: UserRecord }
+    | { ok: false; error: "PHONE_ALREADY_LINKED" | "ALREADY_HAS_PHONE" }
+  > {
+    const rec = this.users.get(userId);
+    if (!rec || rec.phone) return { ok: false, error: "ALREADY_HAS_PHONE" };
+    const owner = [...this.users.values()].find((u) => u.phone === phone);
+    if (owner && owner.id !== userId) return { ok: false, error: "PHONE_ALREADY_LINKED" };
+    const next: UserRecord = { ...rec, phone };
+    this.users.set(userId, next);
+    return { ok: true, user: next };
+  }
+  async detachPhone(userId: string): Promise<void> {
+    const rec = this.users.get(userId);
+    if (rec) this.users.set(userId, { ...rec, phone: null });
+  }
   async updateProfile(
     userId: string,
     patch: { displayName?: string | null; avatarUrl?: string | null },

@@ -75,6 +75,20 @@ export interface UserRepository {
     hints: { displayName?: string | null; avatarUrl?: string | null },
   ): Promise<boolean>;
   /**
+   * Attach a phone to a user that has none (account linking, §2.3). Rejects when the
+   * phone already belongs to ANOTHER account (`PHONE_ALREADY_LINKED`) or this account
+   * already has a phone (`ALREADY_HAS_PHONE`). Returns the refreshed user on success.
+   */
+  attachPhone(
+    userId: string,
+    phone: string,
+  ): Promise<
+    | { ok: true; user: UserRecord }
+    | { ok: false; error: "PHONE_ALREADY_LINKED" | "ALREADY_HAS_PHONE" }
+  >;
+  /** Clear this user's phone credential (unlink, §2.3). Conservation is enforced by the caller. */
+  detachPhone(userId: string): Promise<void>;
+  /**
    * Update this user's profile row (display name / avatar). Only the keys present
    * in `patch` change; `null` clears a field. Returns the refreshed user, or
    * `null` when the user no longer exists.
@@ -195,6 +209,10 @@ export const ERROR_STATUS: Record<AuthErrorCode, ContentfulStatusCode> = {
   SOCIAL_PROVIDER_DISABLED: 400,
   SOCIAL_TOKEN_INVALID: 401,
   SOCIAL_ACCOUNT_ERROR: 401,
+  // Account linking (emitted by account-link.routes.ts, mapped here for completeness).
+  SOCIAL_ALREADY_LINKED: 409,
+  PHONE_ALREADY_LINKED: 409,
+  LAST_CREDENTIAL: 409,
 };
 
 /**

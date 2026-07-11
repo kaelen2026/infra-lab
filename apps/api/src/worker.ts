@@ -31,6 +31,7 @@ import type { Hono } from "hono";
 import { createApp } from "./app.js";
 import { createLogger, type LogLevel } from "./observability/logger.js";
 import type { ObsEnv } from "./observability/middleware.js";
+import { createAccountLinkService } from "./services/account-link-service.js";
 import { createAdminRepository } from "./services/admin-repository.js";
 import { buildOtpEmail } from "./services/otp-email.js";
 import { createRedisQrTicketStore } from "./services/qr-ticket-store.js";
@@ -110,6 +111,10 @@ function buildApp(env: WorkerEnv): Hono<ObsEnv> {
 
   const googleConfig = googleConfigFromEnv(core);
   const appleConfig = appleConfigFromEnv(core);
+  const enabledSocialProviders = new Set([
+    ...(googleConfig ? (["google"] as const) : []),
+    ...(appleConfig ? (["apple"] as const) : []),
+  ]);
   // Late-bound bridge — see server.ts for the why (auth precedes sessions).
   let bridgeWebSession: ((info: OAuthCallbackUser) => Promise<string | null>) | null = null;
   const auth = createAuth({
@@ -191,13 +196,8 @@ function buildApp(env: WorkerEnv): Hono<ObsEnv> {
     admin: createAdminRepository(db),
     images: createR2ImageStore({ bucket: env.IMAGES }),
     sessions,
-    social: createSocialAuthService({
-      auth,
-      enabledProviders: new Set([
-        ...(googleConfig ? (["google"] as const) : []),
-        ...(appleConfig ? (["apple"] as const) : []),
-      ]),
-    }),
+    social: createSocialAuthService({ auth, enabledProviders: enabledSocialProviders }),
+    accountLink: createAccountLinkService({ auth, enabledProviders: enabledSocialProviders }),
     qrTickets: createRedisQrTicketStore(otpStore),
     rateLimitStore: createUpstashRateLimitStore(redis),
     sms,

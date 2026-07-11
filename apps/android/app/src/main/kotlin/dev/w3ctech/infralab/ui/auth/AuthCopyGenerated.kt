@@ -48,6 +48,9 @@ object AuthCopyGenerated {
         AuthErrorCode.SOCIAL_PROVIDER_DISABLED to "暂不支持该登录方式。",
         AuthErrorCode.SOCIAL_TOKEN_INVALID to "第三方账号验证失败，请重试。",
         AuthErrorCode.SOCIAL_ACCOUNT_ERROR to "第三方登录失败，请稍后再试。",
+        AuthErrorCode.SOCIAL_ALREADY_LINKED to "该第三方账号已被绑定，无法重复绑定。",
+        AuthErrorCode.PHONE_ALREADY_LINKED to "该手机号已被占用，无法绑定。",
+        AuthErrorCode.LAST_CREDENTIAL to "至少需保留一种登录方式，无法解绑。",
     )
 
     fun codeDescription(phone: String, minutes: Int): String =

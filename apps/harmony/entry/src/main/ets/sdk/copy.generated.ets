@@ -61,6 +61,12 @@ export function errorMessageFor(code: AuthErrorCode): string {
       return "第三方账号验证失败，请重试。";
     case "SOCIAL_ACCOUNT_ERROR":
       return "第三方登录失败，请稍后再试。";
+    case "SOCIAL_ALREADY_LINKED":
+      return "该第三方账号已被绑定，无法重复绑定。";
+    case "PHONE_ALREADY_LINKED":
+      return "该手机号已被占用，无法绑定。";
+    case "LAST_CREDENTIAL":
+      return "至少需保留一种登录方式，无法解绑。";
     default:
       return ERROR_GENERIC;
   }

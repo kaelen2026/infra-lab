@@ -248,8 +248,16 @@ CI——各端改动需本地过门禁,并保证 `phone` 可空后无强解包(`
    故与后端 `GOOGLE_CLIENT_ID/SECRET` 手动保持一致(都开或都关),避免未配置时点按钮落到
    `SOCIAL_PROVIDER_DISABLED` 的 JSON。文案 `COPY.social`(web/h5-only,不进原生生成)。
    Google G 图标为内联 4 色 SVG。
-4. **账号绑定(§2.3)**:`/auth/identities`、`/auth/link/*`、`/auth/unlink` 端点 + 冲突/
-   守恒规则 + 审计 + hermetic 测试(走 CI);web/h5 "账号安全"页展示与绑定/解绑入口。
+4. **账号绑定(§2.3,已实现)**:`GET /auth/identities`、`POST /auth/link/phone`、
+   `POST /auth/link/social/:provider/token`(原生 idToken)、`GET /auth/link/social/:provider/start`
+   (web 重定向,复用 §5.2 回调桥接——link 不下发新会话故 `hooks.after` 自动 no-op)、
+   `POST /auth/unlink`。冲突规则(SOCIAL_ALREADY_LINKED / PHONE_ALREADY_LINKED,拒不合并)+
+   守恒(≥1 凭证,否则 LAST_CREDENTIAL)+ 审计(login_event `reason=link_*/unlink_*`)。
+   端点走 `AccountLinkService`(BA `linkSocialAccount`/`unlinkAccount` + internalAdapter;
+   `accountLinking.allowDifferentEmails` 让无 email 的 OTP 用户可绑),配 `account_provider_account_key`
+   唯一索引兜底跨用户绑定。SDK `AccountLinkClient`;web/h5 账户页「登录方式」卡(绑 Google 走重定向、
+   绑手机走内联 OTP、解绑守恒)。hermetic 路由测试走 CI。**手机号不是 BA account 行**(是 `user.phone`),
+   故守恒与解绑均由本仓库自管,不用 BA 的 last-account 门禁。
 5. **原生镜像**(可并行、各自 PR):iOS / Android / Harmony 契约镜像 + idToken 流 +
    绑定页 + 本地门禁。
 6. **cli**:`auth login --google`(绑定操作在移动/web 端做即可,cli 不强求)。

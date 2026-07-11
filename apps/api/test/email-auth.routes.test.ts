@@ -71,6 +71,23 @@ class FakeUserRepository implements UserRepository {
   async ensureProfile(): Promise<boolean> {
     return false;
   }
+  async attachPhone(
+    userId: string,
+    phone: string,
+  ): Promise<
+    | { ok: true; user: UserRecord }
+    | { ok: false; error: "PHONE_ALREADY_LINKED" | "ALREADY_HAS_PHONE" }
+  > {
+    const user = this.users.get(userId);
+    if (!user) return { ok: false, error: "ALREADY_HAS_PHONE" };
+    const next: UserRecord = { ...user, phone };
+    this.users.set(userId, next);
+    return { ok: true, user: next };
+  }
+  async detachPhone(userId: string): Promise<void> {
+    const user = this.users.get(userId);
+    if (user) this.users.set(userId, { ...user, phone: null });
+  }
   async updateProfile(): Promise<UserRecord | null> {
     return null;
   }

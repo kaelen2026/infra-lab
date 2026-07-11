@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { AuthTokens, AuthUser } from "./auth";
-import { deviceInfoSchema, platformSchema } from "./auth";
+import { deviceInfoSchema, otpCodeSchema, phoneSchema, platformSchema } from "./auth";
 
 /**
  * Social sign-in contracts (Google + Apple today; the list is an extension point
@@ -119,4 +119,111 @@ export interface SocialAuthClient {
     provider: SocialProvider,
     input: Omit<SocialIdTokenInput, "platform">,
   ): Promise<SocialAuthResponse>;
+}
+
+// ── Account linking (§2.3) — every endpoint requires an authenticated session ────
+// Linking ADDS a second credential to the current account; it never merges two
+// existing accounts. Conflicts (a target already owned by another account) are
+// rejected. A `user` must always keep ≥1 way to sign in.
+
+/** The current account's linked sign-in methods, for the "account security" screen. */
+export interface IdentitiesResponse {
+  ok: true;
+  /** True when a phone credential is attached (a Google-only account has none). */
+  phone: boolean;
+  /** Social providers currently linked to this account. */
+  providers: SocialProvider[];
+}
+
+// Link a phone to the current account: the caller first requests an OTP for `phone`
+// (POST /auth/otp/request), then submits it here — verified like a login, but the code
+// is attached to the CURRENT user instead of finding-or-creating one.
+export const linkPhoneSchema = z.object({
+  phone: phoneSchema,
+  code: otpCodeSchema,
+  platform: platformSchema,
+});
+export type LinkPhoneInput = z.infer<typeof linkPhoneSchema>;
+
+/** Response to a successful phone link: the refreshed user (now carrying the phone). */
+export interface LinkPhoneResponse {
+  ok: true;
+  user: AuthUser;
+}
+
+// Link a social provider on native, by verifying an on-device ID token and attaching
+// the provider account to the CURRENT user (no new user, no new session).
+export const linkSocialIdTokenSchema = z.object({
+  idToken: z.string().trim().min(1),
+  accessToken: z.string().trim().min(1).optional(),
+  nonce: z.string().trim().min(1).max(256).optional(),
+  platform: platformSchema,
+});
+export type LinkSocialIdTokenInput = z.infer<typeof linkSocialIdTokenSchema>;
+
+export interface LinkSocialResponse {
+  ok: true;
+}
+
+/** Unlink target: a social provider or the phone credential. */
+export const UNLINK_TARGETS = [...SOCIAL_PROVIDERS, "phone"] as const;
+export const unlinkTargetSchema = z.enum(UNLINK_TARGETS);
+export type UnlinkTarget = (typeof UNLINK_TARGETS)[number];
+
+export const unlinkSchema = z.object({
+  target: unlinkTargetSchema,
+  platform: platformSchema,
+});
+export type UnlinkInput = z.infer<typeof unlinkSchema>;
+
+export interface UnlinkResponse {
+  ok: true;
+}
+
+// ── Linking route paths ─────────────────────────────────────────────────────────
+export const SOCIAL_LINK_ROUTE_PATTERNS = {
+  identities: "/auth/identities",
+  linkPhone: "/auth/link/phone",
+  /** web/h5 redirect link (starts an OAuth link for the logged-in user). */
+  linkSocialStart: "/auth/link/social/:provider/start",
+  /** native link (verify an on-device ID token, attach to the logged-in user). */
+  linkSocialToken: "/auth/link/social/:provider/token",
+  unlink: "/auth/unlink",
+} as const;
+
+/** Concrete `/auth/link/social/<provider>/start` path (web redirect link). */
+export function socialLinkStartPath(provider: SocialProvider): string {
+  return `/auth/link/social/${provider}/start`;
+}
+
+/** Concrete `/auth/link/social/<provider>/token` path (native ID-token link). */
+export function socialLinkTokenPath(provider: SocialProvider): string {
+  return `/auth/link/social/${provider}/token`;
+}
+
+/** Full URL a browser client navigates to (full page) to begin a redirect LINK. */
+export function socialLinkStartUrl(
+  apiBaseUrl: string,
+  provider: SocialProvider,
+  redirect = "/",
+): string {
+  return `${apiBaseUrl}${socialLinkStartPath(provider)}?${new URLSearchParams({ redirect })}`;
+}
+
+/**
+ * Account-management client (identities / link phone / unlink / native social link),
+ * separate from {@link SocialAuthClient} and `AuthClient` — like `QrLoginClient`, it is
+ * a distinct capability a client opts into. web/h5 link Google via the redirect
+ * ({@link socialLinkStartUrl}), so they do NOT implement `linkSocialWithIdToken`.
+ */
+export interface AccountLinkClient {
+  identities(): Promise<IdentitiesResponse>;
+  /** `platform` is injected by the platform-bound client; callers pass phone + code. */
+  linkPhone(input: Omit<LinkPhoneInput, "platform">): Promise<AuthUser>;
+  unlink(target: UnlinkTarget): Promise<void>;
+  /** Native only: attach a provider account via an on-device ID token. */
+  linkSocialWithIdToken(
+    provider: SocialProvider,
+    input: Omit<LinkSocialIdTokenInput, "platform">,
+  ): Promise<void>;
 }
