@@ -15,6 +15,7 @@ const readJson = (res: Response): Promise<any> => res.json() as Promise<any>;
 const phoneUser: UserRecord = {
   id: "user_phone",
   phone: "+8613800138000",
+  email: null,
   displayName: null,
   avatarUrl: null,
   role: "user",
@@ -237,7 +238,7 @@ describe("account-link — link social (native id token)", () => {
         .status,
     ).toBe(400);
     expect(
-      (await jsonPost(app, "/auth/link/social/apple/token", { idToken: "x", platform: "ios" }))
+      (await jsonPost(app, "/auth/link/social/facebook/token", { idToken: "x", platform: "ios" }))
         .status,
     ).toBe(400);
   });

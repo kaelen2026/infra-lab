@@ -99,10 +99,11 @@ export const COPY = {
   },
 
   /**
-   * Social sign-in entry (Google). web/h5-only surface — the browser redirect flow
-   * has no native counterpart (native uses on-device ID tokens), so like
-   * `timelineShare`/`legal` these strings are NOT emitted to the native clients by
-   * `generate.ts`; web/h5 read them straight from this source.
+   * Social sign-in entry. `googleButton` is a web/h5-only surface — the browser
+   * redirect flow has no native counterpart (native uses on-device ID tokens) — so
+   * like `timelineShare`/`legal` it is NOT emitted to the native clients. `divider`
+   * IS emitted to iOS (the `AuthCopy.Social.orDivider` under the native Sign in with
+   * Apple button); see `generate.ts`.
    */
   social: {
     /** Label on the "sign in with Google" button. */

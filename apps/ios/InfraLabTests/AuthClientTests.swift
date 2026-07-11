@@ -20,6 +20,24 @@ final class AuthClientTests: XCTestCase {
         (try? JSONSerialization.data(withJSONObject: object)) ?? Data()
     }
 
+    /// URLProtocol strips a POST's `httpBody` onto `httpBodyStream`; read whichever
+    /// the request carries so body assertions work regardless.
+    private static func requestBody(_ request: URLRequest) -> Data? {
+        if let body = request.httpBody { return body }
+        guard let stream = request.httpBodyStream else { return nil }
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        let size = 4096
+        var buffer = [UInt8](repeating: 0, count: size)
+        while stream.hasBytesAvailable {
+            let read = stream.read(&buffer, maxLength: size)
+            if read <= 0 { break }
+            data.append(buffer, count: read)
+        }
+        return data
+    }
+
     func testRequestOtpParsesResponse() async throws {
         MockURLProtocol.handler = { _ in
             (200, self.json(["ok": true, "ttlSeconds": 300, "resendAfterSeconds": 60, "debugCode": "123456"]))
@@ -48,6 +66,56 @@ final class AuthClientTests: XCTestCase {
         XCTAssertTrue(res.user.isNew)
         XCTAssertEqual(store.load()?.accessToken, "at")
         XCTAssertEqual(store.load()?.refreshToken, "rt")
+    }
+
+    func testSignInWithApplePostsTokenAndPersistsTokens() async throws {
+        let store = InMemoryTokenStore()
+        var capturedPath: String?
+        var capturedBody: [String: Any]?
+        MockURLProtocol.handler = { request in
+            capturedPath = request.url?.path
+            // URLProtocol moves a POST body onto httpBodyStream, so read that.
+            capturedBody = Self.requestBody(request).flatMap {
+                (try? JSONSerialization.jsonObject(with: $0)) as? [String: Any]
+            }
+            return (200, self.json([
+                "ok": true,
+                // A Sign in with Apple account has no phone → server sends null.
+                "user": [
+                    "id": "u_apple", "phone": NSNull(), "displayName": NSNull(),
+                    "avatarUrl": NSNull(), "createdAt": "2026-06-30T00:00:00.000Z", "isNew": true
+                ],
+                "tokens": [
+                    "accessToken": "at", "accessTokenExpiresIn": 900,
+                    "refreshToken": "rt", "refreshTokenExpiresIn": 2_592_000, "tokenType": "Bearer"
+                ]
+            ]))
+        }
+        let user = try await makeClient(store: store)
+            .signInWithApple(idToken: "eyJ.apple.jwt", nonce: "raw-nonce", device: nil)
+
+        XCTAssertEqual(capturedPath, AuthRoutes.socialToken("apple"))
+        XCTAssertEqual(capturedBody?["idToken"] as? String, "eyJ.apple.jwt")
+        XCTAssertEqual(capturedBody?["nonce"] as? String, "raw-nonce")
+        XCTAssertEqual(capturedBody?["platform"] as? String, "ios")
+        XCTAssertNil(user.phone)
+        XCTAssertTrue(user.isNew)
+        XCTAssertEqual(store.load()?.accessToken, "at")
+        XCTAssertEqual(store.load()?.refreshToken, "rt")
+    }
+
+    func testSignInWithAppleMapsInvalidTokenError() async {
+        MockURLProtocol.handler = { _ in
+            (401, self.json(["ok": false, "code": "SOCIAL_TOKEN_INVALID"]))
+        }
+        do {
+            _ = try await makeClient().signInWithApple(idToken: "bad", nonce: nil, device: nil)
+            XCTFail("expected failure")
+        } catch let error as AuthClientError {
+            XCTAssertEqual(error.code, .socialTokenInvalid)
+        } catch {
+            XCTFail("unexpected error: \(error)")
+        }
     }
 
     func testInvalidCodeMapsErrorAndRemainingAttempts() async {

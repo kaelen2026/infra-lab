@@ -16,7 +16,12 @@ import {
   type OAuthCallbackUser,
 } from "@infra/auth";
 import { createNeonDb, schema } from "@infra/db/neon";
-import { googleConfigFromEnv, parseCoreEnv } from "@infra/env/core";
+import {
+  appleConfigFromEnv,
+  googleConfigFromEnv,
+  parseCoreEnv,
+  resendConfigFromEnv,
+} from "@infra/env/core";
 import {
   createUpstashOtpStore,
   createUpstashRateLimitStore,
@@ -28,8 +33,10 @@ import { createLogger, type LogLevel } from "./observability/logger.js";
 import type { ObsEnv } from "./observability/middleware.js";
 import { createAccountLinkService } from "./services/account-link-service.js";
 import { createAdminRepository } from "./services/admin-repository.js";
+import { buildOtpEmail } from "./services/otp-email.js";
 import { createRedisQrTicketStore } from "./services/qr-ticket-store.js";
 import { createR2ImageStore } from "./services/r2-image-store.js";
+import { createResendClient } from "./services/resend-client.js";
 import { createSessionService } from "./services/session-service.js";
 import { createSocialAuthService } from "./services/social-auth-service.js";
 import { createTimelineRepository } from "./services/timeline-repository.js";
@@ -53,6 +60,11 @@ export interface WorkerEnv {
   // Google sign-in (optional secrets; both-or-neither, enforced by parseCoreEnv).
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
+  // Apple sign-in (native ID-token flow; single optional var = the app bundle id).
+  APPLE_CLIENT_ID?: string;
+  // Resend email delivery (optional secrets; both-or-neither, enforced by parseCoreEnv).
+  RESEND_API_KEY?: string;
+  RESEND_FROM?: string;
   // Vars ([vars] in wrangler.toml)
   BETTER_AUTH_URL: string;
   NODE_ENV?: string;
@@ -98,7 +110,11 @@ function buildApp(env: WorkerEnv): Hono<ObsEnv> {
   const users = createUserRepository(db);
 
   const googleConfig = googleConfigFromEnv(core);
-  const enabledSocialProviders = new Set(googleConfig ? (["google"] as const) : []);
+  const appleConfig = appleConfigFromEnv(core);
+  const enabledSocialProviders = new Set([
+    ...(googleConfig ? (["google"] as const) : []),
+    ...(appleConfig ? (["apple"] as const) : []),
+  ]);
   // Late-bound bridge — see server.ts for the why (auth precedes sessions).
   let bridgeWebSession: ((info: OAuthCallbackUser) => Promise<string | null>) | null = null;
   const auth = createAuth({
@@ -114,6 +130,9 @@ function buildApp(env: WorkerEnv): Hono<ObsEnv> {
           onOAuthCallbackSession: async (info) =>
             bridgeWebSession ? bridgeWebSession(info) : null,
         }
+      : {}),
+    ...(appleConfig
+      ? { apple: { clientId: appleConfig.clientId, appBundleIdentifier: appleConfig.clientId } }
       : {}),
   });
   const sessions = createSessionService({
@@ -148,6 +167,22 @@ function buildApp(env: WorkerEnv): Hono<ObsEnv> {
     else log.debug("sms code dispatched");
   };
 
+  // Email OTP delivery — Resend runs on Workers unchanged (fetch transport, no
+  // node:http2 like APNS), so it is wired here too. Falls back to the dev log stub
+  // when unconfigured, mirroring `sms`.
+  const resendConfig = resendConfigFromEnv(core);
+  const resend = resendConfig ? createResendClient(resendConfig) : undefined;
+  const sendEmailOtp = resend
+    ? async (email: string, code: string): Promise<void> => {
+        const res = await resend.send(buildOtpEmail(email, code));
+        if (!res.ok) log.error("email otp send failed", { status: res.status, reason: res.reason });
+      }
+    : async (email: string, code: string): Promise<void> => {
+        if (core.OTP_DEBUG_RETURN_CODE)
+          log.warn("dev email stub: delivering code", { email, code });
+        else log.debug("email code dispatched");
+      };
+
   return createApp({
     env: core,
     log,
@@ -166,6 +201,7 @@ function buildApp(env: WorkerEnv): Hono<ObsEnv> {
     qrTickets: createRedisQrTicketStore(otpStore),
     rateLimitStore: createUpstashRateLimitStore(redis),
     sms,
+    sendEmailOtp,
     // No APNS on Workers (node:http2 unsupported); push stays disabled.
   });
 }

@@ -29,6 +29,7 @@ class FakeQrTicketStore implements QrTicketStore {
 const fakeUser: UserRecord = {
   id: "user_native",
   phone: "+8613800138000",
+  email: null,
   displayName: "Scanner",
   avatarUrl: null,
   role: "user",

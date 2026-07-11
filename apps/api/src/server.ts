@@ -14,7 +14,13 @@ import {
   type OAuthCallbackUser,
 } from "@infra/auth";
 import { createDb, schema } from "@infra/db";
-import { apnsConfigFromEnv, googleConfigFromEnv, loadCoreEnv } from "@infra/env/core";
+import {
+  apnsConfigFromEnv,
+  appleConfigFromEnv,
+  googleConfigFromEnv,
+  loadCoreEnv,
+  resendConfigFromEnv,
+} from "@infra/env/core";
 import { createRedis, createRedisOtpStore, createRedisRateLimitStore } from "@infra/redis";
 import { createApp } from "./app.js";
 import { createLogger } from "./observability/logger.js";
@@ -22,7 +28,9 @@ import { createAccountLinkService } from "./services/account-link-service.js";
 import { createAdminRepository } from "./services/admin-repository.js";
 import { createApnsClient } from "./services/apns-client.js";
 import { createLocalImageStore } from "./services/image-store.js";
+import { buildOtpEmail } from "./services/otp-email.js";
 import { createRedisQrTicketStore } from "./services/qr-ticket-store.js";
+import { createResendClient } from "./services/resend-client.js";
 import { createSessionService } from "./services/session-service.js";
 import { createSocialAuthService } from "./services/social-auth-service.js";
 import { createTimelineRepository } from "./services/timeline-repository.js";
@@ -45,8 +53,10 @@ const redis = createRedis(env.REDIS_URL, {
 });
 const users = createUserRepository(db);
 
-// Google sign-in is opt-in: enabled only when both GOOGLE_CLIENT_ID/SECRET are set.
+// Social sign-in is opt-in per provider: Google when GOOGLE_CLIENT_ID/SECRET are set,
+// Apple (native ID-token) when APPLE_CLIENT_ID is set.
 const googleConfig = googleConfigFromEnv(env);
+const appleConfig = appleConfigFromEnv(env);
 // Late-bound: the Google web-redirect bridge (hooks.after in createAuth) provisions the
 // profile + audits + mints our session cookie via `users`/`sessions`, and `sessions` is
 // constructed AFTER `auth` (it depends on it). A mutable holder breaks the cycle; the
@@ -65,8 +75,14 @@ const auth = createAuth({
         onOAuthCallbackSession: async (info) => (bridgeWebSession ? bridgeWebSession(info) : null),
       }
     : {}),
+  ...(appleConfig
+    ? { apple: { clientId: appleConfig.clientId, appBundleIdentifier: appleConfig.clientId } }
+    : {}),
 });
-const enabledSocialProviders = new Set(googleConfig ? (["google"] as const) : []);
+const enabledSocialProviders = new Set([
+  ...(googleConfig ? (["google"] as const) : []),
+  ...(appleConfig ? (["apple"] as const) : []),
+]);
 const social = createSocialAuthService({ auth, enabledProviders: enabledSocialProviders });
 const accountLink = createAccountLinkService({ auth, enabledProviders: enabledSocialProviders });
 // The OTP + CLI device-flow services and QR ticket store share the one Redis
@@ -83,6 +99,23 @@ const sms = async (phone: string, code: string): Promise<void> => {
   if (env.OTP_DEBUG_RETURN_CODE) log.warn("dev sms stub: delivering code", { phone, code });
   else log.debug("sms code dispatched");
 };
+
+// Email OTP delivery: Resend when configured, else the same dev log stub as `sms`
+// (the code is surfaced only under OTP_DEBUG_RETURN_CODE, never in a production-like
+// config). A send failure is logged at error for ops — status/reason only, never the
+// email or code — and does not throw: the code is valid in Redis for its TTL and the
+// user can resend, matching the phone channel's fire-and-forget posture.
+const resendConfig = resendConfigFromEnv(env);
+const resend = resendConfig ? createResendClient(resendConfig) : undefined;
+const sendEmailOtp = resend
+  ? async (email: string, code: string): Promise<void> => {
+      const res = await resend.send(buildOtpEmail(email, code));
+      if (!res.ok) log.error("email otp send failed", { status: res.status, reason: res.reason });
+    }
+  : async (email: string, code: string): Promise<void> => {
+      if (env.OTP_DEBUG_RETURN_CODE) log.warn("dev email stub: delivering code", { email, code });
+      else log.debug("email code dispatched");
+    };
 
 const sessions = createSessionService({
   db,
@@ -142,6 +175,7 @@ const app = createApp({
   qrTickets: createRedisQrTicketStore(otpStore),
   rateLimitStore: createRedisRateLimitStore(redis),
   sms,
+  sendEmailOtp,
   apns,
   apnsProduction: apnsConfig?.production,
   isShuttingDown: () => shuttingDown,

@@ -24,6 +24,7 @@ function fakeIO(answers: string[] = []): { io: CliIO; out: string[]; err: string
 const USER: AuthUser = {
   id: "u_1",
   phone: "+8613800138000",
+  email: null,
   displayName: null,
   avatarUrl: null,
   createdAt: "2026-07-03T00:00:00.000Z",

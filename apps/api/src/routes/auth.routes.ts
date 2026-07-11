@@ -38,6 +38,8 @@ export interface UserRecord {
   id: string;
   /** `null` for a social-only account (Google) that has never linked a phone. */
   phone: string | null;
+  /** `null` for accounts with no email credential (phone-OTP / social without email). */
+  email: string | null;
   displayName: string | null;
   avatarUrl: string | null;
   /** Persisted identity role; gates the admin console. */
@@ -47,10 +49,18 @@ export interface UserRecord {
 
 export interface UserRepository {
   findByPhone(phone: string): Promise<UserRecord | null>;
+  /** Load a user by email (the email-OTP login subject). Email is stored lowercased. */
+  findByEmail(email: string): Promise<UserRecord | null>;
   /** Load a user by id (used to issue tokens after a CLI device-flow approval). */
   findById(id: string): Promise<UserRecord | null>;
   /** Creates the user row AND its profile row in one transaction. */
   createWithProfile(phone: string): Promise<UserRecord>;
+  /**
+   * Email counterpart of {@link createWithProfile}: creates the user row (with
+   * `email` set + `emailVerified: true`, since the OTP just proved it) and its
+   * profile row in one transaction. Used by the email-OTP find-or-create.
+   */
+  createWithProfileByEmail(email: string): Promise<UserRecord>;
   /**
    * Idempotently ensure a profile row exists for a user provisioned OUTSIDE the OTP
    * flow — i.e. one Better Auth created for a social sign-in, which writes the `user`
@@ -181,7 +191,7 @@ export interface AuthRouteDeps {
   };
 }
 
-const ERROR_STATUS: Record<AuthErrorCode, ContentfulStatusCode> = {
+export const ERROR_STATUS: Record<AuthErrorCode, ContentfulStatusCode> = {
   INVALID_REQUEST: 400,
   RESEND_COOLDOWN: 429,
   DAILY_LIMIT_EXCEEDED: 429,
@@ -239,6 +249,7 @@ export function toAuthUser(user: UserRecord, isNew: boolean): AuthUser {
   return {
     id: user.id,
     phone: user.phone,
+    email: user.email,
     displayName: user.displayName,
     avatarUrl: user.avatarUrl,
     createdAt: user.createdAt.toISOString(),

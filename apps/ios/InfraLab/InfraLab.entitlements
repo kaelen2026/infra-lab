@@ -10,5 +10,13 @@
 	     true for TestFlight builds. -->
 	<key>aps-environment</key>
 	<string>development</string>
+	<!-- Sign in with Apple. Simulator ignores it; a device / TestFlight build needs a
+	     provisioning profile whose App ID has the "Sign in with Apple" capability
+	     enabled (Automatic signing + DEVELOPMENT_TEAM). "Default" is the standard
+	     primary-app-relationship value. -->
+	<key>com.apple.developer.applesignin</key>
+	<array>
+		<string>Default</string>
+	</array>
 </dict>
 </plist>

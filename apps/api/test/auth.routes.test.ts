@@ -37,6 +37,9 @@ class FakeUserRepository implements UserRepository {
   async findByPhone(phone: string): Promise<UserRecord | null> {
     return [...this.users.values()].find((u) => u.phone === phone) ?? null;
   }
+  async findByEmail(email: string): Promise<UserRecord | null> {
+    return [...this.users.values()].find((u) => u.email === email) ?? null;
+  }
   async findById(id: string): Promise<UserRecord | null> {
     return this.users.get(id) ?? null;
   }
@@ -45,6 +48,22 @@ class FakeUserRepository implements UserRepository {
     const rec: UserRecord = {
       id,
       phone,
+      email: null,
+      displayName: null,
+      avatarUrl: null,
+      role: "user",
+      createdAt: new Date("2026-06-30T00:00:00Z"),
+    };
+    this.users.set(id, rec);
+    this.profiles.add(id);
+    return rec;
+  }
+  async createWithProfileByEmail(email: string): Promise<UserRecord> {
+    const id = `user_${++this.seq}`;
+    const rec: UserRecord = {
+      id,
+      phone: null,
+      email,
       displayName: null,
       avatarUrl: null,
       role: "user",
@@ -572,6 +591,7 @@ describe("POST /auth/devices/push-token", () => {
     sessions.currentUser = {
       id: "user_1",
       phone: PHONE,
+      email: null,
       displayName: null,
       avatarUrl: null,
       role: "user",
@@ -587,6 +607,7 @@ describe("POST /auth/devices/push-token", () => {
     sessions.currentUser = {
       id: "user_1",
       phone: PHONE,
+      email: null,
       displayName: null,
       avatarUrl: null,
       role: "user",
@@ -611,6 +632,7 @@ describe("POST /auth/devices/push-token", () => {
     sessions.currentUser = {
       id: "user_1",
       phone: PHONE,
+      email: null,
       displayName: null,
       avatarUrl: null,
       role: "user",

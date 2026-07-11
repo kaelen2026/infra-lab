@@ -87,6 +87,25 @@ const CoreEnvSchema = z
     // Never logged. See packages/auth/src/better-auth.ts + routes/social.routes.ts.
     GOOGLE_CLIENT_ID: optionalNonEmpty,
     GOOGLE_CLIENT_SECRET: optionalNonEmpty,
+    // ── Apple sign-in (Sign in with Apple), native-only for now ───────────────────
+    // Enables the Apple login entry point for the native ID-token flow (iOS today).
+    // Single, optional var: the on-device idToken's `aud` is the app bundle id, so we
+    // verify against it (Better Auth `appBundleIdentifier`). Unlike Google there is no
+    // both-or-neither pair — the web authorization-code flow (Services ID + `.p8`
+    // client secret) is deferred, so no APPLE_CLIENT_SECRET is needed yet. Set this to
+    // the iOS bundle id (dev.w3ctech.infralab). Unset → Apple disabled, its route
+    // answers SOCIAL_PROVIDER_DISABLED. See packages/auth/src/better-auth.ts.
+    APPLE_CLIENT_ID: optionalNonEmpty,
+    // ── Resend (transactional email, for the email-OTP channel), all optional ─────
+    // Enables delivering OTP codes over email via Resend's HTTP API. Both optional so
+    // the API boots without email configured (`resendConfigFromEnv` returns null → the
+    // email-OTP endpoints fall back to the same dev log stub as the SMS channel, so the
+    // flow still works locally and only real delivery is skipped). When ONE is set the
+    // superRefine below requires the other, so a half-configured provider fails fast at
+    // boot instead of silently dropping every email. RESEND_FROM is the verified sender
+    // ("Name <no-reply@your-domain>"). RESEND_API_KEY is never logged.
+    RESEND_API_KEY: optionalNonEmpty,
+    RESEND_FROM: optionalNonEmpty,
     // Global request-body ceiling (bytes). A body larger than this is rejected with a
     // 413 before the handler runs, bounding the memory one request can force the API to
     // buffer. Must stay above the largest legitimate body — a timeline image upload
@@ -235,6 +254,17 @@ const CoreEnvSchema = z
         message: "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set together (or both unset)",
       });
     }
+    // Resend both-or-neither: the API key and the verified `from` address are both
+    // required to send. A half-set pair is a deployment mistake — every email would
+    // fail (missing key) or be rejected by Resend (missing/unverified from). Fail fast
+    // at boot. All-unset simply leaves email delivery on the dev log stub.
+    if ((e.RESEND_API_KEY === undefined) !== (e.RESEND_FROM === undefined)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [e.RESEND_API_KEY === undefined ? "RESEND_API_KEY" : "RESEND_FROM"],
+        message: "RESEND_API_KEY and RESEND_FROM must be set together (or both unset)",
+      });
+    }
   })
   .transform((e) => {
     // Allowlist for both hono CORS and Better Auth: BETTER_AUTH_URL (the web/auth origin,
@@ -333,6 +363,44 @@ export interface GoogleEnvConfig {
 export function googleConfigFromEnv(env: CoreEnv): GoogleEnvConfig | null {
   if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) return null;
   return { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET };
+}
+
+export interface AppleEnvConfig {
+  /**
+   * The audience the native ID token is verified against — the iOS app bundle id
+   * (`dev.w3ctech.infralab`). Passed to Better Auth as both `clientId` and
+   * `appBundleIdentifier`; the on-device Sign in with Apple idToken carries this
+   * bundle id in its `aud`, not a Services ID. Never logged.
+   */
+  clientId: string;
+}
+
+/**
+ * Build Apple sign-in config from validated env, or `null` when it is not
+ * configured (`APPLE_CLIENT_ID` unset → the provider is simply disabled). Native
+ * ID-token verification needs only the audience, so there is no secret to pair.
+ */
+export function appleConfigFromEnv(env: CoreEnv): AppleEnvConfig | null {
+  if (!env.APPLE_CLIENT_ID) return null;
+  return { clientId: env.APPLE_CLIENT_ID };
+}
+
+/** Resolved Resend email-delivery credentials. */
+export interface ResendEnvConfig {
+  /** Resend API key (`re_...`). Never logged. */
+  apiKey: string;
+  /** Verified sender, e.g. `Infra Lab <no-reply@example.com>`. */
+  from: string;
+}
+
+/**
+ * Build Resend email config from validated env, or `null` when it is not configured
+ * (neither var set). The schema's superRefine guarantees a non-null result has both
+ * fields present (both-or-neither), so callers get all-or-nothing.
+ */
+export function resendConfigFromEnv(env: CoreEnv): ResendEnvConfig | null {
+  if (!env.RESEND_API_KEY || !env.RESEND_FROM) return null;
+  return { apiKey: env.RESEND_API_KEY, from: env.RESEND_FROM };
 }
 
 let cached: CoreEnv | undefined;

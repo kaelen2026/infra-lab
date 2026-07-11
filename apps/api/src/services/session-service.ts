@@ -56,6 +56,7 @@ export function createSessionService(config: SessionServiceConfig): SessionServi
     return {
       id: row.user.id,
       phone: row.user.phone ?? null,
+      email: row.user.email ?? null,
       displayName: row.profile?.displayName ?? null,
       avatarUrl: row.profile?.avatarUrl ?? null,
       role: row.user.role,

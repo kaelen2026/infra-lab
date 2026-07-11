@@ -8,6 +8,7 @@ const SECRET = "session-test-secret";
 const USER: UserRecord = {
   id: "user_1",
   phone: "+8613800138000",
+  email: null,
   displayName: "Kai",
   avatarUrl: null,
   role: "user",

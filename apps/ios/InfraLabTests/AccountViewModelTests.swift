@@ -30,6 +30,9 @@ private final class FakeAccountClient: AuthClient {
     func verifyOtp(phone: String, code: String, device: DeviceInfo?) async throws -> VerifyOtpResponse {
         throw Unscripted()
     }
+    func signInWithApple(idToken: String, nonce: String?, device: DeviceInfo?) async throws -> AuthUser {
+        throw Unscripted()
+    }
     func refresh() async throws -> AuthTokens? { nil }
     func me() async throws -> AuthUser { throw Unscripted() }
     func updatePushToken(deviceId: String, pushToken: String) async throws {}

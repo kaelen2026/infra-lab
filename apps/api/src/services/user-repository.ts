@@ -18,6 +18,27 @@ export function createUserRepository(db: Db): UserRepository {
     return {
       id: row.user.id,
       phone: row.user.phone ?? null,
+      email: row.user.email ?? null,
+      displayName: row.profile?.displayName ?? null,
+      avatarUrl: row.profile?.avatarUrl ?? null,
+      role: row.user.role,
+      createdAt: row.user.createdAt,
+    };
+  }
+
+  async function loadByEmail(email: string): Promise<UserRecord | null> {
+    const rows = await db
+      .select({ user, profile })
+      .from(user)
+      .leftJoin(profile, eq(profile.userId, user.id))
+      .where(eq(user.email, email))
+      .limit(1);
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      id: row.user.id,
+      phone: row.user.phone ?? null,
+      email: row.user.email ?? null,
       displayName: row.profile?.displayName ?? null,
       avatarUrl: row.profile?.avatarUrl ?? null,
       role: row.user.role,
@@ -37,6 +58,7 @@ export function createUserRepository(db: Db): UserRepository {
     return {
       id: row.user.id,
       phone: row.user.phone ?? null,
+      email: row.user.email ?? null,
       displayName: row.profile?.displayName ?? null,
       avatarUrl: row.profile?.avatarUrl ?? null,
       role: row.user.role,
@@ -46,6 +68,7 @@ export function createUserRepository(db: Db): UserRepository {
 
   return {
     findByPhone: loadByPhone,
+    findByEmail: loadByEmail,
     findById: loadById,
 
     async createWithProfile(phone) {
@@ -59,7 +82,36 @@ export function createUserRepository(db: Db): UserRepository {
       });
       // New accounts default to the `user` role (the DB default); promote to admin
       // out-of-band via scripts/grant-admin.mjs.
-      return { id, phone, displayName: null, avatarUrl: null, role: "user", createdAt: now };
+      return {
+        id,
+        phone,
+        email: null,
+        displayName: null,
+        avatarUrl: null,
+        role: "user",
+        createdAt: now,
+      };
+    },
+
+    async createWithProfileByEmail(email) {
+      const id = randomUUID();
+      const now = new Date();
+      await db.transaction(async (tx) => {
+        // emailVerified: the OTP round-trip just proved control of the address.
+        await tx
+          .insert(user)
+          .values({ id, email, emailVerified: true, createdAt: now, updatedAt: now });
+        await tx.insert(profile).values({ id: randomUUID(), userId: id });
+      });
+      return {
+        id,
+        phone: null,
+        email,
+        displayName: null,
+        avatarUrl: null,
+        role: "user",
+        createdAt: now,
+      };
     },
 
     async ensureProfile(userId, hints) {

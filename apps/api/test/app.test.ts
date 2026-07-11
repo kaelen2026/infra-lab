@@ -53,6 +53,7 @@ function buildApp(overrides: Partial<AppDeps> = {}) {
     qrTickets: {} as QrTicketStore,
     rateLimitStore: { incr: async () => 1, expire: async () => true },
     sms: async () => {},
+    sendEmailOtp: async () => {},
     ...overrides,
   };
   return createApp(deps);
