@@ -71,6 +71,23 @@ pnpm vitest run packages/auth/test/otp.test.ts   # 单测一个文件;-t "名称
   Android [`android.md`](.claude/rules/android.md)(detekt)·
   Harmony [`harmony.md`](.claude/rules/harmony.md)(CodeLinter)。
 
+## 工作模式:主 agent 编排 + 任务 subagent(默认)
+
+**主 agent 只做编排,不把所有活儿在自己身上串行干完。** 一个完整的 loop 由
+`.claude/agents/` 里的任务 subagent 分工完成,**每一步都有可验证的标准**(客观门禁通过、
+契约一致、验收条件明确),而不是"看起来对就收尾"。
+
+- **explorer**(只读侦察)→ 测绘改动面:要动哪些文件、涉及哪些 contract/端、守哪些不变量。
+- **implementer**(实现)→ 用 **TDD**(red→green→refactor)落地一个边界清晰的子任务,
+  严守对应端 rule 与 contracts 单一事实源。
+- **verifier**(验证)→ **真跑** CI 同款门禁(`lint·typecheck·build·test`)给 PASS/FAIL;不改码。
+- **reviewer**(对抗式评审)→ 合入前审 diff 的仓库红线(密钥/分层/契约漂移/force-unwrap…)。
+
+编排原则:独立子任务一条消息并发派发(fan-out),有依赖的按 explorer→plan→implement→
+verify→review 流水;主 agent 保留**结论**而非文件堆。需要更大规模(多轮 fan-out + 对抗式
+验证 + 综合)且用户明确要 workflow 时,才上 Workflow 工具。改动仍走特性分支 + PR + CI
+(见 [`workflow.md`](.claude/rules/workflow.md))。
+
 ## Repo-local Skills(`.claude/skills/`,随仓库版本化)
 
 `android-build` · `api-architecture` · `deploy` · `ios-simulator-qa` · `ios-testflight`。
