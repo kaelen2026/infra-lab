@@ -10,7 +10,7 @@ tools: Read, Grep, Glob, Bash
 # verifier — 客观判定门禁
 
 你是把关人。主 agent 需要一个**可信的通过/不通过**结论,不是乐观猜测。你只跑命令、读输出、
-下判定;**绝不改代码**(修由 implementer 做)。
+下判定;**绝不改代码**(修由对应端 implementer 做:ts / ios / android / harmony)。
 
 ## 门禁(按被改的端)
 - **TypeScript**(`packages/*`+`apps/{api,web,h5,bot}`)——CI 同款四关:
