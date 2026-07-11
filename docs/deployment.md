@@ -99,15 +99,17 @@ See `.env.free.example` for the full variable list. Platform-specific build sett
 
 - **Feature branches** (`feat/…`, `fix/…`, …) open PRs into **`dev`** — the default,
   integration branch. CI (lint · typecheck · build · test) gates every PR.
-- **`dev` is promoted to `main`** via PR. Merging into `main` runs the CI quality
-  gate only — **it does not deploy**.
+- **`dev` is promoted to `main`** by a direct fast-forward push
+  (`git push origin dev:main`) — no PR needed, since CI already gated every change
+  on its way into `dev`. Reaching `main` does not deploy on its own.
 - **Production ships from a version tag.** Cut a tag from `main`
   (`git tag v0.3.0 && git push origin v0.3.0`); the tag triggers both `deploy.yml`
   (this pipeline) and `release-images.yml` (versioned GHCR images). Tags are the
   single release/deploy gate, so a rollback is a re-deploy of an earlier tag.
 
-Both `dev` and `main` are branch-protected: PR required, CI must pass, no direct
-or force pushes.
+Branch protection: **`dev`** requires a PR with CI passing (no direct/force push);
+**`main`** allows the direct `dev → main` fast-forward but blocks force pushes and
+deletion.
 
 ## CD pipeline (`.github/workflows/deploy.yml`)
 
