@@ -87,6 +87,12 @@ const CoreEnvSchema = z
     // Never logged. See packages/auth/src/better-auth.ts + routes/social.routes.ts.
     GOOGLE_CLIENT_ID: optionalNonEmpty,
     GOOGLE_CLIENT_SECRET: optionalNonEmpty,
+    // Optional extra audience for the native ID-token flow: the iOS OAuth client id.
+    // GoogleSignIn on-device mints an idToken whose `aud` is this iOS client id, not the
+    // web one — so when set it is appended to `clientId` (making it an array) so Better
+    // Auth accepts tokens for either audience. Requires GOOGLE_CLIENT_ID (see superRefine);
+    // unset ⇒ clientId stays the single web id (backward-compatible). Never logged.
+    GOOGLE_IOS_CLIENT_ID: optionalNonEmpty,
     // ── Apple sign-in (Sign in with Apple), native-only for now ───────────────────
     // Enables the Apple login entry point for the native ID-token flow (iOS today).
     // Single, optional var: the on-device idToken's `aud` is the app bundle id, so we
@@ -254,6 +260,17 @@ const CoreEnvSchema = z
         message: "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set together (or both unset)",
       });
     }
+    // The iOS audience is only ever appended to the base Google config. Without
+    // GOOGLE_CLIENT_ID, `googleConfigFromEnv` returns null and the iOS id would be
+    // silently dropped — a deployment mistake, so fail fast at boot instead.
+    if (e.GOOGLE_IOS_CLIENT_ID !== undefined && e.GOOGLE_CLIENT_ID === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["GOOGLE_IOS_CLIENT_ID"],
+        message:
+          "GOOGLE_IOS_CLIENT_ID requires GOOGLE_CLIENT_ID (it is an extra audience, not a standalone config)",
+      });
+    }
     // Resend both-or-neither: the API key and the verified `from` address are both
     // required to send. A half-set pair is a deployment mistake — every email would
     // fail (missing key) or be rejected by Resend (missing/unverified from). Fail fast
@@ -350,19 +367,30 @@ export function apnsConfigFromEnv(env: CoreEnv): ApnsEnvConfig | null {
 
 /** Resolved Google OAuth credentials. */
 export interface GoogleEnvConfig {
-  clientId: string;
+  /**
+   * The accepted audience(s). A single web client id, or `[web, ios]` when
+   * `GOOGLE_IOS_CLIENT_ID` is also set — Better Auth's `google.clientId` accepts
+   * either, verifying a native ID token against any listed audience while the web
+   * redirect flow uses the first entry.
+   */
+  clientId: string | string[];
   /** Never logged. Required for the web authorization-code flow. */
   clientSecret: string;
 }
 
 /**
  * Build Google sign-in config from validated env, or `null` when it is not
- * configured (neither var set). The schema's superRefine guarantees a non-null
- * result has both fields present (both-or-neither), so callers get all-or-nothing.
+ * configured (neither web var set). The schema's superRefine guarantees a non-null
+ * result has both web fields present (both-or-neither), so callers get all-or-nothing.
+ * When `GOOGLE_IOS_CLIENT_ID` is set it is appended as an extra accepted audience,
+ * widening `clientId` to `[web, ios]`; unset ⇒ the single web id (backward-compatible).
  */
 export function googleConfigFromEnv(env: CoreEnv): GoogleEnvConfig | null {
   if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) return null;
-  return { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET };
+  const clientId = env.GOOGLE_IOS_CLIENT_ID
+    ? [env.GOOGLE_CLIENT_ID, env.GOOGLE_IOS_CLIENT_ID]
+    : env.GOOGLE_CLIENT_ID;
+  return { clientId, clientSecret: env.GOOGLE_CLIENT_SECRET };
 }
 
 export interface AppleEnvConfig {
