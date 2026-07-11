@@ -9,9 +9,9 @@ name: release-images
 #
 # Images: ghcr.io/<owner>/<repo>/{api,web,h5,bot}:<version|sha>.
 #
-# Database migrations are NOT run here — the CD workflow (deploy.yml) already
-# orders `db-migrate` before `deploy-api` on push to main; self-hosted compose
-# operators run migrations out-of-band per docs/deployment.md.
+# Database migrations are NOT run here — the CD workflow (deploy.yml) triggers on
+# the same version tag and orders `db-migrate` before `deploy-api`; self-hosted
+# compose operators run migrations out-of-band per docs/deployment.md.
 #
 # NOTE: web/h5 bake their public API origin into the browser bundle at BUILD time
 # (NEXT_PUBLIC_API_URL / VITE_API_URL, from repo Variables). One published image

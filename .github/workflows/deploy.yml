@@ -9,10 +9,16 @@ name: Deploy
 #   DEPLOY_API  → API   → Cloudflare Workers (+ Neon migrate)
 #   DEPLOY_H5   → H5    → Cloudflare Pages
 #   DEPLOY_WEB  → Web   → Vercel
+#
+# Trigger: a pushed version tag (`git tag v0.3.0 && git push origin v0.3.0`), cut
+# from `main` after a `dev → main` promotion PR. Merging into `main` does NOT
+# deploy — it only runs the CI quality gate; the tag is the release/deploy gate.
+# release-images.yml builds the versioned GHCR images off the same tag.
+# `workflow_dispatch` remains for manual re-runs against the checked-out ref.
 
 on:
   push:
-    branches: [main]
+    tags: ["v*"]
   workflow_dispatch:
 
 # Never cancel an in-flight deploy; let each finish so a half-applied rollout can't happen.
