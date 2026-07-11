@@ -233,6 +233,19 @@ final class AuthViewModelTests: XCTestCase {
         XCTAssertFalse(model.busy)
     }
 
+    func testGoogleDisabledByDefault() {
+        let model = AuthViewModel(client: FakeAuthClient())
+        XCTAssertFalse(model.googleEnabled)
+    }
+
+    func testGoogleEnabledWhenConfigured() {
+        let provider = FakeGoogleSignInProvider(.success(
+            GoogleSignInCredential(idToken: "t", nonce: nil)
+        ))
+        let model = AuthViewModel(client: FakeAuthClient(), googleSignIn: provider, googleEnabled: true)
+        XCTAssertTrue(model.googleEnabled)
+    }
+
     func testCompleteGoogleSignInExchangeFailureStaysWithMessage() async {
         let client = FakeAuthClient()
         client.signInWithGoogleResult = .failure(AuthClientError.http(

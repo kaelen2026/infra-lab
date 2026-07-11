@@ -37,6 +37,13 @@ final class AuthViewModel: ObservableObject {
     /// True while the launch-time session restore is in flight.
     @Published private(set) var restoring = true
 
+    /// Whether the Google button should be offered — mirrors web's
+    /// `NEXT_PUBLIC_GOOGLE_ENABLED` / h5's `VITE_GOOGLE_ENABLED`. The composition
+    /// root sets it from `GoogleConfig.isEnabled` (a client id is configured);
+    /// when false the view hides the button and the injected provider is the
+    /// ``UnavailableGoogleSignInProvider`` placeholder.
+    let googleEnabled: Bool
+
     private let client: AuthClient
     private let googleSignIn: GoogleSignInProvider
     private var cooldownTask: Task<Void, Never>?
@@ -44,9 +51,14 @@ final class AuthViewModel: ObservableObject {
     /// into the Apple request, the raw value is sent to our server, which re-derives.
     private var appleNonce: String?
 
-    init(client: AuthClient, googleSignIn: GoogleSignInProvider = UnavailableGoogleSignInProvider()) {
+    init(
+        client: AuthClient,
+        googleSignIn: GoogleSignInProvider = UnavailableGoogleSignInProvider(),
+        googleEnabled: Bool = false
+    ) {
         self.client = client
         self.googleSignIn = googleSignIn
+        self.googleEnabled = googleEnabled
     }
 
     // MARK: - Derived UI state

@@ -31,6 +31,26 @@ settings:
     # SHARE_BASE_URL (see AppConfig.swift). Empty → http://localhost:3002, the
     # h5 dev server.
     SHARE_BASE_URL: ""
+    # Google Sign-In OAuth *iOS client id* (Google Cloud → Credentials → iOS client),
+    # substituted into Info.plist's GIDClientID (see GoogleConfig in AppConfig.swift).
+    # Empty → the Google button is hidden and the app injects the
+    # UnavailableGoogleSignInProvider, so the app builds / runs / tests with no Google
+    # config. NEVER commit a real id — pass it at build time, e.g.
+    #   make build GID_CLIENT_ID=<id>.apps.googleusercontent.com \
+    #              GID_REVERSED_CLIENT_ID=com.googleusercontent.apps.<id>
+    GID_CLIENT_ID: ""
+    # The "reversed" client id (Google Cloud iOS client → "iOS URL scheme"), registered
+    # below as a CFBundleURLScheme so Google can redirect back after the browser handoff.
+    # Empty placeholder until configured; harmless when blank (no real Google flow runs).
+    GID_REVERSED_CLIENT_ID: ""
+
+packages:
+  # Google Sign-In SDK. XcodeGen resolves it via SPM and regenerates the (gitignored)
+  # .xcodeproj — do not hand-edit project.pbxproj. `GoogleSignIn` is the SDK,
+  # `GoogleSignInSwift` provides the self-localized SwiftUI button.
+  GoogleSignIn:
+    url: https://github.com/google/GoogleSignIn-iOS
+    from: "9.0.0"
 
 targets:
   InfraLab:
@@ -38,6 +58,11 @@ targets:
     platform: iOS
     sources:
       - path: InfraLab
+    dependencies:
+      - package: GoogleSignIn
+        product: GoogleSignIn
+      - package: GoogleSignIn
+        product: GoogleSignInSwift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.w3ctech.infralab
@@ -70,12 +95,21 @@ targets:
           - UIInterfaceOrientationLandscapeRight
         API_BASE_URL: $(API_BASE_URL)
         SHARE_BASE_URL: $(SHARE_BASE_URL)
+        # The GoogleSignIn SDK reads GIDClientID from Info.plist. Empty when
+        # unconfigured — GoogleConfig treats a blank value as "disabled", hides the
+        # button and injects UnavailableGoogleSignInProvider.
+        GIDClientID: $(GID_CLIENT_ID)
         # Custom scheme for deep links (mirror of TIMELINE_APP_SCHEME in
         # @infra/shared): the h5 share landing opens infralab://timeline/<id>.
+        # The second entry is Google Sign-In's redirect scheme (the reversed client
+        # id); blank placeholder until GID_REVERSED_CLIENT_ID is set.
         CFBundleURLTypes:
           - CFBundleURLName: dev.w3ctech.infralab
             CFBundleURLSchemes:
               - infralab
+          - CFBundleURLName: dev.w3ctech.infralab.google
+            CFBundleURLSchemes:
+              - $(GID_REVERSED_CLIENT_ID)
         # Camera access for the timeline composer (taking a photo to publish) and
         # the QR login scanner (account sheet). Library picking uses PhotosPicker
         # (PHPicker, out-of-process), which needs no permission, so only the
