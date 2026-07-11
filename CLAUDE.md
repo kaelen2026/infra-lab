@@ -73,7 +73,7 @@ pnpm vitest run packages/auth/test/otp.test.ts   # 单测一个文件;-t "名称
 
 ## Repo-local Skills(`.claude/skills/`,随仓库版本化)
 
-`android-build` · `api-architecture` · `ios-simulator-qa` · `ios-testflight`。
+`android-build` · `api-architecture` · `deploy` · `ios-simulator-qa` · `ios-testflight`。
 不要另建未跟踪的 `.agents/` 副本;`AGENTS.md` 有意回指这里,保持单一维护源。
 
 ## Rules (always apply)
