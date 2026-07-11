@@ -1,5 +1,6 @@
 ---
 name: ios-implementer
+model: opus
 description: >-
   iOS 实现者(`apps/ios`,Swift / SwiftUI)。主 agent 把一个**边界清晰、已有验收标准**的
   iOS 子任务交给它,先测契约/SDK 逻辑再落地。它镜像共享 `AuthClient` 语义(login==register),

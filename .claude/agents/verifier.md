@@ -1,5 +1,6 @@
 ---
 name: verifier
+model: sonnet
 description: >-
   验证员——loop 里"可验证标准"的执行者。主 agent 派它对一处改动**真跑质量门禁**并给出
   客观 PASS/FAIL,而不是"看起来对"。TS 端跑 CI 同款门禁(lint·typecheck·build·test);

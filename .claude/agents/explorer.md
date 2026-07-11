@@ -1,5 +1,6 @@
 ---
 name: explorer
+model: sonnet
 description: >-
   只读侦察员。接到一个任务时,先派它测绘"改动面":要动哪些文件、涉及哪些
   contract/端、必须守住哪些不变量、有哪些坑。主 agent 在 plan/implement 之前用它换取
