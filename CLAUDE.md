@@ -77,7 +77,9 @@ pnpm vitest run packages/auth/test/otp.test.ts   # 单测一个文件;-t "名称
 `.claude/agents/` 里的任务 subagent 分工完成,**每一步都有可验证的标准**(客观门禁通过、
 契约一致、验收条件明确),而不是"看起来对就收尾"。
 
-- **explorer**(只读侦察)→ 测绘改动面:要动哪些文件、涉及哪些 contract/端、守哪些不变量。
+- **explorer**(只读侦察)→ 测绘改动面:要动哪些文件、涉及哪些 contract/端、守哪些不变量;
+  **并确认基线现状能否过对应端门禁**(尤其原生端:先跑一次 `make build` / `detekt` / `codelinter`,
+  别默认基线是绿的)。
 - **implementer(按端拆分,主 agent 按改动落点路由)**→ 用 **TDD**(red→green→refactor)落地一个
   边界清晰的子任务,严守**对应端** rule 与 contracts 单一事实源:
   - **ts-implementer** — `packages/*` + `apps/{api,web,h5,bot,cli,miniprogram}`,门禁是 CI 四关。
@@ -85,6 +87,8 @@ pnpm vitest run packages/auth/test/otp.test.ts   # 单测一个文件;-t "名称
   - **android-implementer** — `apps/android`(Kotlin/Compose),门禁本地 `./gradlew detekt`。
   - **harmony-implementer** — `apps/harmony`(ArkTS),门禁本地 `codelinter`。
   - 一次改 contract 会波及多端 → 主 agent 一条消息并发派发对应端 implementer 同步各自镜像。
+  - 原生端(ios/android/harmony)build/test 循环慢(模拟器/真机全量跑动辄数分钟):implementer
+    迭代期只跑**窄测试 target**,收尾再跑一次全量,别每轮都全量——这是这些端的主要耗时来源。
 - **verifier**(验证)→ **真跑** CI 同款门禁(`lint·typecheck·build·test`)给 PASS/FAIL;不改码。
 - **reviewer**(对抗式评审)→ 合入前审 diff 的仓库红线(密钥/分层/契约漂移/force-unwrap…)。
   **成本分层派发(Opus 不同精度不付两遍)**:默认用其自带 `model: sonnet` 做廉价预审;仅当
@@ -96,6 +100,10 @@ pnpm vitest run packages/auth/test/otp.test.ts   # 单测一个文件;-t "名称
 verify→review 流水;主 agent 保留**结论**而非文件堆。需要更大规模(多轮 fan-out + 对抗式
 验证 + 综合)且用户明确要 workflow 时,才上 Workflow 工具。改动仍走特性分支 + PR + CI
 (见 [`workflow.md`](.claude/rules/workflow.md))。
+
+**fan-out 实现前先确认基线绿**:基线本身不过门禁 / 不绿编译时,别把实现 subagent 派上去撞
+预存坡——先修基线、合入干净基线,再在其上派实现。前车之鉴:iOS 接 Google 登录时 main 上有个
+预存 iOS 编译坡,逻辑 implementer 干了 ~44 分钟才撞出来、还得临时绕过,白烧工时又打乱编排顺序。
 
 **loop 自己驱动到底,不在每个 gate 停下等确认。** 接到一个任务就把它当一整个 loop 跑完
 (explorer→implement→verify→review→建分支→commit→PR),中途**不为"要不要继续下一步"回来
