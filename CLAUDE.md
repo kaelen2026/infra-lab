@@ -78,8 +78,13 @@ pnpm vitest run packages/auth/test/otp.test.ts   # 单测一个文件;-t "名称
 契约一致、验收条件明确),而不是"看起来对就收尾"。
 
 - **explorer**(只读侦察)→ 测绘改动面:要动哪些文件、涉及哪些 contract/端、守哪些不变量。
-- **implementer**(实现)→ 用 **TDD**(red→green→refactor)落地一个边界清晰的子任务,
-  严守对应端 rule 与 contracts 单一事实源。
+- **implementer(按端拆分,主 agent 按改动落点路由)**→ 用 **TDD**(red→green→refactor)落地一个
+  边界清晰的子任务,严守**对应端** rule 与 contracts 单一事实源:
+  - **ts-implementer** — `packages/*` + `apps/{api,web,h5,bot,cli,miniprogram}`,门禁是 CI 四关。
+  - **ios-implementer** — `apps/ios`(Swift/SwiftUI),门禁本地 `make lint`(SwiftLint)。
+  - **android-implementer** — `apps/android`(Kotlin/Compose),门禁本地 `./gradlew detekt`。
+  - **harmony-implementer** — `apps/harmony`(ArkTS),门禁本地 `codelinter`。
+  - 一次改 contract 会波及多端 → 主 agent 一条消息并发派发对应端 implementer 同步各自镜像。
 - **verifier**(验证)→ **真跑** CI 同款门禁(`lint·typecheck·build·test`)给 PASS/FAIL;不改码。
 - **reviewer**(对抗式评审)→ 合入前审 diff 的仓库红线(密钥/分层/契约漂移/force-unwrap…)。
 
@@ -87,6 +92,14 @@ pnpm vitest run packages/auth/test/otp.test.ts   # 单测一个文件;-t "名称
 verify→review 流水;主 agent 保留**结论**而非文件堆。需要更大规模(多轮 fan-out + 对抗式
 验证 + 综合)且用户明确要 workflow 时,才上 Workflow 工具。改动仍走特性分支 + PR + CI
 (见 [`workflow.md`](.claude/rules/workflow.md))。
+
+**loop 自己驱动到底,不在每个 gate 停下等确认。** 接到一个任务就把它当一整个 loop 跑完
+(explorer→implement→verify→review→建分支→commit→PR),中途**不为"要不要继续下一步"回来
+问**;只在两种时刻才停下找用户:(1)**决策分叉**——需求有歧义、多个合理方案要选、要动
+不可逆/对外的动作(删数据、发布上线、`git push --force`);(2)**最终结果**——任务完成或
+遇到自己无法推进的阻塞。gate 失败(verifier FAIL / reviewer 报红线)是 loop 内部事件:自己
+派对应端 implementer 返工再验,不必回来请示。此自治**不豁免**既有纪律——仍**禁止在 `main`
+直接提交**(先建特性分支),仍走 PR + CI 门禁,仍遵守各端 rule 与 contracts 单一事实源。
 
 ## Repo-local Skills(`.claude/skills/`,随仓库版本化)
 
