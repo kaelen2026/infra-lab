@@ -87,6 +87,10 @@ pnpm vitest run packages/auth/test/otp.test.ts   # 单测一个文件;-t "名称
   - 一次改 contract 会波及多端 → 主 agent 一条消息并发派发对应端 implementer 同步各自镜像。
 - **verifier**(验证)→ **真跑** CI 同款门禁(`lint·typecheck·build·test`)给 PASS/FAIL;不改码。
 - **reviewer**(对抗式评审)→ 合入前审 diff 的仓库红线(密钥/分层/契约漂移/force-unwrap…)。
+  **成本分层派发(Opus 不同精度不付两遍)**:默认用其自带 `model: sonnet` 做廉价预审;仅当
+  diff 命中**高危面**(`contracts/*`、`packages/{auth,redis,db}`、token/OTP/session、密钥/安全头)
+  时,主 agent 才用 `model: opus` 升级派发。**合入后 CI 的 `.github/workflows/reviewer.yml`
+  (Opus)是唯一权威评审** —— 本地 reviewer 是合入前快筛,不是终审,别在常规 diff 上烧 Opus。
 
 编排原则:独立子任务一条消息并发派发(fan-out),有依赖的按 explorer→plan→implement→
 verify→review 流水;主 agent 保留**结论**而非文件堆。需要更大规模(多轮 fan-out + 对抗式
