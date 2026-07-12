@@ -243,6 +243,8 @@ Bot 侧环境变量见 [`apps/bot/.env.example`](./apps/bot/.env.example) / [`ap
 - 原生端（iOS / Android / HarmonyOS）各有本地编码规范 + lint 门禁（SwiftLint / detekt / DevEco CodeLinter），
   改动前先读 `.claude/rules/{ios,android,harmony}.md`；这些门禁本地运行，不进 CI（详见 [`CLAUDE.md`](./CLAUDE.md)）。
 - Agent 入口：`AGENTS.md` 只指向 `CLAUDE.md`，不要复制两份说明；仓库本地技能放在 `.claude/skills/`。
+  子代理按改动面累计加载 rules，并可按依赖顺序组合多个 skills；派发与交回都要明确所用规则、
+  技能、验收标准和证据。规则与 skill 冲突时，以仓库规则为准。
 - 详尽的开发须知见 [`CLAUDE.md`](./CLAUDE.md)。
 - 仓库配有 AI 助手 **infra-lab-bot**（`@infra-lab-bot` 提及即用）——协作方式见 [`docs/infra-lab-bot.md`](./docs/infra-lab-bot.md)；
   飞书用户可经 `apps/bot` 接待 bot 触达同一 workflow。
