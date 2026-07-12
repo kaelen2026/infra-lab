@@ -3,7 +3,7 @@ name: CI
 # Quality gate: every push to `main` and every PR must pass lint, typecheck,
 # build, and the hermetic test suite before it can be merged. `main` is the only
 # long-lived branch and every change reaches it through a PR; production ships
-# from a per-app version tag `v{app}-{date}` (see docs/deployment.md).
+# from a per-app version tag `{app}_v{version}` (see docs/deployment.md).
 on:
   push:
     branches: [main]
