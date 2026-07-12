@@ -1,7 +1,7 @@
 import { relations } from "drizzle-orm";
 import { boolean, index, pgEnum, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
-/** device.platform — the supported clients (`cli` = terminal client apps/cli; `weapp` = WeChat mini-program apps/miniprogram). */
+/** device.platform — the supported clients (`cli` = terminal client apps/cli; `weapp` = WeChat mini-program apps/miniprogram; `macos` = macOS desktop client apps/macos). */
 export const platformEnum = pgEnum("platform", [
   "web",
   "ios",
@@ -9,6 +9,7 @@ export const platformEnum = pgEnum("platform", [
   "harmony",
   "cli",
   "weapp",
+  "macos",
 ]);
 
 /**

@@ -17,7 +17,10 @@ import type { TimelineImageContentType } from "./timeline";
 // ever send their own value and never decode this enum, so they are unaffected.
 // `weapp` is the WeChat mini-program (apps/miniprogram): also cookie-less, so it
 // rides the same Bearer + refresh channel as `cli`, storing tokens in wx storage.
-export const PLATFORMS = ["web", "ios", "android", "harmony", "cli", "weapp"] as const;
+// `macos` is the macOS desktop client (apps/macos): a native, cookie-less client
+// on the same Bearer + refresh channel — it reports its own value rather than
+// masquerading as `ios`.
+export const PLATFORMS = ["web", "ios", "android", "harmony", "cli", "weapp", "macos"] as const;
 export const platformSchema = z.enum(PLATFORMS);
 export type Platform = (typeof PLATFORMS)[number];
 

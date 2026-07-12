@@ -1,0 +1,10 @@
+# The Xcode project is generated from project.yml by XcodeGen — never commit it.
+InfraLab.xcodeproj/
+*.xcworkspace/
+# Build output
+.build/
+DerivedData/
+build/
+# Xcode user state
+xcuserdata/
+*.xcuserstate

@@ -1,0 +1,131 @@
+# XcodeGen spec — regenerate the project with `xcodegen generate` (or `make project`).
+# The .xcodeproj is derived, so it is gitignored; this file is the source of truth.
+#
+# This is the macOS peer of apps/ios. It mirrors the shared AuthClient semantics
+# (login == register); only the platform layer differs (AppKit lifecycle, NSImage,
+# an AVFoundation/Vision QR scanner instead of VisionKit's DataScanner, and a
+# ProcessInfo-based DeviceMetadata instead of UIDevice). Design tokens + copy under
+# InfraLab/Generated are emitted by `pnpm gen:design` (emitMacos) — never hand-edited.
+name: InfraLab
+options:
+  bundleIdPrefix: dev.w3ctech.infralab.mac
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # Sign ad-hoc ("Sign to Run Locally") with no team, same rationale as iOS: keeps
+    # the lab build fully offline (Automatic signing would try to fetch a profile).
+    # Device / notarized distribution: set CODE_SIGN_STYLE=Automatic + DEVELOPMENT_TEAM
+    # on the command line (kept out of source control).
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    DEVELOPMENT_TEAM: ""
+    # Build-time API endpoint override, substituted into Info.plist's API_BASE_URL
+    # (see AppConfig.swift). Empty → the app falls back to http://localhost:3001.
+    API_BASE_URL: ""
+    # Origin of the h5 share landing (`/t/:id`), substituted into Info.plist's
+    # SHARE_BASE_URL. Empty → http://localhost:3002, the h5 dev server.
+    SHARE_BASE_URL: ""
+    # Google Sign-In OAuth client id, substituted into Info.plist's GIDClientID.
+    # Empty → the Google button is hidden and UnavailableGoogleSignInProvider is
+    # injected, so the app builds / runs / tests with no Google config.
+    GID_CLIENT_ID: ""
+    # The "reversed" client id, registered below as a CFBundleURLScheme so Google
+    # can redirect back after the browser handoff. Empty placeholder until configured.
+    GID_REVERSED_CLIENT_ID: ""
+
+packages:
+  # Google Sign-In SDK (multiplatform SPM package — supports macOS). XcodeGen resolves
+  # it via SPM and regenerates the (gitignored) .xcodeproj — do not hand-edit pbxproj.
+  GoogleSignIn:
+    url: https://github.com/google/GoogleSignIn-iOS
+    from: "9.0.0"
+
+targets:
+  InfraLab:
+    type: application
+    platform: macOS
+    sources:
+      - path: InfraLab
+    dependencies:
+      - package: GoogleSignIn
+        product: GoogleSignIn
+      - package: GoogleSignIn
+        product: GoogleSignInSwift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.w3ctech.infralab.mac
+        GENERATE_INFOPLIST_FILE: false
+        # Xcode 16 splits the app into a preview "debug dylib"; that breaks hosted
+        # unit tests run via xcodebuild (runner crashes at <external symbol>).
+        ENABLE_DEBUG_DYLIB: false
+        # NOTE: the default local build carries NO restricted entitlements. Push
+        # (aps-environment) and Sign in with Apple both require a provisioning
+        # profile, which ad-hoc "-" signing has no way to fetch — so, unlike iOS
+        # (whose offline build targets the simulator and ignores entitlements),
+        # a macOS host build would fail at signing. The entitlements those
+        # capabilities need live in InfraLab/InfraLab.entitlements and are injected
+        # only by `make archive` (Automatic signing + DEVELOPMENT_TEAM → a profile
+        # that carries them). Locally, push registration is inert exactly as it is
+        # on the iOS simulator.
+        # macOS app icon is a single 1024 image; SwiftUI drives the rest of the UI.
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        COMBINE_HIDPI_IMAGES: "YES"
+    info:
+      path: InfraLab/Info.plist
+      properties:
+        CFBundleDisplayName: Infra Lab
+        LSApplicationCategoryType: public.app-category.developer-tools
+        API_BASE_URL: $(API_BASE_URL)
+        SHARE_BASE_URL: $(SHARE_BASE_URL)
+        # The GoogleSignIn SDK reads GIDClientID from Info.plist. Empty when
+        # unconfigured — GoogleConfig treats a blank value as "disabled".
+        GIDClientID: $(GID_CLIENT_ID)
+        # Custom scheme for deep links (mirror of TIMELINE_APP_SCHEME in
+        # @infra/shared): the h5 share landing opens infralab://timeline/<id>.
+        # The second entry is Google Sign-In's redirect scheme (the reversed client id).
+        CFBundleURLTypes:
+          - CFBundleURLName: dev.w3ctech.infralab
+            CFBundleURLSchemes:
+              - infralab
+          - CFBundleURLName: dev.w3ctech.infralab.google
+            CFBundleURLSchemes:
+              - $(GID_REVERSED_CLIENT_ID)
+        # Camera access is used only by the QR login scanner (AVFoundation capture).
+        # The timeline composer's camera capture is iOS-only (#if os(iOS)); on macOS
+        # images are added via PhotosPicker (out-of-process, needs no permission).
+        NSCameraUsageDescription: 扫描网页端的登录二维码。
+        # Lab app: the API is a dev server reached over cleartext HTTP (localhost or
+        # a LAN IP via API_BASE_URL), so allow arbitrary loads. Revisit before any
+        # signed/notarized public release.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+          NSAllowsArbitraryLoads: true
+        # Standard HTTPS only — exempt from export compliance.
+        ITSAppUsesNonExemptEncryption: false
+
+  InfraLabTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: InfraLabTests
+    dependencies:
+      - target: InfraLab
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: true
+
+schemes:
+  InfraLab:
+    build:
+      targets:
+        InfraLab: all
+    test:
+      targets:
+        - InfraLabTests
