@@ -50,6 +50,9 @@ jobs:
       - name: Seed .env
         run: cp .env.example .env
 
+      - name: Release workflow contract
+        run: node .github/scripts/check-release-workflow-contract.mjs
+
       - name: Lint (biome)
         run: pnpm lint
 
