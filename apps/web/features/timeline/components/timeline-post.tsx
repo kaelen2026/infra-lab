@@ -2,6 +2,7 @@
 
 import type { AuthUser, TimelinePostDTO } from "@infra/sdk";
 import { MoreHorizontal, Trash2 } from "lucide-react";
+import Image from "next/image";
 import { useState } from "react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -98,18 +99,23 @@ export function TimelinePostCard({ post, pending, onRemove }: TimelinePostCardPr
         {post.images.length > 0 && (
           <ul className={cn("grid gap-1.5", gridCols(post.images.length))}>
             {post.images.map((image, i) => (
-              <li key={image.url} className="overflow-hidden rounded-lg border bg-muted">
+              <li
+                key={image.url}
+                className="relative aspect-square overflow-hidden rounded-lg border bg-muted"
+              >
                 <button
                   type="button"
                   onClick={() => setViewerIndex(i)}
                   aria-label="查看大图"
                   className="block size-full cursor-zoom-in"
                 >
-                  <img
+                  <Image
                     src={resolveImageUrl(image.url)}
                     alt="动态图片"
-                    loading="lazy"
-                    className="aspect-square size-full object-cover"
+                    fill
+                    unoptimized
+                    sizes="(max-width: 640px) 33vw, 240px"
+                    className="object-cover"
                   />
                 </button>
               </li>
