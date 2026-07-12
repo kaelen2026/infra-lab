@@ -96,6 +96,26 @@ pnpm vitest run packages/auth/test/otp.test.ts   # 单测一个文件;-t "名称
   时,主 agent 才用 `model: opus` 升级派发。**合入后 CI 的 `.github/workflows/reviewer.yml`
   (Opus)是唯一权威评审** —— 本地 reviewer 是合入前快筛,不是终审,别在常规 diff 上烧 Opus。
 
+### 子代理的 rules + skills 组合
+
+**子代理不是只绑定一种 rule 或 skill。** 主 agent 先按任务的改动面组装一个**有序、可叠加**的
+上下文包，再派发；一个子代理可同时执行多个 rules 和多个 skills。rules 定义必须遵守的约束，
+skills 提供特定任务的操作流程，二者不互相替代、也不是单选关系。
+
+1. **先装 rules（累计生效）**：所有子代理默认带 `build-and-typecheck.md`、`conventions.md`、
+   `workflow.md`；再按改动端叠加 `typescript.md`、`ios.md`、`android.md`、`harmony.md`，以及
+   auth/session/OTP/contract 改动所需的 `architecture.md`。跨端任务把每个端的 rule 分别交给
+   对应 implementer，不把端特有约束遗漏在主 agent 的摘要里。
+2. **再装 skills（按任务叠加）**：skill 可组合使用，且顺序由依赖决定。例如 API 改动使用
+   `api-architecture`；iOS 功能的运行态验收可在实现后叠加 `ios-simulator-qa`；发布 iOS 时可组合
+   `deploy` + `ios-testflight`；Android 出包可组合 `deploy` + `android-build`。只加载与子任务有关的
+   skills，避免把无关流程塞进上下文。
+3. **派发消息必须显式列出组合**：`任务边界`、`Rules（按阅读顺序）`、`Skills（按执行顺序）`、
+   `不变量/验收标准`、`上游依赖与交付物`。引用具体路径或 skill 名，而不是只说“遵循规范”。
+4. **交回时说明实际使用情况**：子代理报告已遵守的 rules、实际执行的 skills、产出的证据与未覆盖
+   项；若规则与 skill 的建议冲突，以仓库 rule、架构约束和安全要求为准，并把冲突交回主 agent
+   决策，不能自行放宽 rule。
+
 编排原则:独立子任务一条消息并发派发(fan-out),有依赖的按 explorer→plan→implement→
 verify→review 流水;主 agent 保留**结论**而非文件堆。需要更大规模(多轮 fan-out + 对抗式
 验证 + 综合)且用户明确要 workflow 时,才上 Workflow 工具。改动仍走特性分支 + PR + CI
