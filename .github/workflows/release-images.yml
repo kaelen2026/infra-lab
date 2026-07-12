@@ -23,7 +23,7 @@ name: release-images
 # therefore serves ONE topology; set both Variables before tagging a release.
 on:
   push:
-    tags: ["vapi-*", "vweb-*", "vh5-*", "vbot-*"]
+    tags: ["api_v*", "web_v*", "h5_v*", "bot_v*"]
   workflow_dispatch:
     inputs:
       app:
@@ -42,7 +42,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Derive the target app + version label from the tag (`v{app}-{date}`) or the
+  # Derive the target app + version label from the tag (`{app}_v{version}`) or the
   # manual dispatch input, and reject anything that isn't a known app.
   resolve:
     name: Resolve app + version
