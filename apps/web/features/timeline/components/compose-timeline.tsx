@@ -2,6 +2,7 @@
 
 import { TIMELINE_IMAGE_CONTENT_TYPES, TIMELINE_IMAGES_MAX, TIMELINE_TEXT_MAX } from "@infra/sdk";
 import { ImagePlus, Send, X } from "lucide-react";
+import Image from "next/image";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -80,7 +81,14 @@ export function ComposeTimeline({ onPublish, busy }: ComposeTimelineProps) {
               {previews.map((url, i) => (
                 <li key={url} className="relative aspect-square overflow-hidden rounded-lg border">
                   {/* Local preview of a not-yet-uploaded file. */}
-                  <img src={url} alt="待发布图片预览" className="size-full object-cover" />
+                  <Image
+                    src={url}
+                    alt="待发布图片预览"
+                    fill
+                    unoptimized
+                    sizes="(max-width: 640px) 33vw, 160px"
+                    className="object-cover"
+                  />
                   <button
                     type="button"
                     onClick={() => removeAt(i)}

@@ -2,6 +2,7 @@
 
 import type { TimelineImage } from "@infra/sdk";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import Image from "next/image";
 import { type TouchEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import { resolveImageUrl } from "@/lib/timeline-client";
@@ -100,12 +101,17 @@ export function ImageLightbox({ images, startIndex, onClose }: ImageLightboxProp
         </span>
       )}
 
-      {/* `relative` lifts the image above the absolute backdrop; a tap on it is a no-op. */}
-      <img
-        src={resolveImageUrl(current.url)}
-        alt="动态图片"
-        className="relative max-h-[90vh] max-w-[92vw] object-contain"
-      />
+      {/* This wrapper lifts the image above the absolute backdrop; a tap on it is a no-op. */}
+      <div className="relative h-[90vh] w-[92vw]">
+        <Image
+          src={resolveImageUrl(current.url)}
+          alt="动态图片"
+          fill
+          unoptimized
+          sizes="92vw"
+          className="object-contain"
+        />
+      </div>
 
       {count > 1 && (
         <>
