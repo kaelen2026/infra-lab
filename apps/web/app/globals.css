@@ -34,11 +34,17 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 
-  /* Spectral display serif · Hanken Grotesk UI · JetBrains Mono for data. CJK fallbacks appended. */
-  --font-sans: var(--font-hanken), ui-sans-serif, system-ui, "PingFang SC", "Noto Sans SC",
-    sans-serif;
-  --font-serif: var(--font-spectral), "Songti SC", "Noto Serif SC", Georgia, serif;
-  --font-mono: var(--font-jetbrains), ui-monospace, "SFMono-Regular", Menlo, monospace;
+  /* Prefer locally-provided font variables when present; otherwise build-safe system stacks. */
+  --font-sans: var(
+    --font-hanken,
+    ui-sans-serif,
+    system-ui,
+    "PingFang SC",
+    "Noto Sans SC",
+    sans-serif
+  );
+  --font-serif: var(--font-spectral, "Songti SC", "Noto Serif SC", Georgia, serif);
+  --font-mono: var(--font-jetbrains, ui-monospace, "SFMono-Regular", Menlo, monospace);
 }
 
 @layer base {

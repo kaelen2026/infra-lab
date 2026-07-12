@@ -13,7 +13,6 @@
     "dev:api": "turbo run dev --filter @infra/api",
     "dev:web": "turbo run dev --filter @infra/web",
     "dev:h5": "turbo run dev --filter @infra/h5",
-    "dev:id-photo": "turbo run dev --filter @infra/id-photo",
     "bot:up": "node scripts/bot-docker.mjs",
     "bot:down": "node scripts/bot-docker.mjs down",
     "test": "vitest run",
@@ -51,10 +50,5 @@
     "turbo": "^2.10.4",
     "typescript": "5.9.3",
     "vitest": "4.1.10"
-  },
-  "pnpm": {
-    "overrides": {
-      "axios": ">=1.16.0"
-    }
   }
 }

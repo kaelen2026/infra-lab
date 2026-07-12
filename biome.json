@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.5.1/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.3/schema.json",
   "vcs": {
     "enabled": true,
     "clientKind": "git",
@@ -17,9 +17,6 @@
       "!apps/web/app/tokens.generated.css",
       "!apps/h5/src/index.css",
       "!apps/h5/src/tokens.generated.css",
-      "!apps/icon/src/app/globals.css",
-      "!apps/id-photo/src/index.css",
-      "!apps/game/src/index.css",
       "!apps/ios"
     ]
   },

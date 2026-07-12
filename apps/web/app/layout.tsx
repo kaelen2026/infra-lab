@@ -5,7 +5,6 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { QueryProvider } from "@/features/query";
 import { SessionProvider } from "@/features/session";
 import { Toaster, ToastProvider } from "@/features/toast";
-import { mono, sans, serif } from "@/lib/fonts";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -15,11 +14,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html
-      lang="zh-CN"
-      suppressHydrationWarning
-      className={`${serif.variable} ${sans.variable} ${mono.variable}`}
-    >
+    <html lang="zh-CN" suppressHydrationWarning>
       <body>
         <ThemeProvider
           attribute="class"
