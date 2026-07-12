@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Push Notifications capability. "development" targets the APNS sandbox
+	     (api.sandbox.push.apple.com) and is correct here for debug/device builds: the
+	     app-store-connect export (`make ipa`/`make upload`) re-signs with the
+	     distribution profile, which sets aps-environment=production automatically.
+	     The server must match the install: APNS_PRODUCTION=false for dev builds,
+	     true for TestFlight builds. -->
+	<key>aps-environment</key>
+	<string>development</string>
+	<!-- Sign in with Apple. Simulator ignores it; a device / TestFlight build needs a
+	     provisioning profile whose App ID has the "Sign in with Apple" capability
+	     enabled (Automatic signing + DEVELOPMENT_TEAM). "Default" is the standard
+	     primary-app-relationship value. -->
+	<key>com.apple.developer.applesignin</key>
+	<array>
+		<string>Default</string>
+	</array>
+</dict>
+</plist>

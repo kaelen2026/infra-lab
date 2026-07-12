@@ -96,58 +96,27 @@ const SWIFT_CASE: Record<string, string> = {
   LAST_CREDENTIAL: "lastCredential",
 };
 
-function emitIos(): void {
-  const color = (role: keyof Palette, name: string) =>
-    `    static let ${name} = dyn(light: "${oklchToHex(light[role])}", dark: "${oklchToHex(dark[role])}")`;
+// The color-role → Swift constant list, shared byte-for-byte by the iOS and macOS
+// `DesignTokens.swift` emitters (only the dynamic-color transport differs below).
+const SWIFT_COLOR_ROLES: [keyof Palette, string][] = [
+  ["primary", "primary"],
+  ["primaryDeep", "primaryDeep"],
+  ["primaryForeground", "primaryForeground"],
+  ["background", "background"],
+  ["card", "surface"],
+  ["foreground", "textPrimary"],
+  ["mutedForeground", "textSecondary"],
+  ["destructive", "danger"],
+  ["border", "border"],
+];
 
-  write(
-    "apps/ios/InfraLab/Generated/DesignTokens.swift",
-    `// ${GEN}
-import SwiftUI
-import UIKit
-
-/// Canonical color + shape tokens shared with web / android / harmony.
-enum DesignTokens {
-    static let radius: CGFloat = ${shape.radiusPx}
-${color("primary", "primary")}
-${color("primaryDeep", "primaryDeep")}
-${color("primaryForeground", "primaryForeground")}
-${color("background", "background")}
-${color("card", "surface")}
-${color("foreground", "textPrimary")}
-${color("mutedForeground", "textSecondary")}
-${color("destructive", "danger")}
-${color("border", "border")}
-
-    /// A Color that resolves light/dark per the active trait collection.
-    private static func dyn(light: String, dark: String) -> Color {
-        Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: dark) : UIColor(hex: light) })
-    }
-}
-
-private extension UIColor {
-    convenience init(hex: String) {
-        let s = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
-        var v: UInt64 = 0
-        Scanner(string: s).scanHexInt64(&v)
-        self.init(
-            red: CGFloat((v >> 16) & 0xFF) / 255,
-            green: CGFloat((v >> 8) & 0xFF) / 255,
-            blue: CGFloat(v & 0xFF) / 255,
-            alpha: 1
-        )
-    }
-}
-`,
-  );
-
+/** The `AuthCopy.swift` body, identical for iOS and macOS (only `import` differs). */
+function swiftAuthCopy(): string {
   const errCases = AUTH_ERROR_CODES.map(
     (code) => `        case .${SWIFT_CASE[code]}: return ${q(COPY.errors.messages[code])}`,
   ).join("\n");
 
-  write(
-    "apps/ios/InfraLab/Generated/AuthCopy.swift",
-    `// ${GEN}
+  return `// ${GEN}
 import Foundation
 
 /// Canonical auth copy shared with web / android / harmony.
@@ -212,8 +181,55 @@ ${errCases}
         }
     }
 }
+`;
+}
+
+function emitIos(): void {
+  const color = (role: keyof Palette, name: string) =>
+    `    static let ${name} = dyn(light: "${oklchToHex(light[role])}", dark: "${oklchToHex(dark[role])}")`;
+
+  write(
+    "apps/ios/InfraLab/Generated/DesignTokens.swift",
+    `// ${GEN}
+import SwiftUI
+import UIKit
+
+/// Canonical color + shape tokens shared with web / android / harmony.
+enum DesignTokens {
+    static let radius: CGFloat = ${shape.radiusPx}
+${color("primary", "primary")}
+${color("primaryDeep", "primaryDeep")}
+${color("primaryForeground", "primaryForeground")}
+${color("background", "background")}
+${color("card", "surface")}
+${color("foreground", "textPrimary")}
+${color("mutedForeground", "textSecondary")}
+${color("destructive", "danger")}
+${color("border", "border")}
+
+    /// A Color that resolves light/dark per the active trait collection.
+    private static func dyn(light: String, dark: String) -> Color {
+        Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: dark) : UIColor(hex: light) })
+    }
+}
+
+private extension UIColor {
+    convenience init(hex: String) {
+        let s = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
+        var v: UInt64 = 0
+        Scanner(string: s).scanHexInt64(&v)
+        self.init(
+            red: CGFloat((v >> 16) & 0xFF) / 255,
+            green: CGFloat((v >> 8) & 0xFF) / 255,
+            blue: CGFloat(v & 0xFF) / 255,
+            alpha: 1
+        )
+    }
+}
 `,
   );
+
+  write("apps/ios/InfraLab/Generated/AuthCopy.swift", swiftAuthCopy());
 
   // Launch-window background as an asset-catalog color set. The iOS static launch
   // screen (`UILaunchScreen` in project.yml) can only read an asset color, not the
@@ -249,6 +265,56 @@ ${errCases}
       2,
     )}\n`,
   );
+}
+
+// ── macos: SwiftUI + AppKit tokens + copy ─────────────────────────────────────
+// Same token structure as iOS, but dynamic colors resolve through an NSColor
+// dynamic provider (aqua / darkAqua) instead of a UIKit trait collection, and
+// there is no launch-window colorset (macOS has no static UILaunchScreen —
+// BrandSplashView paints DesignTokens.background at runtime).
+function emitMacos(): void {
+  const color = ([role, name]: [keyof Palette, string]) =>
+    `    static let ${name} = dyn(light: "${oklchToHex(light[role])}", dark: "${oklchToHex(dark[role])}")`;
+  const colors = SWIFT_COLOR_ROLES.map(color).join("\n");
+
+  write(
+    "apps/macos/InfraLab/Generated/DesignTokens.swift",
+    `// ${GEN}
+import SwiftUI
+import AppKit
+
+/// Canonical color + shape tokens shared with web / ios / android / harmony.
+enum DesignTokens {
+    static let radius: CGFloat = ${shape.radiusPx}
+${colors}
+
+    /// A Color that resolves light/dark per the active NSAppearance.
+    private static func dyn(light: String, dark: String) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+                ? NSColor(hex: dark)
+                : NSColor(hex: light)
+        })
+    }
+}
+
+private extension NSColor {
+    convenience init(hex: String) {
+        let s = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
+        var v: UInt64 = 0
+        Scanner(string: s).scanHexInt64(&v)
+        self.init(
+            srgbRed: CGFloat((v >> 16) & 0xFF) / 255,
+            green: CGFloat((v >> 8) & 0xFF) / 255,
+            blue: CGFloat(v & 0xFF) / 255,
+            alpha: 1
+        )
+    }
+}
+`,
+  );
+
+  write("apps/macos/InfraLab/Generated/AuthCopy.swift", swiftAuthCopy());
 }
 
 // ── android: Compose tokens + copy ────────────────────────────────────────────
@@ -514,6 +580,7 @@ emitIos();
 emitAndroid();
 emitHarmony();
 emitWeapp();
+emitMacos();
 
 console.log(`@infra/design: generated ${written.length} files`);
 for (const f of written) console.log(`  ${f}`);

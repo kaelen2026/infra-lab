@@ -1,0 +1,73 @@
+# SwiftLint config for the InfraLab macOS client.
+# Run locally with `make lint` (see apps/macos/Makefile). Not wired into CI —
+# macOS builds need a macOS runner, so the gate is local + pre-push discipline.
+# Coding conventions this enforces live in .claude/rules/ios.md (shared with the
+# iOS client — same Swift/SwiftUI safety rules apply).
+
+included:
+  - InfraLab
+  - InfraLabTests
+
+excluded:
+  # Design tokens + copy are generated from @infra/design; never hand-edited,
+  # so they are not held to the source style rules.
+  - InfraLab/Generated
+  - .build
+  - build
+  - DerivedData
+
+# Opt-in rules that catch real defects in an async/Keychain codebase.
+opt_in_rules:
+  - force_unwrapping          # a crash-on-nil in an auth flow is a security event
+  - empty_count
+  - first_where
+  - contains_over_first_not_nil
+  - toggle_bool
+  - explicit_init
+  - redundant_nil_coalescing
+  - closure_spacing
+  - operator_usage_whitespace
+  - overridden_super_call
+  - prohibited_super_call
+  - fatal_error_message
+  - implicitly_unwrapped_optional   # no `String!`; model absence with `?`
+  - private_action
+  - private_outlet
+  - sorted_imports
+
+disabled_rules:
+  - todo                       # tracked separately; don't fail the build on TODOs
+
+line_length:
+  warning: 120
+  error: 160
+  ignores_comments: true
+  ignores_urls: true
+
+type_body_length:
+  warning: 300
+  error: 400
+
+file_length:
+  warning: 500
+  error: 700
+
+function_body_length:
+  warning: 60
+  error: 100
+
+identifier_name:
+  # Allow short, conventional names (id, ok, to, vm) common in this codebase.
+  min_length:
+    warning: 2
+  excluded: [id, ok, to, vm, up]
+
+# `print(...)` can leak an OTP/token to the console — ban it outright.
+# Diagnostics go through the app's logging, never raw print.
+custom_rules:
+  no_print:
+    name: "No print()"
+    regex: '\bprint(?=\s*\()'
+    match_kinds: [identifier]
+    message: "Use structured logging, not print() — it can leak OTP/tokens to the console."
+    severity: error

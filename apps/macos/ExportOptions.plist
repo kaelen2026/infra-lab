@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Developer ID export for direct (non-App-Store) macOS distribution. `make app`
+     uses this; it needs a paid Developer Program team (TEAM_ID) + a Developer ID
+     Application certificate. The lab build itself runs unsigned/ad-hoc locally. -->
+<plist version="1.0">
+<dict>
+	<key>method</key>
+	<string>developer-id</string>
+	<key>signingStyle</key>
+	<string>automatic</string>
+</dict>
+</plist>
