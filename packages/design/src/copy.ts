@@ -112,6 +112,49 @@ export const COPY = {
     divider: "或",
   },
 
+  /**
+   * Web-only marketing landing page — the default `/` shown to signed-out visitors
+   * (`apps/web`). Like `timelineShare`/`legal`/`social`, it is a browser-only surface
+   * with no native counterpart, so it is NOT emitted to the native clients by
+   * `generate.ts`; the web app consumes it straight from this source.
+   */
+  landing: {
+    hero: {
+      eyebrow: "手机号 + 验证码认证",
+      title: "一个手机号，登录你的每一台设备",
+      subtitle:
+        "infra-lab 用一次性验证码完成登录与注册，横跨 web、iOS、Android、HarmonyOS、命令行与小程序——无需记住任何密码。",
+      primaryCta: "立即登录 / 注册",
+      secondaryCta: "扫码跨端登录",
+    },
+    features: {
+      heading: "一套账号，处处可用",
+      auth: {
+        title: "一步认证",
+        body: "手机号加一次性验证码，登录即注册。验证码只存哈希、用后即焚，绝不明文落库。",
+      },
+      timeline: {
+        title: "时间线与分享",
+        body: "发布图文动态，一键生成公开分享链接，原生端可深链直接回到 app 查看。",
+      },
+      crossDevice: {
+        title: "跨端扫码 · 设备流",
+        body: "已登录的设备扫码，几秒钟把新设备带上线；命令行走标准设备授权流程。",
+      },
+      todo: {
+        title: "待办与资料",
+        body: "每个账号独立的待办清单与资料编辑，数据相互隔离，随身同步。",
+      },
+    },
+    platforms: {
+      heading: "全端覆盖",
+      items: ["Web", "iOS", "Android", "HarmonyOS", "命令行", "微信小程序"],
+    },
+    footer: {
+      tagline: "手机号，一步登录",
+    },
+  },
+
   errors: {
     messages: ERROR_MESSAGES,
     network: "网络异常，请稍后再试。",
