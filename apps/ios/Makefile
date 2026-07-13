@@ -21,6 +21,16 @@ ifneq ($(API_URL),)
 # (see AppConfig.swift); empty keeps the http://localhost:3001 fallback.
 API_OVERRIDE = "API_BASE_URL=$(API_URL)"
 endif
+ifneq ($(GID_CLIENT_ID),)
+# Bakes the Google Sign-In iOS OAuth client id + its reversed redirect scheme into
+# Info.plist (GIDClientID / the second CFBundleURLScheme) via the GID_CLIENT_ID /
+# GID_REVERSED_CLIENT_ID build settings — see GoogleConfig in AppConfig.swift. Empty
+# keeps the button hidden. These MUST be forwarded to xcodebuild as explicit
+# build-setting args: GNU make only *exports* a command-line var to the recipe's
+# environment, and xcodebuild ignores env-named build settings, so an env export
+# alone would leave the committed "" default in the product Info.plist.
+GID_OVERRIDE = GID_CLIENT_ID="$(GID_CLIENT_ID)" GID_REVERSED_CLIENT_ID="$(GID_REVERSED_CLIENT_ID)"
+endif
 
 .PHONY: project build test lint format clean archive ipa upload
 
@@ -35,17 +45,17 @@ format: ## Auto-fix the violations SwiftLint can fix in place
 
 build: project ## Build the app for the simulator
 	xcodebuild build -project InfraLab.xcodeproj -scheme $(SCHEME) \
-		-destination "$(DESTINATION)"
+		-destination "$(DESTINATION)" $(API_OVERRIDE) $(GID_OVERRIDE)
 
 test: project ## Run the unit tests on the simulator
 	xcodebuild test -project InfraLab.xcodeproj -scheme $(SCHEME) \
-		-destination "$(DESTINATION)"
+		-destination "$(DESTINATION)" $(API_OVERRIDE) $(GID_OVERRIDE)
 
 archive: project ## Signed device archive (needs TEAM_ID from a paid Developer Program team)
 	@test -n "$(TEAM_ID)" || { echo "TEAM_ID is empty — pass TEAM_ID=<team id> (paid Apple Developer Program)"; exit 1; }
 	xcodebuild archive -project InfraLab.xcodeproj -scheme $(SCHEME) \
 		-destination "generic/platform=iOS" -archivePath $(ARCHIVE) \
-		CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM=$(TEAM_ID) $(BUILD_OVERRIDE) $(API_OVERRIDE) $(ASC_AUTH)
+		CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM=$(TEAM_ID) $(BUILD_OVERRIDE) $(API_OVERRIDE) $(GID_OVERRIDE) $(ASC_AUTH)
 
 ipa: archive ## Export build/export/InfraLab.ipa from the archive
 	xcodebuild -exportArchive -archivePath $(ARCHIVE) \
