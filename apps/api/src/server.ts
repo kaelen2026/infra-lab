@@ -172,6 +172,11 @@ const app = createApp({
   sessions,
   social,
   accountLink,
+  // Serve the OAuth provider callback only when a web-redirect provider is configured
+  // (the single mounted Better Auth path — see AppDeps.oauthCallbackHandler).
+  ...(enabledSocialProviders.size > 0
+    ? { oauthCallbackHandler: (req: Request) => auth.handler(req) }
+    : {}),
   qrTickets: createRedisQrTicketStore(otpStore),
   rateLimitStore: createRedisRateLimitStore(redis),
   sms,

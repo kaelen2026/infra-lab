@@ -65,6 +65,28 @@ describe("createApp wiring", () => {
     expect(res.status).toBe(404);
   });
 
+  it("mounts ONLY the OAuth provider callback from Better Auth (not the rest of /api/auth)", async () => {
+    let seenPath = "";
+    const app = buildApp({
+      oauthCallbackHandler: (req) => {
+        seenPath = new URL(req.url).pathname;
+        return new Response(null, { status: 200 });
+      },
+    });
+    // The provider redirect lands on the callback → routed to Better Auth's handler.
+    const cb = await app.request("/api/auth/callback/google");
+    expect(cb.status).toBe(200);
+    expect(seenPath).toBe("/api/auth/callback/google");
+    // The rest of Better Auth's surface stays unmounted.
+    expect((await app.request("/api/auth/session")).status).toBe(404);
+    expect((await app.request("/api/auth/sign-in/social")).status).toBe(404);
+  });
+
+  it("does not mount the OAuth callback when no provider is configured", async () => {
+    // Default deps omit oauthCallbackHandler → even the callback path 404s.
+    expect((await buildApp().request("/api/auth/callback/google")).status).toBe(404);
+  });
+
   it("/ready reports 200 with dependency checks when healthy", async () => {
     const res = await buildApp().request("/ready");
     expect(res.status).toBe(200);
