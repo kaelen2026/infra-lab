@@ -11,7 +11,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { AUTH_ERROR_CODES } from "@infra/shared";
+import { AUTH_ERROR_CODES, type AuthErrorCode } from "@infra/shared";
 import { COPY } from "./copy";
 import { dark, light, oklchToCss, oklchToHex, type Palette, shape } from "./tokens";
 
@@ -75,7 +75,10 @@ function emitH5(): void {
 }
 
 // ── ios: SwiftUI tokens + copy ────────────────────────────────────────────────
-const SWIFT_CASE: Record<string, string> = {
+// Typed by `AuthErrorCode`, not `string`: adding a code to the contract without a
+// Swift case name here now fails `pnpm typecheck` in CI, instead of silently
+// generating a broken `switch` that only breaks a local Xcode build.
+const SWIFT_CASE: Record<AuthErrorCode, string> = {
   INVALID_REQUEST: "invalidRequest",
   RESEND_COOLDOWN: "resendCooldown",
   DAILY_LIMIT_EXCEEDED: "dailyLimitExceeded",

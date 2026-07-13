@@ -60,6 +60,13 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # The canonical auth error codes + platforms live in @infra/shared; every native
+      # client hand-mirrors them. The native gates are local-only, so a source item
+      # missing from a mirror otherwise only breaks a later local build. Fail here if
+      # any mirror is missing a canonical item. Reads source only, so no Build needed.
+      - name: Contracts · no drift
+        run: node scripts/check-contract-drift.mjs
+
       - name: Build
         run: pnpm build
 

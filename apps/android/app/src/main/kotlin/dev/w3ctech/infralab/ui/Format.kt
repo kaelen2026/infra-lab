@@ -22,6 +22,10 @@ object Format {
         Platform.IOS -> "iOS"
         Platform.ANDROID -> "Android"
         Platform.HARMONY -> "HarmonyOS"
+        Platform.CLI -> "CLI"
+        Platform.WEAPP -> "WeChat Mini Program"
+        Platform.MACOS -> "macOS"
+        Platform.UNKNOWN -> "Unknown"
     }
 
     /** Format an ISO-8601 timestamp as a local date; falls back to the raw string if unparseable. */
