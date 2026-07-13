@@ -57,9 +57,17 @@ test.describe("phone OTP auth", () => {
     await expect(page).toHaveURL("/auth");
   });
 
-  test("redirects unauthenticated visitors away from the dashboard", async ({ page }) => {
+  test("shows the public landing page to unauthenticated visitors", async ({ page }) => {
     await page.goto("/");
+    // `/` is now a public marketing landing, not a redirect to /auth.
+    await expect(page).toHaveURL("/");
+    await expect(
+      page.getByRole("heading", { name: "一个手机号，登录你的每一台设备" }),
+    ).toBeVisible();
+
+    // Its primary CTA leads to the auth screen.
+    await page.getByRole("link", { name: "立即登录 / 注册" }).first().click();
     await expect(page).toHaveURL("/auth");
-    await expect(page.getByRole("heading", { name: "手机号登录" })).toBeVisible();
+    await expect(page.getByLabel("手机号")).toBeVisible();
   });
 });
