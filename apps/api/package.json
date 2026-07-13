@@ -21,10 +21,10 @@
     "@infra/shared": "workspace:*",
     "better-auth": "1.6.23",
     "drizzle-orm": "0.45.2",
-    "hono": "4.12.28"
+    "hono": "4.12.30"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "5.20260710.1",
+    "@cloudflare/workers-types": "5.20260712.1",
     "tsx": "4.23.0",
     "wrangler": "4.110.0"
   }
