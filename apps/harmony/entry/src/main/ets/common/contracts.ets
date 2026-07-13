@@ -8,7 +8,7 @@
  * format. If the shared contract changes, change this file in the same PR.
  */
 
-export type Platform = "web" | "ios" | "android" | "harmony";
+export type Platform = "web" | "ios" | "android" | "harmony" | "cli" | "weapp" | "macos";
 
 export interface OtpLimits {
   codeLength: number;
@@ -43,7 +43,13 @@ export type AuthErrorCode =
   | "INVALID_REFRESH_TOKEN"
   | "QR_NOT_FOUND"
   | "QR_ALREADY_USED"
-  | "QR_NOT_APPROVED";
+  | "QR_NOT_APPROVED"
+  | "SOCIAL_PROVIDER_DISABLED"
+  | "SOCIAL_TOKEN_INVALID"
+  | "SOCIAL_ACCOUNT_ERROR"
+  | "SOCIAL_ALREADY_LINKED"
+  | "PHONE_ALREADY_LINKED"
+  | "LAST_CREDENTIAL";
 
 export interface AuthRoutes {
   requestOtp: string;
