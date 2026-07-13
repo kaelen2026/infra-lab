@@ -239,6 +239,47 @@ final class AuthClientTests: XCTestCase {
         XCTAssertEqual(events.last?.platform, .ios)
     }
 
+    /// A device/login-event row whose `platform` isn't modeled by this client
+    /// (e.g. `weapp`, `cli`, or a future value) must not blow up the whole list —
+    /// the tolerant `Platform` decode maps the unknown raw value to `.unknown` and
+    /// keeps every other row. Regression guard for the account dashboard load.
+    func testListDecodeToleratesUnknownPlatform() async throws {
+        MockURLProtocol.handler = { request in
+            if request.url?.path == AuthRoutes.devices {
+                return (200, self.json([
+                    "ok": true,
+                    "devices": [
+                        ["id": "d1", "platform": "ios", "deviceId": "device-1",
+                         "model": "iPhone", "osVersion": "17.0", "appVersion": "0.1.0",
+                         "lastSeenAt": "2026-07-01T09:30:00.000Z", "createdAt": "2026-06-30T00:00:00.000Z"],
+                        // `weapp` is a real server platform this enum didn't model.
+                        ["id": "d2", "platform": "weapp", "deviceId": "device-2",
+                         "model": NSNull(), "osVersion": NSNull(), "appVersion": NSNull(),
+                         "lastSeenAt": "2026-07-01T09:31:00.000Z", "createdAt": "2026-06-30T00:00:01.000Z"],
+                        // A value no client knows yet must still decode, not throw.
+                        ["id": "d3", "platform": "foobar", "deviceId": "device-3",
+                         "model": NSNull(), "osVersion": NSNull(), "appVersion": NSNull(),
+                         "lastSeenAt": "2026-07-01T09:32:00.000Z", "createdAt": "2026-06-30T00:00:02.000Z"]
+                    ]
+                ]))
+            }
+            return (200, self.json([
+                "ok": true,
+                "events": [
+                    ["id": "e1", "platform": "weapp", "ip": NSNull(), "success": true,
+                     "createdAt": "2026-06-30T22:10:00.000Z"],
+                    ["id": "e2", "platform": "foobar", "ip": "203.0.113.7", "success": true,
+                     "createdAt": "2026-07-01T09:30:00.000Z"]
+                ]
+            ]))
+        }
+        let devices = try await makeClient().listDevices()
+        XCTAssertEqual(devices.map(\.platform), [.ios, .weapp, .unknown])
+
+        let events = try await makeClient().listLoginEvents()
+        XCTAssertEqual(events.map(\.platform), [.weapp, .unknown])
+    }
+
     func testUnknownErrorCodeDecodesToUnknown() async {
         MockURLProtocol.handler = { _ in
             (500, self.json(["ok": false, "code": "SOMETHING_NEW"]))

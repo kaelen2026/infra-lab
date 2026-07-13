@@ -10,7 +10,19 @@ import Foundation
 // MARK: - Platforms
 
 enum Platform: String, Codable, Sendable {
-    case web, ios, android, harmony, macos
+    case web, ios, android, harmony, cli, weapp, macos
+
+    /// Decode-only sentinel for a `platform` this client doesn't model yet (a new
+    /// server value shipped ahead of this app). This client only ever encodes its
+    /// own platform (`.macos`), so `.unknown` is never sent — see `init(from:)`.
+    case unknown
+
+    /// Tolerant decode: an unrecognized raw value maps to `.unknown` instead of
+    /// throwing, so one unknown row can't fail the whole devices/login-events list.
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = Platform(rawValue: raw) ?? .unknown
+    }
 
     /// Web authenticates via HttpOnly cookie; native platforms via Bearer tokens.
     var isCookiePlatform: Bool { self == .web }

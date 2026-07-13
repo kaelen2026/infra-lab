@@ -79,7 +79,10 @@ enum Format {
         case .ios: return "iOS"
         case .android: return "Android"
         case .harmony: return "HarmonyOS"
+        case .cli: return "CLI"
+        case .weapp: return "WeChat Mini Program"
         case .macos: return "macOS"
+        case .unknown: return "Unknown"
         }
     }
 }
