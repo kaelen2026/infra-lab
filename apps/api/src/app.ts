@@ -74,6 +74,16 @@ export interface AppDeps {
   social: SocialAuthService;
   /** Account linking (identities / link phone / link+unlink social). Always present. */
   accountLink: AccountLinkService;
+  /**
+   * Better Auth's request handler, exposed ONLY to serve the OAuth provider callback
+   * (`/api/auth/callback/:provider`). Present when a web-redirect social provider is
+   * configured; omitted otherwise. This is the single, deliberate exception to "Better
+   * Auth's HTTP surface is not mounted" (#170): the provider redirects the browser to
+   * that callback (an inbound, unauthenticated hit) where the `hooks.after` bridge swaps
+   * BA's session cookie for our `infra.session`. The rest of `/api/auth/*` stays
+   * unmounted — SessionService remains the sole session authority.
+   */
+  oauthCallbackHandler?: (req: Request) => Response | Promise<Response>;
   qrTickets: QrTicketStore;
   /** Counter store backing the transport-level rate limiter. */
   rateLimitStore: RateLimitStore;
@@ -173,6 +183,16 @@ export function createApp(deps: AppDeps): Hono<ObsEnv> {
     });
   } else {
     log.warn("rate limit disabled (RATE_LIMIT_MAX=0)");
+  }
+
+  // OAuth provider callback — the ONE Better Auth HTTP path we mount (see the
+  // `oauthCallbackHandler` dep note + #170). Google/Apple redirect the browser to
+  // `/api/auth/callback/:provider`; Better Auth completes the exchange there and our
+  // `hooks.after` bridge swaps its cookie for `infra.session`. Everything else under
+  // `/api/auth/*` (session/sign-in/…) stays unmounted → 404.
+  if (deps.oauthCallbackHandler) {
+    const oauthCallback = deps.oauthCallbackHandler;
+    app.on(["GET", "POST"], "/api/auth/callback/*", (c) => oauthCallback(c.req.raw));
   }
 
   // Our phone-OTP routes.

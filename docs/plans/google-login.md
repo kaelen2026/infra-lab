@@ -178,6 +178,12 @@ Better Auth 的 `/api/auth/*` handler 已挂在 `apps/api/src/app.ts:166`,OAuth 
 > 校验(否则 403 `INVALID_CALLBACK_URL`);部署时须让 API 挂载 origin、`BETTER_AUTH_URL`、
 > Google 控制台注册的 redirect URI 三者自洽(dev 下 web 需代理 `/api/auth/*` 到 API,或
 > 直接把浏览器导到 API origin 的 `/auth/social/google/start`)。
+>
+> **回调挂载(#170 回归修复)**:该流依赖 Better Auth 的 `/api/auth/callback/:provider`
+> 被挂载。#170「SessionService 为唯一会话权威」删掉了整个 `/api/auth/*` 挂载,曾使本回调
+> 404(web 端到端不在 hermetic 范围故未被 CI 抓到)。现仅重挂 **`/api/auth/callback/*`** 这
+> 一条(`app.ts` 的 `oauthCallbackHandler`,仅当配了社交 provider 时),其余 BA HTTP 面
+> 仍不挂 —— 既修回归又守住 #170 的收敛意图。原生 idToken 流不经 `/api/auth/*`,不受影响。
 
 ### 5.3 native ID Token 流(ios/android/harmony/cli)
 

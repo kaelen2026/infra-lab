@@ -200,6 +200,10 @@ function buildApp(env: WorkerEnv): Hono<ObsEnv> {
     sessions,
     social: createSocialAuthService({ auth, enabledProviders: enabledSocialProviders }),
     accountLink: createAccountLinkService({ auth, enabledProviders: enabledSocialProviders }),
+    // Single mounted Better Auth path — the OAuth provider callback (see app.ts).
+    ...(enabledSocialProviders.size > 0
+      ? { oauthCallbackHandler: (req: Request) => auth.handler(req) }
+      : {}),
     qrTickets: createRedisQrTicketStore(otpStore),
     rateLimitStore: createUpstashRateLimitStore(redis),
     sms,
