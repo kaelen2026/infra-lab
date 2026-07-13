@@ -132,6 +132,9 @@ struct AuthUser: Codable, Identifiable, Equatable {
     /// Null for a social-only account (e.g. Sign in with Apple) that never verified
     /// a phone. Mirrors `AuthUser.phone: string | null` in `@infra/shared`.
     let phone: String?
+    /// Null for a phone-OTP or social account with no email credential; populated
+    /// for email-OTP accounts. Mirrors `AuthUser.email: string | null` in `@infra/shared`.
+    let email: String?
     let displayName: String?
     let avatarUrl: String?
     let createdAt: String // ISO 8601

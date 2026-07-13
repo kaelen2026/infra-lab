@@ -112,7 +112,7 @@ private final class StubAuthClient: AuthClient {
 
 private extension AuthUser {
     static let stub = AuthUser(
-        id: "u1", phone: "+8613800138000", displayName: nil, avatarUrl: nil,
+        id: "u1", phone: "+8613800138000", email: nil, displayName: nil, avatarUrl: nil,
         createdAt: "2026-07-01T00:00:00.000Z", isNew: false
     )
 }

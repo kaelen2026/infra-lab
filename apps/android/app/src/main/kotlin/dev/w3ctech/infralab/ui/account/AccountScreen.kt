@@ -77,7 +77,7 @@ fun AccountScreen(
 private fun monogram(user: AuthUser): String {
     val name = user.displayName?.trim().orEmpty()
     if (name.isNotEmpty()) return name.take(1).uppercase()
-    val digits = user.phone.filter(Char::isDigit)
+    val digits = user.phone?.filter(Char::isDigit).orEmpty()
     return if (digits.isEmpty()) "··" else digits.takeLast(2)
 }
 
@@ -103,7 +103,7 @@ private fun ProfileCard(user: AuthUser) {
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
-                MonoText(user.phone)
+                MonoText(user.phone ?: user.email ?: "未绑定手机号")
                 MonoText("注册于 ${Format.date(user.createdAt)}")
             }
         }

@@ -119,7 +119,7 @@ struct AuthPage {
         device: device,
       });
       const u: AuthUser = res.user;
-      this.userPhone = u.phone;
+      this.userPhone = u.phone ?? "";
       this.userDisplayName = u.displayName ?? "";
       this.userAvatarUrl = u.avatarUrl ?? "";
       this.userCreatedAt = u.createdAt;

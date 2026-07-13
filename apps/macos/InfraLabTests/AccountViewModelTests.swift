@@ -45,7 +45,7 @@ private final class FakeAccountClient: AuthClient {
 
 private extension AuthUser {
     static let fixture = AuthUser(
-        id: "u1", phone: "+8613800138000", displayName: "测试用户", avatarUrl: nil,
+        id: "u1", phone: "+8613800138000", email: nil, displayName: "测试用户", avatarUrl: nil,
         createdAt: "2026-07-01T00:00:00.000Z", isNew: false
     )
 }
