@@ -60,13 +60,6 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      # The canonical auth error codes + platforms live in @infra/shared; every native
-      # client hand-mirrors them. The native gates are local-only, so a source item
-      # missing from a mirror otherwise only breaks a later local build. Fail here if
-      # any mirror is missing a canonical item. Reads source only, so no Build needed.
-      - name: Contracts · no drift
-        run: node scripts/check-contract-drift.mjs
-
       - name: Build
         run: pnpm build
 
@@ -82,12 +75,15 @@ jobs:
             apps/web/app/tokens.generated.css \
             apps/h5/src/tokens.generated.css \
             apps/ios/InfraLab/Generated \
+            apps/macos/InfraLab/Generated \
             apps/android/app/src/main/kotlin/dev/w3ctech/infralab/ui/theme/DesignTokens.kt \
             apps/android/app/src/main/kotlin/dev/w3ctech/infralab/ui/auth/AuthCopyGenerated.kt \
+            apps/android/app/src/main/kotlin/dev/w3ctech/infralab/data/contracts/AuthContractEnums.generated.kt \
             apps/android/app/src/main/res/values/colors.generated.xml \
             apps/android/app/src/main/res/values-night/colors.generated.xml \
             apps/harmony/entry/src/main/resources/base/element/color.json \
             apps/harmony/entry/src/main/ets/sdk/copy.generated.ets \
+            apps/harmony/entry/src/main/ets/common/contracts.generated.ets \
             apps/miniprogram/miniprogram/tokens.generated.wxss \
             apps/miniprogram/miniprogram/theme.json
 

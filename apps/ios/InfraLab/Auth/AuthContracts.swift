@@ -7,27 +7,6 @@ import Foundation
 // emits camelCase JSON, so the default `Codable` synthesis maps 1:1 with no
 // custom key strategy.
 
-// MARK: - Platforms
-
-enum Platform: String, Codable, Sendable {
-    case web, ios, android, harmony, cli, weapp, macos
-
-    /// Decode-only sentinel for a `platform` this client doesn't model yet (a new
-    /// server value shipped ahead of this app). This client only ever encodes its
-    /// own platform (`.ios`), so `.unknown` is never sent — see `init(from:)`.
-    case unknown
-
-    /// Tolerant decode: an unrecognized raw value maps to `.unknown` instead of
-    /// throwing, so one unknown row can't fail the whole devices/login-events list.
-    init(from decoder: Decoder) throws {
-        let raw = try decoder.singleValueContainer().decode(String.self)
-        self = Platform(rawValue: raw) ?? .unknown
-    }
-
-    /// Web authenticates via HttpOnly cookie; native platforms via Bearer tokens.
-    var isCookiePlatform: Bool { self == .web }
-}
-
 // MARK: - Limits (mirrors the OTP service config; used for UX hints)
 
 enum OTPLimits {
@@ -56,42 +35,6 @@ enum AuthValidation {
 
     static func isValidCode(_ code: String) -> Bool {
         code.count == OTPLimits.codeLength && code.allSatisfy(\.isNumber)
-    }
-}
-
-// MARK: - Error codes (stable, client-switchable)
-
-enum AuthErrorCode: String, Codable, Sendable {
-    case invalidRequest = "INVALID_REQUEST"
-    case resendCooldown = "RESEND_COOLDOWN"
-    case dailyLimitExceeded = "DAILY_LIMIT_EXCEEDED"
-    case ipLimitExceeded = "IP_LIMIT_EXCEEDED"
-    case locked = "LOCKED"
-    case codeExpired = "CODE_EXPIRED"
-    case invalidCode = "INVALID_CODE"
-    case unauthorized = "UNAUTHORIZED"
-    case invalidRefreshToken = "INVALID_REFRESH_TOKEN"
-    case qrNotFound = "QR_NOT_FOUND"
-    case qrAlreadyUsed = "QR_ALREADY_USED"
-    case qrNotApproved = "QR_NOT_APPROVED"
-    /// Social sign-in (e.g. Sign in with Apple) — provider not configured here.
-    case socialProviderDisabled = "SOCIAL_PROVIDER_DISABLED"
-    /// Social sign-in — the provider ID token failed server-side verification.
-    case socialTokenInvalid = "SOCIAL_TOKEN_INVALID"
-    /// Social sign-in — verified, but the account couldn't be established/loaded.
-    case socialAccountError = "SOCIAL_ACCOUNT_ERROR"
-    /// Account linking — this social account is already linked (to this or another user).
-    case socialAlreadyLinked = "SOCIAL_ALREADY_LINKED"
-    /// Account linking — the phone already belongs to another account.
-    case phoneAlreadyLinked = "PHONE_ALREADY_LINKED"
-    /// Account linking — unlinking would leave the account with no way to sign in.
-    case lastCredential = "LAST_CREDENTIAL"
-    /// Fallback for any code the server adds before this client is updated.
-    case unknown = "UNKNOWN"
-
-    init(from decoder: Decoder) throws {
-        let raw = try decoder.singleValueContainer().decode(String.self)
-        self = AuthErrorCode(rawValue: raw) ?? .unknown
     }
 }
 

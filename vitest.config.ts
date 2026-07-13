@@ -23,7 +23,6 @@ export default defineConfig({
       "packages/**/test/**/*.test.ts",
       "apps/**/test/**/*.test.ts",
       ".github/scripts/test/**/*.test.ts",
-      "scripts/test/**/*.test.ts",
     ],
   },
 });
