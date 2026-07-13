@@ -72,6 +72,7 @@ extension AuthUser {
     static let preview = AuthUser(
         id: "preview",
         phone: "+8613800138000",
+        email: nil,
         displayName: "138****8000",
         avatarUrl: nil,
         createdAt: "2026-06-30T00:00:00.000Z",

@@ -184,7 +184,17 @@ data class RequestOtpResponse(
 @Serializable
 data class AuthUser(
     val id: String,
-    val phone: String,
+    /**
+     * `null` for accounts with no phone credential (social / email-only). Every decoder must
+     * tolerate a null and fall back to [displayName] for presentation — mirrors the shared
+     * `AuthUser.phone: string | null` contract.
+     */
+    val phone: String? = null,
+    /**
+     * `null` for accounts with no email credential (phone-OTP or social). Mirrors the shared
+     * `AuthUser.email: string | null`. Additive: absence/null are both safe under `explicitNulls=false`.
+     */
+    val email: String? = null,
     val displayName: String? = null,
     val avatarUrl: String? = null,
     val createdAt: String,

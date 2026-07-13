@@ -130,9 +130,11 @@ final class AuthClientTests: XCTestCase {
             }
             return (200, self.json([
                 "ok": true,
-                // A Google-only account may have no phone → server sends null.
+                // A Google-only account has no phone (null) but carries the email
+                // Google returns — exercises the AuthUser email + null-phone decode.
                 "user": [
-                    "id": "u_google", "phone": NSNull(), "displayName": NSNull(),
+                    "id": "u_google", "phone": NSNull(), "email": "user@example.com",
+                    "displayName": NSNull(),
                     "avatarUrl": NSNull(), "createdAt": "2026-06-30T00:00:00.000Z", "isNew": true
                 ],
                 "tokens": [
@@ -149,6 +151,7 @@ final class AuthClientTests: XCTestCase {
         XCTAssertEqual(capturedBody?["nonce"] as? String, "raw-nonce")
         XCTAssertEqual(capturedBody?["platform"] as? String, "ios")
         XCTAssertNil(user.phone)
+        XCTAssertEqual(user.email, "user@example.com")
         XCTAssertTrue(user.isNew)
         XCTAssertEqual(store.load()?.accessToken, "at")
         XCTAssertEqual(store.load()?.refreshToken, "rt")

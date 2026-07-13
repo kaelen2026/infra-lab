@@ -106,7 +106,10 @@ export interface VerifyOtpInput {
 
 export interface AuthUser {
   id: string;
-  phone: string;
+  /** null for social/email-only accounts with no linked phone. */
+  phone: string | null;
+  /** null when no email is linked to the account. */
+  email: string | null;
   displayName: string | null;
   avatarUrl: string | null;
   createdAt: string;
