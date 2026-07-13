@@ -8,7 +8,9 @@
  * format. If the shared contract changes, change this file in the same PR.
  */
 
-export type Platform = "web" | "ios" | "android" | "harmony" | "cli" | "weapp" | "macos";
+// `Platform` and `AuthErrorCode` are generated from @infra/design (pnpm gen:design)
+// and re-exported here so existing `../common/contracts` importers keep resolving them.
+export { Platform, AuthErrorCode } from "./contracts.generated";
 
 export interface OtpLimits {
   codeLength: number;
@@ -29,27 +31,6 @@ export const OTP_LIMITS: OtpLimits = {
   maxAttempts: 5,
   lockSeconds: 600,
 };
-
-/** Stable, client-switchable error codes (mirrors AUTH_ERROR_CODES). */
-export type AuthErrorCode =
-  | "INVALID_REQUEST"
-  | "RESEND_COOLDOWN"
-  | "DAILY_LIMIT_EXCEEDED"
-  | "IP_LIMIT_EXCEEDED"
-  | "LOCKED"
-  | "CODE_EXPIRED"
-  | "INVALID_CODE"
-  | "UNAUTHORIZED"
-  | "INVALID_REFRESH_TOKEN"
-  | "QR_NOT_FOUND"
-  | "QR_ALREADY_USED"
-  | "QR_NOT_APPROVED"
-  | "SOCIAL_PROVIDER_DISABLED"
-  | "SOCIAL_TOKEN_INVALID"
-  | "SOCIAL_ACCOUNT_ERROR"
-  | "SOCIAL_ALREADY_LINKED"
-  | "PHONE_ALREADY_LINKED"
-  | "LAST_CREDENTIAL";
 
 export interface AuthRoutes {
   requestOtp: string;

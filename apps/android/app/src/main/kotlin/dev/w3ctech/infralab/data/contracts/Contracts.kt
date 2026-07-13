@@ -1,56 +1,15 @@
 package dev.w3ctech.infralab.data.contracts
 
-import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.descriptors.PrimitiveKind
-import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
-import kotlinx.serialization.descriptors.SerialDescriptor
-import kotlinx.serialization.encoding.Decoder
-import kotlinx.serialization.encoding.Encoder
 
 /**
  * Kotlin mirror of `packages/shared/src/contracts/auth.ts` — the single source of truth shared by
  * the API and every client SDK. Keep these shapes in lock-step with the TypeScript contracts:
  * request/response DTOs, error codes, limits, route paths and the platform enum.
+ *
+ * The `Platform` / `AuthErrorCode` enums and their tolerant serializers are generated from the
+ * shared contracts into `AuthContractEnums.generated.kt` (same package). Run `pnpm gen:design`.
  */
-
-// ── Platforms ────────────────────────────────────────────────────────────────
-/**
- * Mirrors the shared `PLATFORMS` set (web / ios / android / harmony / cli / weapp / macos). The
- * wire name is the lowercase value the server emits; [UNKNOWN] is a decode-only sentinel for a
- * `platform` a newer server ships ahead of this client. Tolerant decode via [PlatformSerializer]
- * keeps one unknown row from failing an entire devices / login-events list (the #194 class of bug).
- * This client only ever encodes its own value (`android`), so [UNKNOWN] is never sent.
- */
-@Serializable(with = PlatformSerializer::class)
-enum class Platform(val wireName: String) {
-    WEB("web"),
-    IOS("ios"),
-    ANDROID("android"),
-    HARMONY("harmony"),
-    CLI("cli"),
-    WEAPP("weapp"),
-    MACOS("macos"),
-
-    /** Decode-only sentinel for a platform this client doesn't model yet. Never encoded. */
-    UNKNOWN("unknown"),
-    ;
-
-    companion object {
-        /** Map a wire value to its member, falling back to [UNKNOWN] for anything unmodelled. */
-        fun fromWire(wire: String): Platform = values().firstOrNull { it.wireName == wire } ?: UNKNOWN
-    }
-}
-
-/** Tolerant string (de)serializer for [Platform]: unknown wire values decode to [Platform.UNKNOWN]. */
-object PlatformSerializer : KSerializer<Platform> {
-    override val descriptor: SerialDescriptor =
-        PrimitiveSerialDescriptor("Platform", PrimitiveKind.STRING)
-
-    override fun serialize(encoder: Encoder, value: Platform) = encoder.encodeString(value.wireName)
-
-    override fun deserialize(decoder: Decoder): Platform = Platform.fromWire(decoder.decodeString())
-}
 
 // ── Limits (mirrors the OTP service config; the UI uses these for hints) ───────
 object OtpLimits {
@@ -61,59 +20,6 @@ object OtpLimits {
     const val HOURLY_PER_IP = 30
     const val MAX_ATTEMPTS = 5
     const val LOCK_SECONDS = 600 // 10 minutes
-}
-
-// ── Stable error codes (kept identical to AUTH_ERROR_CODES) ────────────────────
-/**
- * Mirrors the shared `AUTH_ERROR_CODES` set. The member name is the wire value. [UNKNOWN] is a
- * decode-only sentinel so a code the server adds before this client is updated maps to a fallback
- * instead of throwing — see [AuthErrorCodeSerializer].
- */
-@Serializable(with = AuthErrorCodeSerializer::class)
-enum class AuthErrorCode {
-    INVALID_REQUEST,
-    RESEND_COOLDOWN,
-    DAILY_LIMIT_EXCEEDED,
-    IP_LIMIT_EXCEEDED,
-    LOCKED,
-    CODE_EXPIRED,
-    INVALID_CODE,
-    UNAUTHORIZED,
-    INVALID_REFRESH_TOKEN,
-    QR_NOT_FOUND,
-    QR_ALREADY_USED,
-    QR_NOT_APPROVED,
-
-    // Social sign-in (Google / Apple).
-    SOCIAL_PROVIDER_DISABLED,
-    SOCIAL_TOKEN_INVALID,
-    SOCIAL_ACCOUNT_ERROR,
-
-    // Account linking — conflicts are rejected, never auto-merged.
-    SOCIAL_ALREADY_LINKED,
-    PHONE_ALREADY_LINKED,
-    LAST_CREDENTIAL,
-
-    /** Fallback for any code the server adds before this client is updated. */
-    UNKNOWN,
-    ;
-
-    companion object {
-        /** Map a wire value to its member, falling back to [UNKNOWN] for anything unmodelled. */
-        fun fromWire(wire: String): AuthErrorCode =
-            values().firstOrNull { it.name == wire } ?: UNKNOWN
-    }
-}
-
-/** Tolerant string (de)serializer for [AuthErrorCode]: unknown codes decode to [AuthErrorCode.UNKNOWN]. */
-object AuthErrorCodeSerializer : KSerializer<AuthErrorCode> {
-    override val descriptor: SerialDescriptor =
-        PrimitiveSerialDescriptor("AuthErrorCode", PrimitiveKind.STRING)
-
-    override fun serialize(encoder: Encoder, value: AuthErrorCode) = encoder.encodeString(value.name)
-
-    override fun deserialize(decoder: Decoder): AuthErrorCode =
-        AuthErrorCode.fromWire(decoder.decodeString())
 }
 
 // ── Endpoint paths (kept identical to AUTH_ROUTES) ─────────────────────────────

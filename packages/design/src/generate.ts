@@ -11,7 +11,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { AUTH_ERROR_CODES, type AuthErrorCode } from "@infra/shared";
+import { AUTH_ERROR_CODES, type AuthErrorCode, PLATFORMS } from "@infra/shared";
 import { COPY } from "./copy";
 import { dark, light, oklchToCss, oklchToHex, type Palette, shape } from "./tokens";
 
@@ -187,6 +187,55 @@ ${errCases}
 `;
 }
 
+/**
+ * The `AuthContractEnums.swift` body — the `Platform` + `AuthErrorCode` enums
+ * mirrored from `@infra/shared` (`PLATFORMS` + `AUTH_ERROR_CODES`). Emitted
+ * byte-for-byte identically for iOS and macOS (only the write path differs), so
+ * the two clients can share one canonical, drift-proof enum definition.
+ */
+function swiftContractEnums(): string {
+  const platformCases = PLATFORMS.join(", ");
+  const errCases = AUTH_ERROR_CODES.map((code) => `    case ${SWIFT_CASE[code]} = ${q(code)}`).join(
+    "\n",
+  );
+
+  return `// ${GEN}
+import Foundation
+
+/// Canonical \`Platform\` values shared with web / android / harmony / cli / weapp.
+enum Platform: String, Codable, Sendable {
+    case ${platformCases}
+
+    /// Decode-only sentinel for a \`platform\` this client doesn't model yet (a new
+    /// server value shipped ahead of this app). Only a client's own platform is ever
+    /// encoded, so \`.unknown\` is never sent — see \`init(from:)\`.
+    case unknown
+
+    /// Tolerant decode: an unrecognized raw value maps to \`.unknown\` instead of
+    /// throwing, so one unknown row can't fail the whole devices/login-events list.
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = Platform(rawValue: raw) ?? .unknown
+    }
+
+    /// Web authenticates via HttpOnly cookie; native platforms via Bearer tokens.
+    var isCookiePlatform: Bool { self == .web }
+}
+
+/// Canonical, client-switchable auth error codes shared with every client.
+enum AuthErrorCode: String, Codable, Sendable {
+${errCases}
+    /// Fallback for any code the server adds before this client is updated.
+    case unknown = "UNKNOWN"
+
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = AuthErrorCode(rawValue: raw) ?? .unknown
+    }
+}
+`;
+}
+
 function emitIos(): void {
   const color = (role: keyof Palette, name: string) =>
     `    static let ${name} = dyn(light: "${oklchToHex(light[role])}", dark: "${oklchToHex(dark[role])}")`;
@@ -233,6 +282,7 @@ private extension UIColor {
   );
 
   write("apps/ios/InfraLab/Generated/AuthCopy.swift", swiftAuthCopy());
+  write("apps/ios/InfraLab/Generated/AuthContractEnums.swift", swiftContractEnums());
 
   // Launch-window background as an asset-catalog color set. The iOS static launch
   // screen (`UILaunchScreen` in project.yml) can only read an asset color, not the
@@ -318,6 +368,7 @@ private extension NSColor {
   );
 
   write("apps/macos/InfraLab/Generated/AuthCopy.swift", swiftAuthCopy());
+  write("apps/macos/InfraLab/Generated/AuthContractEnums.swift", swiftContractEnums());
 }
 
 // ── android: Compose tokens + copy ────────────────────────────────────────────
@@ -433,6 +484,89 @@ ${errEntries}
 }
 `,
   );
+
+  // Platform + AuthErrorCode enums mirrored from @infra/shared. Emitted into the
+  // `data.contracts` package so they need no import at the use site (same package as
+  // the request/response DTOs in Contracts.kt).
+  const platformEntries = PLATFORMS.map((p) => `    ${p.toUpperCase()}(${q(p)}),`).join("\n");
+  const codeEntries = AUTH_ERROR_CODES.map((code) => `    ${code},`).join("\n");
+
+  write(
+    "apps/android/app/src/main/kotlin/dev/w3ctech/infralab/data/contracts/AuthContractEnums.generated.kt",
+    `// ${GEN}
+package dev.w3ctech.infralab.data.contracts
+
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+
+/**
+ * Mirrors the shared \`PLATFORMS\` set. The wire name is the lowercase value the server
+ * emits; [UNKNOWN] is a decode-only sentinel for a \`platform\` a newer server ships
+ * ahead of this client. Tolerant decode via [PlatformSerializer] keeps one unknown row
+ * from failing an entire devices / login-events list. This client only ever encodes its
+ * own value, so [UNKNOWN] is never sent.
+ */
+@Serializable(with = PlatformSerializer::class)
+enum class Platform(val wireName: String) {
+${platformEntries}
+
+    /** Decode-only sentinel for a platform this client doesn't model yet. Never encoded. */
+    UNKNOWN("unknown"),
+    ;
+
+    companion object {
+        /** Map a wire value to its member, falling back to [UNKNOWN] for anything unmodelled. */
+        fun fromWire(wire: String): Platform = values().firstOrNull { it.wireName == wire } ?: UNKNOWN
+    }
+}
+
+/** Tolerant string (de)serializer for [Platform]: unknown wire values decode to [Platform.UNKNOWN]. */
+object PlatformSerializer : KSerializer<Platform> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("Platform", PrimitiveKind.STRING)
+
+    override fun serialize(encoder: Encoder, value: Platform) = encoder.encodeString(value.wireName)
+
+    override fun deserialize(decoder: Decoder): Platform = Platform.fromWire(decoder.decodeString())
+}
+
+/**
+ * Mirrors the shared \`AUTH_ERROR_CODES\` set. The member name is the wire value. [UNKNOWN]
+ * is a decode-only sentinel so a code the server adds before this client is updated maps to
+ * a fallback instead of throwing — see [AuthErrorCodeSerializer].
+ */
+@Serializable(with = AuthErrorCodeSerializer::class)
+enum class AuthErrorCode {
+${codeEntries}
+
+    /** Fallback for any code the server adds before this client is updated. */
+    UNKNOWN,
+    ;
+
+    companion object {
+        /** Map a wire value to its member, falling back to [UNKNOWN] for anything unmodelled. */
+        fun fromWire(wire: String): AuthErrorCode =
+            values().firstOrNull { it.name == wire } ?: UNKNOWN
+    }
+}
+
+/** Tolerant string (de)serializer for [AuthErrorCode]: unknown codes decode to [AuthErrorCode.UNKNOWN]. */
+object AuthErrorCodeSerializer : KSerializer<AuthErrorCode> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("AuthErrorCode", PrimitiveKind.STRING)
+
+    override fun serialize(encoder: Encoder, value: AuthErrorCode) = encoder.encodeString(value.name)
+
+    override fun deserialize(decoder: Decoder): AuthErrorCode =
+        AuthErrorCode.fromWire(decoder.decodeString())
+}
+`,
+  );
 }
 
 // ── harmony: ArkUI color resource + copy ──────────────────────────────────────
@@ -517,6 +651,24 @@ export function resendCooldown(seconds: number): string {
 export function invalidCodeRemaining(base: string, remaining: number): string {
   return ${q(COPY.errors.invalidCodeRemaining)}.replace("{base}", base).replace("{remaining}", \`\${remaining}\`);
 }
+`,
+  );
+
+  // Platform + AuthErrorCode as ArkTS string-literal unions mirrored from @infra/shared.
+  // Deliberately NO `unknown` / `UNKNOWN` sentinel: Harmony tolerates unmodelled values in
+  // the consumer's `default:` branch, not at the type layer (matches the current mirror).
+  const harmonyPlatform = PLATFORMS.map((p) => q(p)).join(" | ");
+  const harmonyCodes = AUTH_ERROR_CODES.map((code) => `  | ${q(code)}`).join("\n");
+
+  write(
+    "apps/harmony/entry/src/main/ets/common/contracts.generated.ets",
+    `// ${GEN}
+
+export type Platform = ${harmonyPlatform};
+
+/** Stable, client-switchable error codes (mirrors AUTH_ERROR_CODES). */
+export type AuthErrorCode =
+${harmonyCodes};
 `,
   );
 }

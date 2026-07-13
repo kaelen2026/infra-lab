@@ -17,6 +17,7 @@
     "**/.preview/**",
     // Emitted from @infra/design (pnpm gen:design) — never hand-edited.
     "**/copy.generated.ets",
+    "**/contracts.generated.ets",
   ],
   ruleSet: [
     // The ArkTS strict-subset checks (no `any`, explicit types, no structural
