@@ -15,7 +15,7 @@
     "@infra/sdk": "workspace:*",
     "@infra/shared": "workspace:*",
     "clsx": "^2.1.1",
-    "lucide-react": "^1.24.0",
+    "lucide-react": "^1.25.0",
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "react-router-dom": "^7.9.1",
@@ -27,6 +27,6 @@
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
     "tailwindcss": "4",
-    "vite": "^8.1.4"
+    "vite": "^8.1.5"
   }
 }
