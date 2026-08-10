@@ -22,7 +22,7 @@
   },
   "dependencies": {
     "@infra/auth": "workspace:*",
-    "@upstash/redis": "1.38.0",
+    "@upstash/redis": "1.38.2",
     "ioredis": "5.11.1"
   }
 }

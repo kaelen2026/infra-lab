@@ -13,13 +13,13 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@ai-sdk/openai-compatible": "3.0.7",
+    "@ai-sdk/openai-compatible": "3.0.25",
     "@infra/env": "workspace:*",
-    "@larksuiteoapi/node-sdk": "1.70.0",
-    "ai": "7.0.22",
+    "@larksuiteoapi/node-sdk": "1.72.0",
+    "ai": "7.0.55",
     "zod": "4.4.3"
   },
   "devDependencies": {
-    "tsx": "4.23.0"
+    "tsx": "4.23.9"
   }
 }
