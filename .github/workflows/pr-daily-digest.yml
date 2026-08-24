@@ -103,7 +103,7 @@ jobs:
       - name: Run Claude Code (digest)
         id: claude
         if: steps.collect.outputs.count != '0'
-        uses: anthropics/claude-code-action@e90deca47693f9457b72f2b53c17d7c445a87342 # v1.0.171
+        uses: anthropics/claude-code-action@dcb57747bfceeaa1fa72638cae52295d1d853d4a # v1.0.199
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ steps.app-token.outputs.token }}
