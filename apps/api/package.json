@@ -13,19 +13,19 @@
     "clean": "rm -rf dist dist-worker"
   },
   "dependencies": {
-    "@hono/node-server": "2.0.8",
+    "@hono/node-server": "2.1.1",
     "@infra/auth": "workspace:*",
     "@infra/db": "workspace:*",
     "@infra/env": "workspace:*",
     "@infra/redis": "workspace:*",
     "@infra/shared": "workspace:*",
-    "better-auth": "1.6.23",
+    "better-auth": "1.7.2",
     "drizzle-orm": "0.45.2",
-    "hono": "4.12.30"
+    "hono": "4.13.5"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "5.20260712.1",
-    "tsx": "4.23.0",
-    "wrangler": "4.110.0"
+    "@cloudflare/workers-types": "5.20260903.1",
+    "tsx": "4.23.13",
+    "wrangler": "4.129.0"
   }
 }
