@@ -28,11 +28,11 @@
     "push": "drizzle-kit push"
   },
   "dependencies": {
-    "@neondatabase/serverless": "1.1.0",
-    "drizzle-orm": "0.45.2",
+    "@neondatabase/serverless": "1.2.0",
+    "drizzle-orm": "0.45.3",
     "postgres": "3.4.9"
   },
   "devDependencies": {
-    "drizzle-kit": "0.31.10"
+    "drizzle-kit": "0.31.11"
   }
 }
